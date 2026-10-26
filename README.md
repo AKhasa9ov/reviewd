@@ -173,11 +173,13 @@ lock                              single-writer lock (pid + createdAt)
 reviews/<reviewId>/events.jsonl   append-only, versioned event log (source of truth)
 reviews/<reviewId>/snapshot.json  atomically replaced replay cache
 snapshots/<snapshotId>.json       immutable round snapshots
+deliveries.json                   durable feedback delivery outbox
+stream-cursor.json                durable daemon-wide SSE high-water mark
 ```
 
 `ReviewStore.open(root)` takes the lock and rejects a live owner; a stale lock must be
-removed manually. Every mutation appends one JSON event, fsyncs it, folds it into the
-aggregate and then replaces the cache. Replay is authoritative: a torn final JSONL
+removed manually. Every mutation appends one JSON event under a per-review mutex, fsyncs it, folds it
+into the aggregate and then best-effort replaces the cache. Replay is authoritative: a torn final JSONL
 line is truncated on the next append and reported as `torn-tail`; corruption before the
 last line fails with the review id and line number. `ReviewLifecycle` owns review/round/
 comment mutations, replies, soft states and refresh.

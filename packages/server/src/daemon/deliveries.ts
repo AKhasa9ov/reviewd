@@ -227,5 +227,13 @@ export class DeliveryQueue {
       await unlink(temp).catch(() => undefined);
       throw error;
     }
+    // Rename is not durable until the directory entry is synced; otherwise a
+    // power loss can resurrect an acked delivery and prompt the agent again.
+    const directory = await open(dir, 'r');
+    try {
+      await directory.sync();
+    } finally {
+      await directory.close();
+    }
   }
 }

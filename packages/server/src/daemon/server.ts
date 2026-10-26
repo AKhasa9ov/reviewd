@@ -68,7 +68,13 @@ export async function startDaemon(
       now,
     });
   }
-  const hub = new EventHub(service);
+  const hub = new EventHub(service, { cursorPath: join(config.storeDir, 'stream-cursor.json') });
+  try {
+    await hub.load();
+  } catch (error) {
+    await store.close();
+    throw error;
+  }
   const jobs = new JobQueue({
     now,
     leaseMs: config.jobLeaseMs ?? DEFAULTS.jobLeaseMs,

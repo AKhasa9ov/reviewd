@@ -5,6 +5,7 @@ import {
   open,
   readdir,
   readFile,
+  stat,
   mkdir,
   rename,
   rm,
@@ -26,12 +27,16 @@ export interface ReviewStoreOptions {
 interface CacheEntry {
   state: ReviewState;
   eventCount: number;
+  /** Exact byte length of the log prefix this state was folded from. */
+  bytes?: number;
   events?: ReviewEvent[];
 }
 
 interface SnapshotCache {
   reviewId: ReviewId;
   eventCount: number;
+  /** Size of events.jsonl when this cache was written; detects a stale cache. */
+  eventBytes?: number;
   state: ReviewState;
 }
 
@@ -456,7 +461,13 @@ export class ReviewStore {
       if (!entry.isDirectory()) continue;
       const id = entry.name as ReviewId;
       const cache = await this.readCache(id).catch(() => null);
-      if (cache !== null && cache.state.id === id) {
+      const cacheFresh =
+        cache !== null &&
+        cache.state.id === id &&
+        cache.eventBytes !== undefined &&
+        (await stat(join(this.reviewDir(id), 'events.jsonl')).catch(() => null))?.size ===
+          cache.eventBytes;
+      if (cache !== null && cacheFresh) {
         summaries.push(summary(cache.state));
         continue;
       }
@@ -658,9 +669,11 @@ export class ReviewStore {
 
     const { state, eventCount, events } = parseReview(content, reviewId);
     const cache = await this.readCache(reviewId);
+    const eventBytes = Buffer.byteLength(content);
     if (
       cache !== null &&
       cache.eventCount === eventCount &&
+      cache.eventBytes === eventBytes &&
       cache.state.version === state.version &&
       cache.state.id === reviewId
     ) {
@@ -674,7 +687,7 @@ export class ReviewStore {
       };
     }
 
-    const entry = { state, eventCount, events };
+    const entry = { state, eventCount, bytes: eventBytes, events };
     await this.writeCache(reviewId, entry).catch(() => undefined);
     return entry;
   }
@@ -691,10 +704,12 @@ export class ReviewStore {
       if (!isRecord(value)) return null;
       if (value.reviewId !== reviewId) return null;
       if (typeof value.eventCount !== 'number' || !Number.isInteger(value.eventCount)) return null;
+      if (value.eventBytes !== undefined && typeof value.eventBytes !== 'number') return null;
       if (!isReviewState(value.state)) return null;
       return {
         reviewId,
         eventCount: value.eventCount,
+        ...(typeof value.eventBytes === 'number' ? { eventBytes: value.eventBytes } : {}),
         state: value.state,
       };
     } catch {
@@ -706,9 +721,16 @@ export class ReviewStore {
     const dir = this.reviewDir(reviewId);
     const target = join(dir, 'snapshot.json');
     const temp = join(dir, `.snapshot.${process.pid}.${randomBytes(6).toString('hex')}.tmp`);
+    const eventBytes =
+      entry.bytes ??
+      (await stat(join(dir, 'events.jsonl')).then(
+        (info) => info.size,
+        () => undefined,
+      ));
     const payload: SnapshotCache = {
       reviewId,
       eventCount: entry.eventCount,
+      ...(eventBytes === undefined ? {} : { eventBytes }),
       state: entry.state,
     };
     const handle = await open(temp, 'wx');

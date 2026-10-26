@@ -1,6 +1,9 @@
+import { randomBytes } from 'node:crypto';
+import { open, readFile, rename, unlink } from 'node:fs/promises';
 import type { ServerResponse } from 'node:http';
 import type { ReviewEvent, ReviewService } from '@dsh-code-review/core';
 import type { IncomingMessage } from 'node:http';
+import { dirname } from 'node:path';
 
 const BUFFER_LIMIT = 1000;
 
@@ -20,8 +23,14 @@ export interface GlobalEntry {
 
 type Listener = (event: ReviewEvent, reviewId: string, seq?: number) => void;
 
+export interface EventHubOptions {
+  /** Durable high-water mark for the daemon-wide SSE cursor. */
+  cursorPath?: string;
+}
+
 export class EventHub {
   private readonly service: Pick<ReviewService, 'events' | 'list'>;
+  private readonly cursorPath: string | undefined;
   private readonly reviews = new Map<string, ReviewEvent[]>();
   private readonly global: GlobalEntry[] = [];
   private readonly latest = new Map<string, number>();
@@ -30,8 +39,37 @@ export class EventHub {
   private readonly listeners = new Set<Listener>();
   private globalSeq = 0;
 
-  constructor(service: Pick<ReviewService, 'events' | 'list'>) {
+  constructor(service: Pick<ReviewService, 'events' | 'list'>, options: EventHubOptions = {}) {
     this.service = service;
+    this.cursorPath = options.cursorPath;
+  }
+
+  /**
+   * Loads the persisted global cursor. The cursor is reserved in blocks before
+   * events are published, so a crash can create a gap but can never reuse a
+   * cursor already sent to a client (which would silently drop events).
+   */
+  async load(): Promise<void> {
+    if (this.cursorPath === undefined) return;
+    let raw: string;
+    try {
+      raw = await readFile(this.cursorPath, 'utf8');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
+      throw error;
+    }
+    const value: unknown = JSON.parse(raw);
+    if (
+      typeof value !== 'object' ||
+      value === null ||
+      (value as { version?: unknown }).version !== 1 ||
+      typeof (value as { seq?: unknown }).seq !== 'number' ||
+      !Number.isInteger((value as { seq: number }).seq) ||
+      (value as { seq: number }).seq < 0
+    ) {
+      throw new Error(`stream cursor is invalid: ${this.cursorPath}`);
+    }
+    this.globalSeq = (value as { seq: number }).seq;
   }
 
   /**
@@ -143,10 +181,11 @@ export class EventHub {
       if (knownLatest > 0) this.latest.set(reviewId, knownLatest);
       return [];
     }
+    const start = await this.reserve(fresh.length);
     this.reviews.set(reviewId, [...known, ...fresh].slice(-BUFFER_LIMIT));
     const entries: GlobalEntry[] = [];
-    for (const event of fresh) {
-      const entry: GlobalEntry = { reviewId, event, seq: ++this.globalSeq };
+    for (const [index, event] of fresh.entries()) {
+      const entry: GlobalEntry = { reviewId, event, seq: start + index + 1 };
       this.global.push(entry);
       if (this.global.length > BUFFER_LIMIT) this.global.shift();
       entries.push(entry);
@@ -158,6 +197,42 @@ export class EventHub {
     }
     this.flush();
     return fresh;
+  }
+
+  private async reserve(count: number): Promise<number> {
+    if (count === 0) return this.globalSeq;
+    const start = this.globalSeq;
+    this.globalSeq += count;
+    // Persist before publishing. If this fails, a gap is harmless; reusing a
+    // cursor that a client already saw would silently drop events.
+    if (this.cursorPath !== undefined) await this.persistCursor();
+    return start;
+  }
+
+  private async persistCursor(): Promise<void> {
+    if (this.cursorPath === undefined) return;
+    const target = this.cursorPath;
+    const temp = `${target}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`;
+    const handle = await open(temp, 'wx');
+    try {
+      await handle.writeFile(JSON.stringify({ version: 1, seq: this.globalSeq }));
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    try {
+      await rename(temp, target);
+    } catch (error) {
+      await unlink(temp).catch(() => undefined);
+      throw error;
+    }
+    // The rename is only durable once the directory entry is synced.
+    const dir = await open(dirname(target), 'r');
+    try {
+      await dir.sync();
+    } finally {
+      await dir.close();
+    }
   }
 
   private flush(): void {

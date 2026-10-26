@@ -153,7 +153,7 @@ describe('worker loop', () => {
     await runWorkerLoop({ config, api, agents, sleep: async () => undefined }, controller.signal);
     expect(calls[0]).toMatchObject({ path: '/api/workers/register' });
     expect(restricted).toEqual({
-      allow: ['read', 'read_image', 'grep', 'glob', 'review_status', 'review_feedback'],
+      allow: ['read', 'grep', 'glob', 'review_status', 'review_feedback'],
     });
     expect(calls.some((call) => call.path.endsWith('/findings'))).toBe(true);
     expect(calls.some((call) => call.path.endsWith('/report'))).toBe(true);

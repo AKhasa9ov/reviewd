@@ -88,6 +88,17 @@ export function renderBoundedDiff(
   return { text: text === '' ? TRUNCATION_MARKER : `${text}\n${TRUNCATION_MARKER}`, truncated };
 }
 
+export interface ReviewPromptContext {
+  previousRound?: number;
+  previousReport?: unknown;
+  unresolved?: ReadonlyArray<{
+    path: string;
+    lineStart: number;
+    body: string;
+    state: string;
+  }>;
+}
+
 export interface ReviewPromptInput {
   title: string;
   reviewId: string;
@@ -95,6 +106,7 @@ export interface ReviewPromptInput {
   kind: 'initial' | 'verify';
   files: readonly FileDiff[];
   diffLimit?: number;
+  context?: ReviewPromptContext;
 }
 
 export interface ReviewPrompt {
@@ -122,6 +134,32 @@ export function buildReviewPrompt(input: ReviewPromptInput): ReviewPrompt {
     '',
     'Changed files:',
   ];
+  if (input.kind === 'verify' && input.context !== undefined) {
+    const context = input.context;
+    lines.push('', '## Verification round', '');
+    lines.push(
+      'Re-check the previous findings against this round and the unresolved comments.',
+      'For every previous finding, return a verification entry with status',
+      '`fixed`, `not-fixed` or `unclear`, quoting the new line when fixed.',
+      'Do not repeat findings that are already fixed; do report regressions.',
+    );
+    if (context.previousRound !== undefined) {
+      lines.push('', `Previous round: ${context.previousRound}`);
+    }
+    if (context.unresolved !== undefined && context.unresolved.length > 0) {
+      lines.push('', 'Unresolved human comments:');
+      for (const comment of context.unresolved) {
+        lines.push(
+          `- ${comment.path}:${comment.lineStart} [${comment.state}] ${comment.body.replace(/\s+/g, ' ').slice(0, 500)}`,
+        );
+      }
+    }
+    if (context.previousReport !== undefined) {
+      const previous = JSON.stringify(context.previousReport);
+      lines.push('', 'Previous reviewer report (JSON, bounded):');
+      lines.push(previous.length > 20_000 ? `${previous.slice(0, 20_000)}…` : previous);
+    }
+  }
   if (input.files.length === 0) lines.push('The review contains no file changes.');
   else lines.push(rendered.text);
   return { prompt: lines.join('\n'), truncated: rendered.truncated };

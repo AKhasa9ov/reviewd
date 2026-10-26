@@ -124,6 +124,28 @@ describe('buildReviewPrompt', () => {
     expect(prompt).toContain('diff --git a/src/a.ts b/src/a.ts');
   });
 
+  it('gives a verification round the previous report and unresolved comments', () => {
+    const { prompt } = buildReviewPrompt({
+      title: 'Fix login',
+      reviewId: 'rev_1',
+      round: 2,
+      kind: 'verify',
+      files: [file()],
+      context: {
+        previousRound: 1,
+        previousReport: { summary: 'token checked too late', findings: [] },
+        unresolved: [
+          { path: 'src/a.ts', lineStart: 2, body: 'Check token before write', state: 'open' },
+        ],
+      },
+    });
+    expect(prompt).toContain('Verification round');
+    expect(prompt).toContain('Previous round: 1');
+    expect(prompt).toContain('token checked too late');
+    expect(prompt).toContain('src/a.ts:2 [open] Check token before write');
+    expect(prompt).toContain('`fixed`, `not-fixed` or `unclear`');
+  });
+
   it('still produces a complete prompt when there are no file changes', () => {
     const { prompt, truncated } = buildReviewPrompt({
       title: 'Empty',

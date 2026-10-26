@@ -60,6 +60,8 @@ export class JobQueue {
   private readonly jobs = new Map<string, JobRecord>();
   private readonly order: string[] = [];
   private readonly attempts = new Map<string, AttemptState>();
+  /** Finding ids accepted for a job across retries, bounded by MAX_FINDINGS. */
+  private readonly findingsSeen = new Map<string, Set<string>>();
   private readonly listeners = new Set<() => void>();
   private sweepTimer?: NodeJS.Timeout;
 
@@ -126,6 +128,7 @@ export class JobQueue {
       createdAt: this.now().toISOString(),
     };
     this.jobs.set(job.id, job);
+    this.findingsSeen.set(job.id, new Set());
     this.order.push(job.id);
     this.notify();
     return { ...job };
@@ -152,11 +155,27 @@ export class JobQueue {
     return { ...job };
   }
 
+  /** Checks a finding without consuming its id, so the caller can append first. */
+  hasFinding(jobId: string, attemptId: string, findingId: string): boolean {
+    if (this.leased(jobId, attemptId) === null) return false;
+    return this.findingsSeen.get(jobId)?.has(findingId) === true;
+  }
+
+  /** Number of findings already accepted for this job, across retries. */
+  findingCount(jobId: string, attemptId: string): number {
+    if (this.leased(jobId, attemptId) === null) return 0;
+    return this.findingsSeen.get(jobId)?.size ?? 0;
+  }
+
   acceptFinding(jobId: string, attemptId: string, findingId: string): JobRecord | null {
     const job = this.leased(jobId, attemptId);
     if (job === null) return null;
     const state = this.attempts.get(attemptId);
-    if (state === undefined || state.findings.has(findingId)) return null;
+    if (state === undefined) return null;
+    const seen = this.findingsSeen.get(jobId) ?? new Set<string>();
+    if (seen.has(findingId) || seen.size >= 200) return null;
+    seen.add(findingId);
+    this.findingsSeen.set(jobId, seen);
     state.findings.add(findingId);
     return { ...job };
   }

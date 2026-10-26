@@ -716,12 +716,29 @@ async function runJob(deps, lease, signal) {
     return;
   }
   const agent = handle.agent;
-  const release = agent.ctx?.tools?.restrict({
-    // The reviewer is strictly read-only. An allowlist is safer than a deny
-    // list: new mutating or network tools cannot silently become available,
-    // and the tool service rejects names that are absent from this harness.
-    allow: ["read", "read_image", "grep", "glob", "review_status", "review_feedback"]
-  });
+  let release;
+  try {
+    const tools = agent.ctx?.tools;
+    if (tools?.restrict === void 0) throw new Error("reviewer tool service is unavailable");
+    release = tools.restrict({
+      // The reviewer is strictly read-only. An allowlist is safer than a deny
+      // list: new mutating or network tools cannot silently become available.
+      allow: ["read", "grep", "glob", "review_status", "review_feedback"]
+    });
+  } catch (error) {
+    await deps.api.post(
+      `/api/jobs/${encodeURIComponent(job.id)}/fail`,
+      {
+        attemptId: job.attemptId,
+        code: "reviewer-tools",
+        message: error instanceof Error ? error.message : "cannot restrict reviewer tools",
+        retryable: false
+      },
+      signal
+    ).catch(() => void 0);
+    await handle.dispose?.().catch(() => void 0);
+    return;
+  }
   const timeoutMs = deps.config.reviewerTimeoutMs;
   const timeoutError = new Error("reviewer timed out");
   let timeout;

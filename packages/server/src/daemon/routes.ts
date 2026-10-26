@@ -175,12 +175,37 @@ async function enqueueWorkerJob(ctx: RouteContext, reviewId: string): Promise<vo
   const round = view.review.rounds.at(-1);
   if (round === undefined || view.review.reviewer?.backend !== 'worker') return;
   const kind = view.report === null ? 'initial' : 'verify';
+  const previousRound = round.no > 1 ? round.no - 1 : undefined;
+  const unresolved = view.review.comments
+    .filter((comment) => comment.state === 'open')
+    .flatMap((comment) => {
+      const anchor = comment.anchors.at(-1);
+      return anchor === undefined
+        ? []
+        : [
+            {
+              path: anchor.path,
+              lineStart: anchor.lineStart,
+              body: comment.body,
+              state: comment.state,
+            },
+          ];
+    });
   const { prompt } = buildReviewPrompt({
     title: view.review.title,
     reviewId,
     round: round.no,
     kind,
     files: view.latestSnapshot?.files ?? [],
+    ...(kind === 'verify'
+      ? {
+          context: {
+            ...(previousRound === undefined ? {} : { previousRound }),
+            ...(view.report === null ? {} : { previousReport: view.report }),
+            unresolved,
+          },
+        }
+      : {}),
   });
   const initiator = view.review.initiator;
   ctx.jobs.enqueue({
@@ -633,8 +658,22 @@ export async function handle(
           continue;
         }
         seen.add(finding.id);
+        if (
+          ctx.jobs.hasFinding(jobId, attemptId, finding.id) ||
+          ctx.jobs.findingCount(jobId, attemptId) >= 200
+        ) {
+          rejected += 1;
+          continue;
+        }
+        // Append first: accepting the id before the durable write loses the
+        // finding permanently when the store rejects the append. A failed append
+        // surfaces as an error so the worker retries; accepted findings are
+        // skipped by hasFinding on that retry.
+        await append(ctx, job.reviewId, 'agent/finding', {
+          finding,
+          round: job.round,
+        } as never);
         if (ctx.jobs.acceptFinding(jobId, attemptId, finding.id) !== null) {
-          await append(ctx, job.reviewId, 'agent/finding', { finding, round: job.round } as never);
           accepted += 1;
         } else {
           rejected += 1;
@@ -653,14 +692,9 @@ export async function handle(
       } catch (error) {
         throw new ApiError('validation', error instanceof Error ? error.message : 'invalid report');
       }
-      const accepted = ctx.jobs.acceptReport(jobId, attemptId);
-      if (accepted === null) {
-        const current = ctx.jobs.job(jobId);
-        if (current?.status === 'done') {
-          sendJson(res, 200, { accepted: true, duplicate: true });
-          return;
-        }
-        throw new ApiError('conflict', 'stale or unknown job attempt');
+      if (ctx.jobs.job(jobId)?.status === 'done') {
+        sendJson(res, 200, { accepted: true, duplicate: true });
+        return;
       }
       const agentReport: AgentReport = {
         ...validation.report,
@@ -670,7 +704,17 @@ export async function handle(
         rejected: validation.rejected,
         warnings: validation.warnings,
       };
+      // The report is durable before the attempt is marked done. If the append
+      // fails the worker can retry; the reverse order loses the report.
       await append(ctx, job.reviewId, 'agent/report', { report: agentReport } as never);
+      const accepted = ctx.jobs.acceptReport(jobId, attemptId);
+      if (accepted === null) {
+        if (ctx.jobs.job(jobId)?.status === 'done') {
+          sendJson(res, 200, { accepted: true, duplicate: true });
+          return;
+        }
+        throw new ApiError('conflict', 'stale or unknown job attempt');
+      }
       sendJson(res, 200, { accepted: true, warnings: validation.warnings });
       return;
     }
