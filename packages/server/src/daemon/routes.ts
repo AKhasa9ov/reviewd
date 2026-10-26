@@ -312,9 +312,14 @@ export async function handle(
       const after = Number(Number.isFinite(last) && last >= 0 ? last : 0);
       const accept = String(req.headers.accept ?? '');
       if (accept.includes('text/event-stream')) {
-        openSse(req, res, ctx.hub, { reviewId, after, heartbeatMs: ctx.config.heartbeatMs });
+        await openSse(req, res, ctx.hub, {
+          reviewId,
+          after,
+          heartbeatMs: ctx.config.heartbeatMs,
+        });
         return;
       }
+      await ctx.hub.sync(reviewId);
       const waitSeconds = Math.min(parsePositiveInt(url.searchParams.get('wait'), 25), 25);
       const controller = new AbortController();
       req.on('close', () => controller.abort());
@@ -500,9 +505,10 @@ export async function handle(
     const after = Number(String(raw).includes(':') ? String(raw).split(':').at(-1) : raw);
     const sequence = Number.isFinite(after) && after >= 0 ? after : 0;
     if (accept.includes('text/event-stream')) {
-      openSse(req, res, ctx.hub, { after: sequence, heartbeatMs: ctx.config.heartbeatMs });
+      await openSse(req, res, ctx.hub, { after: sequence, heartbeatMs: ctx.config.heartbeatMs });
       return;
     }
+    await ctx.hub.syncAll();
     const controller = new AbortController();
     req.on('close', () => controller.abort());
     const items = await ctx.hub.waitGlobal(sequence, ctx.config.longPollMs, controller.signal);

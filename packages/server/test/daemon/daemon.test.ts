@@ -62,6 +62,40 @@ async function read(response: Response): Promise<any> {
   return (await response.json()) as any;
 }
 
+async function startWithStore(storeDir: string): Promise<Running> {
+  const daemon = await startDaemon({
+    host: '127.0.0.1',
+    port: 0,
+    storeDir,
+    token: TOKEN,
+    longPollMs: 50,
+    heartbeatMs: 50,
+    jobLeaseMs: 200,
+    rateLimit: { mutations: 100, reads: 1000, windowMs: 60_000 },
+  });
+  cleanups.push(async () => {
+    await daemon.close();
+  });
+  return { daemon, daemonUrl: daemon.url, token: TOKEN, storeDir };
+}
+
+async function sseText(response: Response, tokens: string[]): Promise<string> {
+  const reader = response.body?.getReader();
+  if (reader === undefined) throw new Error('missing SSE body');
+  const decoder = new TextDecoder();
+  let text = '';
+  try {
+    while (tokens.some((token) => !text.includes(token))) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      text += decoder.decode(chunk.value, { stream: true });
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
+  return text;
+}
+
 async function createReview(
   base: string,
   reviewer: Record<string, unknown> = { backend: 'worker' },
@@ -423,6 +457,108 @@ describe('delivery persistence', () => {
     expect(reack.status).toBe(200);
     expect((await read(reack)).status).toBe('acked');
     await third.daemon.close();
+  });
+});
+
+describe('sse replay', () => {
+  it('replays stored review events after a daemon restart', async () => {
+    const storeDir = await mkdtemp(join(tmpdir(), 'reviewd-store-'));
+    cleanups.push(async () => {
+      await rm(storeDir, { recursive: true, force: true });
+    });
+    const checkout = await repo();
+    const first = await startWithStore(storeDir);
+    const created = await createReview(first.daemonUrl, { backend: 'none' }, checkout.root);
+    const reviewId = created.body.review.review.id as string;
+    const comment = await fetch(`${first.daemonUrl}/api/reviews/${reviewId}/comments`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({
+        body: 'historical note',
+        path: 'src/a.ts',
+        side: 'new',
+        lineStart: 2,
+      }),
+    });
+    expect(comment.status).toBe(201);
+    await first.daemon.close();
+
+    const second = await startWithStore(storeDir);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3000);
+    try {
+      const response = await fetch(`${second.daemonUrl}/api/reviews/${reviewId}/events`, {
+        headers: headers(TOKEN, { accept: 'text/event-stream' }),
+        signal: controller.signal,
+      });
+      expect(response.status).toBe(200);
+      const text = await sseText(response, [
+        'event: review/created',
+        'event: comment/added',
+        'historical note',
+      ]);
+      expect(text).toContain('event: review/created');
+      expect(text).toContain('event: comment/added');
+      expect(text).toContain('historical note');
+    } finally {
+      clearTimeout(timer);
+      controller.abort();
+      await second.daemon.close();
+    }
+  });
+
+  it('replays every review on the global stream with a daemon-wide cursor', async () => {
+    const storeDir = await mkdtemp(join(tmpdir(), 'reviewd-store-'));
+    cleanups.push(async () => {
+      await rm(storeDir, { recursive: true, force: true });
+    });
+    const checkout = await repo();
+    const first = await startWithStore(storeDir);
+    const firstReview = await createReview(first.daemonUrl, { backend: 'none' }, checkout.root);
+    const firstId = firstReview.body.review.review.id as string;
+    const secondReview = await createReview(first.daemonUrl, { backend: 'none' }, checkout.root);
+    const secondId = secondReview.body.review.review.id as string;
+    const comment = await fetch(`${first.daemonUrl}/api/reviews/${firstId}/comments`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({
+        body: 'global cursor note',
+        path: 'src/a.ts',
+        side: 'new',
+        lineStart: 2,
+      }),
+    });
+    expect(comment.status).toBe(201);
+    await first.daemon.close();
+
+    const second = await startWithStore(storeDir);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3000);
+    try {
+      const response = await fetch(`${second.daemonUrl}/api/events`, {
+        headers: headers(TOKEN, { accept: 'text/event-stream' }),
+        signal: controller.signal,
+      });
+      expect(response.status).toBe(200);
+      const text = await sseText(response, [firstId, secondId, 'global cursor note']);
+      const ids = [...text.matchAll(/^id: (\S+)$/gm)].map((match) => match[1] as string);
+      expect(ids.length).toBeGreaterThanOrEqual(3);
+      const suffixes = ids.map((id) => Number(id.split(':').at(-1)));
+      expect(new Set(suffixes).size).toBe(suffixes.length);
+      const firstCursor = suffixes[0] as number;
+
+      const resumed = await read(
+        await fetch(`${second.daemonUrl}/api/events?after=${firstCursor}&wait=0`, {
+          headers: headers(),
+        }),
+      );
+      expect(resumed.events.length).toBe(ids.length - 1);
+      expect(resumed.events.every((item: { seq: number }) => item.seq > firstCursor)).toBe(true);
+    } finally {
+      clearTimeout(timer);
+      controller.abort();
+      await second.daemon.close();
+    }
   });
 });
 
