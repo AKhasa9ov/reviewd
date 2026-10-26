@@ -40,6 +40,8 @@ export interface DeliveryDeps {
 }
 
 const MAX_FEEDBACK_CHARS = 100_000;
+/** Failed prompt attempts per delivery before it is reported as failed. */
+const MAX_DELIVERY_ATTEMPTS = 3;
 function wait(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
     if (signal.aborted) {
@@ -101,6 +103,9 @@ async function deliverOne(
 export async function runDeliveryLoop(deps: DeliveryDeps, signal: AbortSignal): Promise<void> {
   const sleep = deps.sleep ?? wait;
   let backoff = 1_000;
+  // Attempts survive polls so a session that keeps rejecting prompts cannot be
+  // retried forever; a successful ack resets the record's budget.
+  const attempts = new Map<string, number>();
   while (!signal.aborted) {
     try {
       const pending = await deps.api.get<{ deliveries: DeliveryRecord[] }>(
@@ -111,10 +116,35 @@ export async function runDeliveryLoop(deps: DeliveryDeps, signal: AbortSignal): 
         if (signal.aborted) return;
         try {
           await deliverOne(deps, record, signal);
+          attempts.delete(record.id);
           backoff = 1_000;
         } catch (error) {
+          const message = error instanceof Error ? error.message : 'unknown';
+          const count = (attempts.get(record.id) ?? 0) + 1;
+          attempts.set(record.id, count);
+          if (count >= MAX_DELIVERY_ATTEMPTS) {
+            deps.logger?.warn?.(
+              `code-review: delivery ${record.id} failed ${count} times; marking it failed: ${message}`,
+            );
+            try {
+              await deps.api.post(
+                `/api/deliveries/${encodeURIComponent(record.id)}/fail`,
+                { error: message },
+                signal,
+              );
+              attempts.delete(record.id);
+            } catch (failError) {
+              // Keep the exhausted count so later polls retry only the fail call.
+              deps.logger?.warn?.(
+                `code-review: cannot mark delivery ${record.id} failed: ${
+                  failError instanceof Error ? failError.message : 'unknown'
+                }`,
+              );
+            }
+            continue;
+          }
           deps.logger?.warn?.(
-            `code-review: delivery ${record.id} failed: ${error instanceof Error ? error.message : 'unknown'}`,
+            `code-review: delivery ${record.id} failed (attempt ${count}/${MAX_DELIVERY_ATTEMPTS}): ${message}`,
           );
           // Keep it pending and retry with backoff; no partial prompt was acknowledged.
           await sleep(backoff, signal);

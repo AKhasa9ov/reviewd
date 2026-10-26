@@ -120,4 +120,41 @@ describe('delivery bridge', () => {
     expect(attempts).toBe(2);
     expect(acks).toEqual(['/api/deliveries/dlv_1/ack']);
   });
+
+  it('stops after three failed prompts and marks the delivery failed', async () => {
+    let attempts = 0;
+    let failed = false;
+    const posts: string[] = [];
+    const controller = new AbortController();
+    const api = {
+      get: async () => {
+        if (attempts >= 5) controller.abort();
+        return { deliveries: failed || attempts >= 5 ? [] : [record()] };
+      },
+      post: async (path: string) => {
+        posts.push(path);
+        if (path.endsWith('/fail')) {
+          failed = true;
+          controller.abort();
+        }
+        return {};
+      },
+    } as any;
+    await runDeliveryLoop(
+      {
+        config,
+        api,
+        sessionController: {
+          prompt: async () => {
+            attempts += 1;
+            throw new Error('session closed');
+          },
+        },
+        sleep: async () => undefined,
+      },
+      controller.signal,
+    );
+    expect(attempts).toBe(3);
+    expect(posts).toEqual(['/api/deliveries/dlv_1/fail']);
+  });
 });
