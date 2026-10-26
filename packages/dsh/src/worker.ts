@@ -188,16 +188,26 @@ async function runJob(deps: WorkerDeps, lease: JobLease, signal: AbortSignal): P
       'review_refresh',
     ],
   });
-  const timeoutMs = 10 * 60 * 1000;
+  const timeoutMs = deps.config.reviewerTimeoutMs;
+  const timeoutError = new Error('reviewer timed out');
   let timeout: ReturnType<typeof setTimeout> | undefined;
-  const onAbort = (): void => agent.cancel({ kind: 'disposed' });
+  let cancelled = false;
+  const cancel = (cause: unknown): void => {
+    if (cancelled) return;
+    cancelled = true;
+    agent.cancel(cause);
+  };
+  const onAbort = (): void => cancel({ kind: 'disposed' });
   signal.addEventListener('abort', onAbort, { once: true });
   try {
     agent.followup(userMessage(bundle.prompt));
     await Promise.race([
       agent.whenIdle(),
       new Promise<never>((_resolve, reject) => {
-        timeout = setTimeout(() => reject(new Error('reviewer timed out')), timeoutMs);
+        timeout = setTimeout(() => {
+          cancel({ kind: 'timeout' });
+          reject(timeoutError);
+        }, timeoutMs);
       }),
     ]);
     const events = agent.snapshotEvents?.() ?? [];
@@ -209,6 +219,19 @@ async function runJob(deps: WorkerDeps, lease: JobLease, signal: AbortSignal): P
           attemptId: job.attemptId,
           code: 'invalid-output',
           message: 'reviewer returned no JSON report',
+          retryable: false,
+        },
+        signal,
+      );
+      return;
+    }
+    if (report.schemaVersion !== 1) {
+      await deps.api.post(
+        `/api/jobs/${encodeURIComponent(job.id)}/fail`,
+        {
+          attemptId: job.attemptId,
+          code: 'invalid-output',
+          message: `reviewer report must use schemaVersion 1 (received ${String(report.schemaVersion)})`,
           retryable: false,
         },
         signal,
@@ -242,12 +265,13 @@ async function runJob(deps: WorkerDeps, lease: JobLease, signal: AbortSignal): P
       signal,
     );
   } catch (error) {
+    const timedOut = error === timeoutError;
     await deps.api
       .post(
         `/api/jobs/${encodeURIComponent(job.id)}/fail`,
         {
           attemptId: job.attemptId,
-          code: 'reviewer-failed',
+          code: timedOut ? 'reviewer-timeout' : 'reviewer-failed',
           message: error instanceof Error ? error.message : 'reviewer failed',
           retryable: true,
         },
@@ -258,6 +282,10 @@ async function runJob(deps: WorkerDeps, lease: JobLease, signal: AbortSignal): P
     if (timeout !== undefined) clearTimeout(timeout);
     signal.removeEventListener('abort', onAbort);
     release?.();
+    // The handle owns the reviewer session; release it exactly once so timed-out
+    // and failed runs do not leak agents between jobs.
+    const disposal = handle.dispose?.();
+    if (disposal !== undefined) await disposal.catch(() => undefined);
   }
 }
 
@@ -269,24 +297,34 @@ export async function runWorkerLoop(deps: WorkerDeps, signal: AbortSignal): Prom
   }
   const sleep = deps.sleep ?? wait;
   const randomId = deps.randomId ?? (() => `wkr_${randomUUID()}`);
-  let workerId: string;
-  try {
-    const registered = await deps.api.post<{ id: string }>(
-      '/api/workers/register',
-      {
-        id: randomId(),
-        name: 'dsh-code-review',
-        harness: 'dsh',
-      },
-      signal,
-    );
-    workerId = registered.id;
-  } catch (error) {
-    deps.logger?.warn?.(
-      `code-review: worker registration failed: ${error instanceof Error ? error.message : 'unknown'}`,
-    );
-    return;
+  const baseId = randomId();
+  let workerId: string | undefined;
+  let registrationDelayMs = 1_000;
+  for (let attempt = 1; !signal.aborted; attempt += 1) {
+    try {
+      const registered = await deps.api.post<{ id: string }>(
+        '/api/workers/register',
+        {
+          id: baseId,
+          name: 'dsh-code-review',
+          harness: 'dsh',
+        },
+        signal,
+      );
+      workerId = registered.id;
+      break;
+    } catch (error) {
+      if (signal.aborted) return;
+      deps.logger?.warn?.(
+        `code-review: worker registration failed (attempt ${attempt}, retrying in ${registrationDelayMs}ms): ${
+          error instanceof Error ? error.message : 'unknown'
+        }`,
+      );
+      await sleep(registrationDelayMs, signal);
+      registrationDelayMs = Math.min(registrationDelayMs * 2, 30_000);
+    }
   }
+  if (workerId === undefined) return;
   const heartbeat = setInterval(() => {
     void deps.api
       .post(`/api/workers/${encodeURIComponent(workerId)}/heartbeat`, {}, signal)

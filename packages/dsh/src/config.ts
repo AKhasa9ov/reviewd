@@ -14,6 +14,7 @@ export interface ReviewConfig {
   deliveryPollMs: number;
   heartbeatMs: number;
   requestTimeoutMs: number;
+  reviewerTimeoutMs: number;
 }
 
 export const DEFAULT_CONFIG: ReviewConfig = {
@@ -25,6 +26,7 @@ export const DEFAULT_CONFIG: ReviewConfig = {
   deliveryPollMs: 1_000,
   heartbeatMs: 20_000,
   requestTimeoutMs: 30_000,
+  reviewerTimeoutMs: 10 * 60 * 1000,
 };
 
 function stringValue(value: unknown, fallback: string): string {
@@ -73,6 +75,7 @@ export function normalizeConfig(raw: unknown): ReviewConfig {
     deliveryPollMs: positive(input.deliveryPollMs, DEFAULT_CONFIG.deliveryPollMs),
     heartbeatMs: positive(input.heartbeatMs, DEFAULT_CONFIG.heartbeatMs),
     requestTimeoutMs: positive(input.requestTimeoutMs, DEFAULT_CONFIG.requestTimeoutMs),
+    reviewerTimeoutMs: positive(input.reviewerTimeoutMs, DEFAULT_CONFIG.reviewerTimeoutMs),
   };
 }
 

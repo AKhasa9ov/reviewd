@@ -37,6 +37,7 @@ function setup() {
     deliveryPollMs: 1,
     heartbeatMs: 1,
     requestTimeoutMs: 1000,
+    reviewerTimeoutMs: 600_000,
   };
   createReviewTools(ctx, config, api);
   return { definitions, calls };

@@ -61,6 +61,7 @@ function config(daemonUrl: string) {
     deliveryPollMs: 5,
     heartbeatMs: 1000,
     requestTimeoutMs: 10_000,
+    reviewerTimeoutMs: 600_000,
   };
 }
 

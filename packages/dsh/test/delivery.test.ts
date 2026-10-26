@@ -12,6 +12,7 @@ const config = {
   deliveryPollMs: 1,
   heartbeatMs: 1,
   requestTimeoutMs: 1000,
+  reviewerTimeoutMs: 600_000,
 };
 function record(overrides: Partial<DeliveryRecord> = {}): DeliveryRecord {
   return {
