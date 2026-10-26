@@ -717,19 +717,10 @@ async function runJob(deps, lease, signal) {
   }
   const agent = handle.agent;
   const release = agent.ctx?.tools?.restrict({
-    // The reviewer is strictly read-only: it must not mutate the workspace,
-    // spawn agents that could bypass this policy, or start/refresh reviews.
-    deny: [
-      "bash",
-      "write",
-      "edit",
-      "apply_patch",
-      "workflow",
-      "subagent_fork",
-      "subagent",
-      "review_start",
-      "review_refresh"
-    ]
+    // The reviewer is strictly read-only. An allowlist is safer than a deny
+    // list: new mutating or network tools cannot silently become available,
+    // and the tool service rejects names that are absent from this harness.
+    allow: ["read", "read_image", "grep", "glob", "review_status", "review_feedback"]
   });
   const timeoutMs = deps.config.reviewerTimeoutMs;
   const timeoutError = new Error("reviewer timed out");
