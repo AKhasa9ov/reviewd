@@ -20,7 +20,6 @@ export const MAX_FINDINGS = 200;
 export const MAX_QUESTIONS = 50;
 export const MAX_TEXT_BYTES = 32 * 1024;
 
-const SEVERITIES = new Set<FindingSeverity>(['blocker', 'major', 'minor', 'nit']);
 const CATEGORIES = new Set<FindingCategory>([
   'security',
   'correctness',
@@ -62,6 +61,46 @@ const FINDING_FIELDS = new Set([
   'suggestion',
 ]);
 const QUESTION_FIELDS = new Set(['id', 'file', 'line', 'question', 'why']);
+
+/** LLM reviewers often use a low/medium/high scale; normalize it to our four levels. */
+const SEVERITY_ALIASES: Record<string, FindingSeverity> = {
+  blocker: 'blocker',
+  critical: 'blocker',
+  high: 'blocker',
+  major: 'major',
+  medium: 'major',
+  minor: 'minor',
+  low: 'minor',
+  nit: 'nit',
+  info: 'nit',
+};
+
+/**
+ * Stable id for a finding that omitted one. The incremental `/findings` route
+ * validates items one at a time with index 0, so an index-based id would make
+ * every item collide; derive it from the content instead.
+ */
+function autoFindingId(value: Record<string, unknown>): string {
+  const basis = [value.file, value.lineStart, value.lineEnd, value.title, value.evidence].join(
+    '\u0000',
+  );
+  let hash = 2166136261;
+  for (let index = 0; index < basis.length; index += 1) {
+    hash ^= basis.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `f_auto_${(hash >>> 0).toString(36)}`;
+}
+
+function autoQuestionId(value: Record<string, unknown>): string {
+  const basis = [value.file, value.line, value.question].join('\u0000');
+  let hash = 2166136261;
+  for (let index = 0; index < basis.length; index += 1) {
+    hash ^= basis.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `q_auto_${(hash >>> 0).toString(36)}`;
+}
 
 export class ReportValidationError extends Error {
   constructor(message: string) {
@@ -170,37 +209,60 @@ function validateFinding(
     return null;
   }
   warnUnknown(ctx, value, FINDING_FIELDS, 'finding');
-  const id = isNonEmpty(value.id) ? value.id : undefined;
+  const id = isNonEmpty(value.id) ? value.id : autoFindingId(value);
   const rejected = (reason: string): null => {
     reject(ctx, 'finding', reason, id, index);
     return null;
   };
-  if (id === undefined) return rejected('id must be a non-empty string');
   if (ids.has(id)) return rejected(`duplicate finding id: ${id}`);
-  if (typeof value.severity !== 'string' || !SEVERITIES.has(value.severity as FindingSeverity)) {
-    return rejected('severity must be blocker|major|minor|nit');
+  const severityKey = typeof value.severity === 'string' ? value.severity.toLowerCase() : '';
+  const severity = Object.prototype.hasOwnProperty.call(SEVERITY_ALIASES, severityKey)
+    ? SEVERITY_ALIASES[severityKey]
+    : undefined;
+  if (severity === undefined) return rejected('severity must be blocker|major|minor|nit');
+  // Keep reports from capable but imperfect models: missing metadata gets a
+  // safe default, while present-but-invalid metadata and broken anchors reject.
+  let category: FindingCategory = 'other';
+  if (value.category !== undefined) {
+    if (!CATEGORIES.has(value.category as FindingCategory)) {
+      return rejected('category is not a known category');
+    }
+    category = value.category as FindingCategory;
   }
-  if (typeof value.category !== 'string' || !CATEGORIES.has(value.category as FindingCategory)) {
-    return rejected('category is not a known category');
+  let confidence: ReviewerConfidence = 'medium';
+  if (value.confidence !== undefined) {
+    if (!CONFIDENCES.has(value.confidence as ReviewerConfidence)) {
+      return rejected('confidence must be high|medium|low');
+    }
+    confidence = value.confidence as ReviewerConfidence;
   }
-  if (
-    typeof value.confidence !== 'string' ||
-    !CONFIDENCES.has(value.confidence as ReviewerConfidence)
-  ) {
-    return rejected('confidence must be high|medium|low');
-  }
-  if (typeof value.kind !== 'string' || !KINDS.has(value.kind as FindingKind)) {
-    return rejected('kind must be issue|question|praise');
+  let kind: FindingKind = 'issue';
+  if (value.kind !== undefined) {
+    if (!KINDS.has(value.kind as FindingKind))
+      return rejected('kind must be issue|question|praise');
+    kind = value.kind as FindingKind;
   }
   if (!isNonEmpty(value.file)) return rejected('file must be a non-empty string');
-  if (!isPositiveInt(value.lineStart) || !isPositiveInt(value.lineEnd)) {
+  const lineStart = value.lineStart;
+  const lineEnd = value.lineEnd === undefined ? lineStart : value.lineEnd;
+  if (!isPositiveInt(lineStart) || !isPositiveInt(lineEnd)) {
     return rejected('lineStart and lineEnd must be positive integers');
   }
-  if (value.lineEnd < value.lineStart) return rejected('lineEnd must not precede lineStart');
-  for (const field of ['title', 'rationale', 'evidence'] as const) {
-    if (!textWithin(ctx, value[field])) {
-      return rejected(`${field} must be a string no larger than ${ctx.maxTextBytes} bytes`);
-    }
+  if (lineEnd < lineStart) return rejected('lineEnd must not precede lineStart');
+  const title = value.title;
+  if (!textWithin(ctx, title)) {
+    return rejected(`title must be a string no larger than ${ctx.maxTextBytes} bytes`);
+  }
+  let rationale: unknown = value.rationale;
+  if (rationale === undefined) {
+    rationale = textWithin(ctx, value.recommendation) ? value.recommendation : title;
+  }
+  if (!textWithin(ctx, rationale)) {
+    return rejected(`rationale must be a string no larger than ${ctx.maxTextBytes} bytes`);
+  }
+  const evidence = value.evidence;
+  if (!textWithin(ctx, evidence)) {
+    return rejected(`evidence must be a string no larger than ${ctx.maxTextBytes} bytes`);
   }
 
   const file = findFile(ctx.snapshot, value.file);
@@ -208,33 +270,25 @@ function validateFinding(
     return rejected(`file is not present in the snapshot: ${value.file}`);
   }
   const lines = fileLines(file);
-  if (lines !== undefined && value.lineEnd > lines.length) {
-    return rejected(
-      `line range ${value.lineStart}..${value.lineEnd} exceeds ${lines.length} lines`,
-    );
+  if (lines !== undefined && lineEnd > lines.length) {
+    return rejected(`line range ${lineStart}..${lineEnd} exceeds ${lines.length} lines`);
   }
 
   const finding: Finding = {
     id,
-    severity: value.severity as FindingSeverity,
-    category: value.category as FindingCategory,
-    confidence: value.confidence as ReviewerConfidence,
-    kind: value.kind as FindingKind,
+    severity,
+    category,
+    confidence,
+    kind,
     file: value.file,
-    lineStart: value.lineStart,
-    lineEnd: value.lineEnd,
-    title: value.title as string,
-    rationale: value.rationale as string,
-    evidence: value.evidence as string,
+    lineStart,
+    lineEnd,
+    title,
+    rationale,
+    evidence,
   };
   if (value.suggestion !== undefined && file !== undefined) {
-    const suggestion = validateSuggestion(
-      ctx,
-      file,
-      value.lineStart,
-      value.lineEnd,
-      value.suggestion,
-    );
+    const suggestion = validateSuggestion(ctx, file, lineStart, lineEnd, value.suggestion);
     if (suggestion.suggestion !== undefined) finding.suggestion = suggestion.suggestion;
     if (suggestion.unanchored === true) finding.unanchored = true;
   } else if (value.suggestion !== undefined) {
@@ -280,12 +334,11 @@ function validateQuestion(
     return null;
   }
   warnUnknown(ctx, value, QUESTION_FIELDS, 'question');
-  const id = isNonEmpty(value.id) ? value.id : undefined;
+  const id = isNonEmpty(value.id) ? value.id : autoQuestionId(value);
   const rejected = (reason: string): null => {
     reject(ctx, 'question', reason, id, index);
     return null;
   };
-  if (id === undefined) return rejected('id must be a non-empty string');
   if (ids.has(id)) return rejected(`duplicate question id: ${id}`);
   if (!isNonEmpty(value.file)) return rejected('file must be a non-empty string');
   if (!isPositiveInt(value.line)) return rejected('line must be a positive integer');

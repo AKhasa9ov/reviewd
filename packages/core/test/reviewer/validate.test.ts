@@ -3,6 +3,7 @@ import {
   MAX_FINDINGS,
   MAX_TEXT_BYTES,
   ReportValidationError,
+  validateFindingItem,
   validateReport,
 } from '../../src/index.js';
 import type { Snapshot } from '../../src/index.js';
@@ -121,6 +122,59 @@ describe('validateReport', () => {
     expect(result.report.findings.map((item) => item.id)).toEqual(['f1']);
     expect(result.rejected.map((item) => item.id)).toEqual(['f1', 'f2', 'f3', 'f4', 'f5']);
     expect(result.rejected.every((item) => item.kind === 'finding')).toBe(true);
+  });
+
+  it('normalizes a sparse LLM finding and gives it a stable content id', () => {
+    const raw = valid();
+    raw.findings = [
+      {
+        file: 'src/a.ts',
+        lineStart: 2,
+        lineEnd: 2,
+        severity: 'medium',
+        title: 'Return is stale',
+        evidence: 'return value;',
+        recommendation: 'Return the next value.',
+      },
+    ];
+    const result = validateReport(raw, { snapshot: snapshot() });
+    expect(result.rejected).toEqual([]);
+    expect(result.report.findings[0]).toMatchObject({
+      severity: 'major',
+      category: 'other',
+      confidence: 'medium',
+      kind: 'issue',
+      rationale: 'Return the next value.',
+    });
+    expect(result.report.findings[0]?.id).toMatch(/^f_auto_/);
+  });
+
+  it('gives different ids to sparse findings validated one at a time', () => {
+    const first = validateFindingItem({
+      file: 'src/a.ts',
+      lineStart: 1,
+      lineEnd: 1,
+      severity: 'minor',
+      title: 'First',
+      evidence: 'one',
+    });
+    const second = validateFindingItem({
+      file: 'src/a.ts',
+      lineStart: 2,
+      lineEnd: 2,
+      severity: 'minor',
+      title: 'Second',
+      evidence: 'two',
+    });
+    expect(first.finding?.id).not.toBe(second.finding?.id);
+  });
+
+  it('rejects inherited prototype keys as severities', () => {
+    const raw = valid();
+    (raw.findings as Record<string, unknown>[])[0]!.severity = 'toString';
+    const result = validateReport(raw, { snapshot: snapshot() });
+    expect(result.report.findings).toEqual([]);
+    expect(result.rejected[0]?.reason).toContain('severity');
   });
 
   it('drops a mismatched suggestion but keeps the finding marked unanchored', () => {

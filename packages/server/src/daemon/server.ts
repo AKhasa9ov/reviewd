@@ -37,6 +37,12 @@ const DEFAULTS = {
   rateLimit: { mutations: 60, reads: 600, windowMs: 60_000 },
 };
 
+function isLoopbackPeer(peer: string): boolean {
+  return (
+    peer === '::1' || peer === '::ffff:127.0.0.1' || peer === '127.0.0.1' || peer.startsWith('127.')
+  );
+}
+
 export async function startDaemon(
   config: DaemonConfig,
   deps: DaemonDeps = {},
@@ -151,7 +157,11 @@ export async function startDaemon(
       }
 
       const kind = isMutation ? 'mutation' : 'read';
-      const allowed = rateLimiter.check(peer, kind);
+      // A local worker long-polls the queue and the panel streams reads over the
+      // loopback interface. Rate-limiting those reads turns a stale worker into a
+      // self-DoS; remote peers, including the LAN UI, stay limited.
+      const localRead = kind === 'read' && isLoopbackPeer(peer);
+      const allowed = localRead ? { allowed: true as const } : rateLimiter.check(peer, kind);
       if (!allowed.allowed) {
         throw new ApiError('rate-limited', 'rate limit exceeded', {
           retryAfter: allowed.retryAfter,

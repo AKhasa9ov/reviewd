@@ -120,7 +120,9 @@ describe('buildReviewPrompt', () => {
     expect(prompt).toContain('Round: 2');
     expect(prompt).toContain('Kind: verify');
     expect(prompt).toContain('Read-only review');
-    expect(prompt).toContain('schemaVersion 1');
+    expect(prompt).toContain('at most 15 tool calls');
+    expect(prompt).toContain('ONLY one fenced');
+    expect(prompt).toContain('"schemaVersion": 1');
     expect(prompt).toContain('diff --git a/src/a.ts b/src/a.ts');
   });
 
@@ -156,7 +158,7 @@ describe('buildReviewPrompt', () => {
     });
     expect(truncated).toBe(false);
     expect(prompt).toContain('no file changes');
-    expect(prompt).toContain('schemaVersion 1');
+    expect(prompt).toContain('"schemaVersion": 1');
   });
 
   it('honours a custom limit', () => {
@@ -169,7 +171,7 @@ describe('buildReviewPrompt', () => {
       diffLimit: 4_000,
     });
     expect(truncated).toBe(true);
-    expect(prompt.length).toBeLessThan(5_000);
+    expect(prompt.length).toBeLessThan(6_000);
     expect(prompt).toContain('[diff truncated');
   });
 });
