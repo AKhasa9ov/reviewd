@@ -71,6 +71,8 @@ export type {
   Side,
   Suggestion,
 } from './review/types.js';
+export { AnchorError, captureAnchor, reanchor } from './review/anchors.js';
+export type { AnchorErrorCode, CaptureAnchorInput, ReanchorOptions } from './review/anchors.js';
 export { fold, ReviewFoldError } from './review/fold.js';
 export {
   ReviewNotFoundError,
