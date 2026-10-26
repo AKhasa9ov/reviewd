@@ -1,6 +1,6 @@
 import { lstat } from 'node:fs/promises';
 import type { DiffHunk, FileDiff, ParsedFile, Snapshot, SnapshotOptions } from '../types.js';
-import { hasSymlinkParent, safeJoin } from '../paths.js';
+import { hasSymlinkParent, safeJoin, splitNulPaths } from '../paths.js';
 import { readBlob } from '../git/content.js';
 import { resolveScope } from '../git/scope.js';
 import { runGit } from '../git/run.js';
@@ -199,7 +199,7 @@ async function listUntracked(repoRoot: string, signal?: AbortSignal): Promise<Un
     truncateOnOverflow: true,
   });
   return {
-    paths: result.stdout.split('\0').filter((path) => path.length > 0),
+    paths: splitNulPaths(result.stdout),
     truncated: result.truncated === true,
   };
 }

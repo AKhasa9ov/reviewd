@@ -18,6 +18,16 @@ export function safeJoin(root: string, relative: string): string {
 }
 
 /**
+ * Split a NUL-delimited Git path list. A truncated stream may end without a
+ * trailing NUL, leaving an incomplete final token; drop it.
+ */
+export function splitNulPaths(output: string): string[] {
+  const paths = output.split('\0');
+  if (!output.endsWith('\0')) paths.pop();
+  return paths.filter((path) => path.length > 0);
+}
+
+/**
  * Detect a symlink in any parent component of a repository-relative path.
  * The final component is excluded: callers inspect it themselves so they can
  * distinguish a symlinked file from a symlinked directory.

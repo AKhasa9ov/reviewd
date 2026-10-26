@@ -12,6 +12,8 @@ const control = vi.hoisted(() => ({
   statusBytes: null as Uint8Array | null,
   diffBytes: null as Uint8Array | null,
   untrackedPaths: null as Uint8Array | null,
+  untrackedPathsTruncated: false,
+  snapshotUntrackedBytes: null as Uint8Array | null,
   lsFilesCalls: 0,
   disableParentCheck: false,
 }));
@@ -61,6 +63,7 @@ vi.mock('../src/git/run.js', async (importOriginal) => {
           stdout: Buffer.from(control.untrackedPaths).toString('utf8'),
           stdoutBytes: Buffer.from(control.untrackedPaths),
           stderr: '',
+          truncated: control.untrackedPathsTruncated,
         } satisfies GitRun.GitResult;
       }
       if (control.truncateUntracked && args[0] === 'ls-files' && args[1] === '--others') {
@@ -74,6 +77,15 @@ vi.mock('../src/git/run.js', async (importOriginal) => {
       }
       if (control.truncateSnapshotUntracked && args[0] === 'ls-files' && args[1] === '--others') {
         control.lsFilesCalls += 1;
+        if (control.lsFilesCalls >= 2 && control.snapshotUntrackedBytes !== null) {
+          return {
+            code: 0,
+            stdout: Buffer.from(control.snapshotUntrackedBytes).toString('utf8'),
+            stdoutBytes: Buffer.from(control.snapshotUntrackedBytes),
+            stderr: '',
+            truncated: true,
+          } satisfies GitRun.GitResult;
+        }
         const result = await actual.runGit(cwd, args, options);
         if (control.lsFilesCalls >= 2) return { ...result, truncated: true };
         return result;
@@ -96,6 +108,8 @@ afterEach(async () => {
   control.statusBytes = null;
   control.diffBytes = null;
   control.untrackedPaths = null;
+  control.untrackedPathsTruncated = false;
+  control.snapshotUntrackedBytes = null;
   control.lsFilesCalls = 0;
   control.disableParentCheck = false;
   await Promise.all(cleanups.splice(0).map(async (cleanup) => cleanup()));
@@ -139,6 +153,45 @@ describe('snapshot untracked listing truncation', () => {
     expect(snapshot.files.find((file) => file.path === 'untracked.txt')).toBeDefined();
     expect(snapshot.warnings).toContain('untracked-list-truncated');
     expect(snapshot.warnings).not.toContain('worktree-digest-truncated');
+    expect(snapshot.totals.truncated).toBe(true);
+  });
+});
+
+describe('partial NUL path tokens', () => {
+  it('drops a trailing partial pathname from a truncated digest listing', async () => {
+    const repo = await makeRepo();
+    cleanups.push(repo.cleanup);
+    await repo.write('base.txt', 'base\n');
+    const baseSha = await repo.commit('base');
+    await repo.write('good.txt', 'content\n');
+
+    control.untrackedPaths = Buffer.from('good.txt\0partial');
+    control.untrackedPathsTruncated = true;
+    const partial = await worktreeDigest(repo.root, baseSha);
+    control.untrackedPaths = Buffer.from('good.txt\0');
+    const complete = await worktreeDigest(repo.root, baseSha);
+
+    expect(partial).toBe(complete);
+  });
+
+  it('drops a trailing partial pathname from a truncated snapshot listing', async () => {
+    const repo = await makeRepo();
+    cleanups.push(repo.cleanup);
+    await repo.write('base.txt', 'base\n');
+    await repo.commit('base');
+    await repo.write('untracked.txt', 'content\n');
+    control.truncateSnapshotUntracked = true;
+    control.snapshotUntrackedBytes = Buffer.from('untracked.txt\0partial');
+
+    const snapshot = await buildSnapshot({
+      repoRoot: repo.root,
+      scope: { kind: 'worktree', baseRef: 'main' },
+    });
+
+    expect(snapshot.files.some((file) => file.path === 'untracked.txt')).toBe(true);
+    expect(snapshot.files.some((file) => file.path === 'partial')).toBe(false);
+    expect(snapshot.warnings).not.toContain('unreadable:partial');
+    expect(snapshot.warnings).toContain('untracked-list-truncated');
     expect(snapshot.totals.truncated).toBe(true);
   });
 });

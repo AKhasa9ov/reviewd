@@ -95,7 +95,10 @@ and length-framed: status/diff byte fields and per-file records carry explicit t
 lengths, and per-file records distinguish regular files, symlinks and unreadable paths. Paths
 are sorted by UTF-8 bytes; regular files are opened with `O_NOFOLLOW` and streamed from the
 handle; symlinks hash their link target rather than the target contents; unreadable or raced
-paths hash a stable marker. Both the digest and the snapshot cap their untracked path
+paths hash a stable marker. On Linux the opened descriptor is verified through
+`/proc/self/fd/<fd>` against the precomputed repository realpath, so a parent-directory swap
+cannot redirect the read. Platforms without procfs fall back to `realpath(pathname)`, which
+retains the parent-symlink TOCTOU limitation. Both the digest and the snapshot cap their untracked path
 listing at 8 MiB; digest overflow sets `worktreeDigestTruncated`, while snapshot overflow
 adds `untracked-list-truncated` and marks totals truncated. Untracked content itself is not
 capped.

@@ -3,7 +3,7 @@ import { constants } from 'node:fs';
 import { lstat, open, readlink, realpath } from 'node:fs/promises';
 import { isAbsolute, relative, sep } from 'node:path';
 import type { DiffScope, ResolvedScope } from '../types.js';
-import { hasSymlinkParent, safeJoin } from '../paths.js';
+import { hasSymlinkParent, safeJoin, splitNulPaths } from '../paths.js';
 import { resolveRepoRoot } from './repo.js';
 import { GitError, runGit } from './run.js';
 
@@ -201,6 +201,16 @@ function fileRecord(pathBytes: Buffer, size: number): Hash {
   return record;
 }
 
+async function openedPath(handle: { readonly fd: number }, absolute: string): Promise<string> {
+  try {
+    // /proc/self/fd names the opened descriptor, not the current pathname.
+    return await readlink(`/proc/self/fd/${handle.fd}`);
+  } catch {
+    // Non-procfs platforms keep the pathname-based fallback and its TOCTOU window.
+    return await realpath(absolute);
+  }
+}
+
 async function untrackedRecord(
   repoRoot: string,
   realRoot: string,
@@ -234,13 +244,14 @@ async function untrackedRecord(
   let handle;
   try {
     handle = await open(absolute, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
-    const resolved = await realpath(absolute);
-    const rel = relative(realRoot, resolved);
+    const stat = await handle.stat();
+    if (!stat.isFile()) return unreadableRecord(pathBytes);
+    const opened = await openedPath(handle, absolute);
+    if (!isAbsolute(opened)) return unreadableRecord(pathBytes);
+    const rel = relative(realRoot, opened);
     if (rel === '' || rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
       return unreadableRecord(pathBytes);
     }
-    const stat = await handle.stat();
-    if (!stat.isFile()) return unreadableRecord(pathBytes);
     const record = fileRecord(pathBytes, stat.size);
     if (stat.size > 0) {
       let read = 0;
@@ -299,10 +310,7 @@ async function worktreeDigestState(
   updateFramed(hash, TAG_STATUS, status.stdoutBytes);
   updateFramed(hash, TAG_DIFF, diff.stdoutBytes);
   const realRoot = await realpath(repoRoot);
-  const paths = untracked.stdout
-    .split('\0')
-    .filter((path) => path.length > 0)
-    .sort(compareBytePaths);
+  const paths = splitNulPaths(untracked.stdout).sort(compareBytePaths);
   for (const path of paths) {
     updateFramed(hash, TAG_UNTRACKED, await untrackedRecord(repoRoot, realRoot, path, signal));
   }
