@@ -5,6 +5,7 @@ import type {
   CreateReviewRequest,
   CreateReviewResponse,
   HealthResponse,
+  LatestFeedbackView,
   Page,
   ReviewSummary,
   ReviewView,
@@ -247,6 +248,16 @@ export class ApiClient {
     return this.request<ReviewView>(`/api/reviews/${encodeURIComponent(id)}/refresh`, {
       method: 'POST',
       body: scope === undefined ? {} : { scope },
+    });
+  }
+
+  async latestFeedback(id: string): Promise<LatestFeedbackView> {
+    return this.request<LatestFeedbackView>(`/api/reviews/${encodeURIComponent(id)}/feedback`);
+  }
+
+  async cancelAgent(id: string): Promise<void> {
+    await this.request<{ ok: boolean }>(`/api/reviews/${encodeURIComponent(id)}/agent/cancel`, {
+      method: 'POST',
     });
   }
 

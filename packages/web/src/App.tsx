@@ -7,7 +7,7 @@ import { ReviewListPage } from './pages/ReviewListPage.js';
 import { NewReviewPage } from './pages/NewReviewPage.js';
 import { AuthPage } from './pages/AuthPage.js';
 import { HealthPage } from './pages/HealthPage.js';
-import { ReviewDetailPlaceholder } from './pages/ReviewDetailPlaceholder.js';
+import { ReviewDetailPage } from './pages/ReviewDetailPage.js';
 import { NotFoundPage } from './pages/NotFoundPage.js';
 
 export interface AppProps {
@@ -35,7 +35,9 @@ export function App({ client }: AppProps = {}): JSX.Element {
           {route.name === 'new' ? <NewReviewPage client={activeClient} /> : null}
           {route.name === 'auth' ? <AuthPage client={activeClient} /> : null}
           {route.name === 'health' ? <HealthPage client={activeClient} /> : null}
-          {route.name === 'review' ? <ReviewDetailPlaceholder id={route.id} /> : null}
+          {route.name === 'review' ? (
+            <ReviewDetailPage client={activeClient} id={route.id} />
+          ) : null}
           {route.name === 'not-found' ? <NotFoundPage path={route.path} /> : null}
         </Shell>
       </ToastProvider>

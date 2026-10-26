@@ -28,3 +28,6 @@ export * from './icons.js';
 export * from './api/client.js';
 export * from './api/types.js';
 export * from './format.js';
+export { ReviewDetail } from './review/ReviewDetail.js';
+export type { ReviewDetailProps } from './review/ReviewDetail.js';
+export * from './review/model.js';

@@ -4,6 +4,7 @@ import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ApiClient, ReviewSummary } from '@dsh-code-review/ui';
 import { App } from '../src/App.js';
+import { latestFeedback, reviewView, snapshotR1, snapshotR2 } from './reviewFixtures.js';
 
 const review: ReviewSummary = {
   id: 'rev_01',
@@ -21,8 +22,12 @@ const review: ReviewSummary = {
 function fakeClient(overrides: Partial<Record<keyof ApiClient, unknown>> = {}): ApiClient {
   return {
     listReviews: vi.fn(async () => ({ items: [review], total: 1, limit: 50, offset: 0 })),
-    getReview: vi.fn(),
-    getSnapshot: vi.fn(),
+    getReview: vi.fn(async () => reviewView),
+    getSnapshot: vi.fn(async (_id: string, round: number) =>
+      round === 2 ? snapshotR2 : snapshotR1,
+    ),
+    latestFeedback: vi.fn(async () => latestFeedback),
+    cancelAgent: vi.fn(async () => undefined),
     addComment: vi.fn(),
     reply: vi.fn(),
     setCommentState: vi.fn(),
@@ -118,11 +123,13 @@ describe('review list', () => {
     expect(await screen.findByText('Billing retry semantics')).toBeInTheDocument();
   });
 
-  it('navigates to a deep-linked review placeholder', async () => {
+  it('navigates to a deep-linked review detail', async () => {
     const user = userEvent.setup();
     render(<App client={fakeClient()} />);
     await user.click(await screen.findByRole('link', { name: /Billing retry semantics/ }));
-    expect(screen.getByRole('heading', { name: 'Review detail' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Billing retry semantics' }),
+    ).toBeInTheDocument();
     expect(screen.getByText('rev_01')).toBeInTheDocument();
     await user.click(screen.getByRole('link', { name: 'All reviews' }));
     expect(screen.getByRole('heading', { name: 'Reviews' })).toBeInTheDocument();
@@ -157,7 +164,9 @@ describe('new review form', () => {
       scope: { kind: 'range', baseRef: 'main', headRef: 'feature/billing' },
       reviewer: { backend: 'none' },
     });
-    expect(screen.getByRole('heading', { name: 'Review detail' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Billing retry semantics' }),
+    ).toBeInTheDocument();
   });
 
   it('switches the scope fields and posts a commit scope', async () => {

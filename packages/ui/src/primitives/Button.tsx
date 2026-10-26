@@ -6,6 +6,7 @@ export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   loading?: boolean;
+  size?: 'small' | 'medium';
   icon?: ReactNode;
 }
 
@@ -13,6 +14,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   {
     variant = 'primary',
     loading = false,
+    size = 'medium',
     icon,
     children,
     disabled,
@@ -29,6 +31,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       type={type}
       className={['cr-button', className].filter(Boolean).join(' ')}
       data-variant={variant}
+      data-size={size}
       disabled={disabled === true || loading}
       aria-busy={loading || undefined}
     >
