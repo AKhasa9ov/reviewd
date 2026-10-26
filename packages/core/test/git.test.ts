@@ -41,6 +41,34 @@ describe('runGit', () => {
     expect(result.code).not.toBe(0);
   });
 
+  it('returns partial stdout when truncateOnOverflow is set', async () => {
+    const repo = await makeRepo();
+    cleanups.push(repo.cleanup);
+    await repo.write('a.txt', 'hello\n');
+    await repo.commit('base');
+
+    const result = await runGit(repo.root, ['rev-parse', 'HEAD'], {
+      maxBytes: 5,
+      truncateOnOverflow: true,
+    });
+    expect(result.truncated).toBe(true);
+    expect(result.code).toBe(1);
+    expect(result.stdoutBytes).toHaveLength(5);
+    expect(result.stdout).toHaveLength(5);
+  });
+
+  it('rejects when stdout exceeds the configured cap without truncation', async () => {
+    const repo = await makeRepo();
+    cleanups.push(repo.cleanup);
+    await repo.write('a.txt', 'hello\n');
+    await repo.commit('base');
+
+    await expect(runGit(repo.root, ['rev-parse', 'HEAD'], { maxBytes: 5 })).rejects.toMatchObject({
+      name: 'GitError',
+      code: 'git-failed',
+    });
+  });
+
   it('rejects when stderr exceeds the configured cap', async () => {
     const repo = await makeRepo();
     cleanups.push(repo.cleanup);

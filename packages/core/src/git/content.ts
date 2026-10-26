@@ -62,7 +62,7 @@ export async function readBlob(
       throw error;
     }
     if (result.code !== 0) return EMPTY;
-    buffer = Buffer.from(result.stdout, 'utf8');
+    buffer = result.stdoutBytes;
   }
 
   if (buffer.includes(0)) {

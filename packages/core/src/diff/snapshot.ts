@@ -1,8 +1,7 @@
 import type { FileDiff, Snapshot, SnapshotOptions } from '../types.js';
 import { readBlob } from '../git/content.js';
 import { resolveScope } from '../git/scope.js';
-import { GitError, runGit } from '../git/run.js';
-import type { GitResult } from '../git/run.js';
+import { runGit } from '../git/run.js';
 import { parseUnifiedDiff } from './parse.js';
 import { isIgnored } from './glob.js';
 
@@ -56,29 +55,30 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
   });
 
   const warnings: string[] = [];
-  let diff: GitResult;
-  try {
-    diff = await runGit(scope.repoRoot, diffArgs(scope), {
-      signal: options.signal,
-      maxBytes: Math.max(maxDiffBytes * 8, 16 * 1024 * 1024),
-    });
-  } catch (error) {
-    if (error instanceof GitError && error.message.includes('exceeded')) {
-      warnings.push('diff-truncated');
-      diff = { stdout: '', stderr: '', code: 0 };
-    } else {
-      throw error;
-    }
-  }
+  const diff = await runGit(scope.repoRoot, diffArgs(scope), {
+    signal: options.signal,
+    maxBytes: Math.max(maxDiffBytes * 8, 16 * 1024 * 1024),
+    truncateOnOverflow: true,
+  });
+  const diffTruncated = diff.truncated === true;
+  if (diffTruncated) warnings.push('diff-truncated');
   const limited = truncateAtFileBoundary(diff.stdout, maxDiffBytes);
-  if (limited.truncated) warnings.push('diff-truncated');
+  if (limited.truncated && !diffTruncated) warnings.push('diff-truncated');
 
-  const parsed = parseUnifiedDiff(limited.text);
+  const candidates = parseUnifiedDiff(limited.text)
+    .filter((entry) => !isIgnored(entry.path, ignore))
+    .sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
+
+  let truncated = diffTruncated || limited.truncated;
+  let selected = candidates;
+  if (candidates.length > maxFiles) {
+    selected = candidates.slice(0, maxFiles);
+    truncated = true;
+    warnings.push('files-truncated');
+  }
+
   const files: FileDiff[] = [];
-
-  for (const entry of parsed) {
-    if (isIgnored(entry.path, ignore)) continue;
-
+  for (const entry of selected) {
     const oldPath = entry.oldPath ?? entry.path;
     const base =
       entry.status === 'added' || !includeContent
@@ -91,7 +91,11 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
 
     const binary = entry.binary || base?.binary === true || head?.binary === true;
     const oversized = base?.oversized === true || head?.oversized === true;
-    const contentHash = head !== null && head.hash !== '' ? head.hash : (base?.hash ?? '');
+    let contentHash: string | null = null;
+    if (includeContent) {
+      if (head !== null && head.hash !== '') contentHash = head.hash;
+      else if (base !== null && base.hash !== '') contentHash = base.hash;
+    }
 
     const file: FileDiff = {
       path: entry.path,
@@ -113,17 +117,7 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
     files.push(file);
   }
 
-  files.sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
-
-  let truncated = limited.truncated;
-  let selected = files;
-  if (files.length > maxFiles) {
-    selected = files.slice(0, maxFiles);
-    truncated = true;
-    warnings.push('files-truncated');
-  }
-
-  const totals = selected.reduce(
+  const totals = files.reduce(
     (accumulator, file) => ({
       files: accumulator.files + 1,
       added: accumulator.added + file.added,
@@ -136,7 +130,7 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
   return {
     schemaVersion: 1,
     scope,
-    files: selected,
+    files,
     totals,
     warnings,
   };

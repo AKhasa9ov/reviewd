@@ -58,7 +58,7 @@ export interface FileDiff {
   hunks: DiffHunk[];
   oldLines?: string[];
   newLines?: string[];
-  contentHash: string;
+  contentHash: string | null;
 }
 
 export interface Snapshot {

@@ -1,7 +1,14 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import { buildSnapshot } from '../src/index.js';
+import { createHash } from 'node:crypto';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { buildSnapshot, readBlob } from '../src/index.js';
+import type * as ContentModule from '../src/git/content.js';
 import type { Snapshot } from '../src/index.js';
 import { makeRepo } from './helpers/repo.js';
+
+vi.mock('../src/git/content.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof ContentModule>();
+  return { ...actual, readBlob: vi.fn(actual.readBlob) };
+});
 
 const cleanups: Array<() => Promise<void>> = [];
 
@@ -69,9 +76,11 @@ describe('buildSnapshot', () => {
     expect(added?.status).toBe('added');
     expect(added?.newLines).toEqual(['new']);
     expect(added?.oldLines).toBeUndefined();
+    expect(added?.contentHash).toBe(createHash('sha256').update('new\n').digest('hex'));
     expect(deleted?.status).toBe('deleted');
     expect(deleted?.oldLines).toEqual(['keep']);
     expect(deleted?.newLines).toBeUndefined();
+    expect(deleted?.contentHash).toBe(createHash('sha256').update('keep\n').digest('hex'));
   });
 
   it('snapshots uncommitted worktree changes', async () => {
@@ -95,11 +104,30 @@ describe('buildSnapshot', () => {
     expect(result.files[0]?.newLines).toBeUndefined();
   });
 
+  it('hashes committed binary bytes without decoding them', async () => {
+    const repo = await makeRepo();
+    cleanups.push(repo.cleanup);
+    await repo.writeBytes('img.bin', Uint8Array.from([0xff, 0xfe, 0x00, 0x01]));
+    await repo.commit('base');
+    await repo.git('checkout', '-b', 'feature');
+    const headBytes = Uint8Array.from([0xff, 0xfe, 0x00, 0x02]);
+    await repo.writeBytes('img.bin', headBytes);
+    await repo.commit('binary change');
+
+    const result = await snapshot(repo.root);
+    const file = result.files.find((entry) => entry.path === 'img.bin');
+    expect(file?.binary).toBe(true);
+    expect(file?.contentHash).toBe(
+      createHash('sha256').update(Buffer.from(headBytes)).digest('hex'),
+    );
+  });
+
   it('omits content when includeContent is false', async () => {
     const repo = await featureRepo();
     const result = await snapshot(repo.root, { includeContent: false });
     expect(result.files[0]?.newLines).toBeUndefined();
     expect(result.files[0]?.oldLines).toBeUndefined();
+    expect(result.files[0]?.contentHash).toBeNull();
   });
 
   it('marks the snapshot truncated when maxFiles is exceeded', async () => {
@@ -109,9 +137,12 @@ describe('buildSnapshot', () => {
     }
     await repo.commit('more files');
 
+    vi.mocked(readBlob).mockClear();
     const result = await snapshot(repo.root, { maxFiles: 1 });
     expect(result.files).toHaveLength(1);
     expect(result.totals.truncated).toBe(true);
+    const readPaths = vi.mocked(readBlob).mock.calls.map(([, , path]) => path);
+    expect(readPaths).toEqual(['src/a.ts', 'src/a.ts']);
   });
 
   it('sorts files by path', async () => {

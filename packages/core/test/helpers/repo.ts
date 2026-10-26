@@ -10,6 +10,7 @@ export interface TestRepo {
   root: string;
   git: (...args: string[]) => Promise<string>;
   write: (path: string, content: string) => Promise<void>;
+  writeBytes: (path: string, content: Uint8Array) => Promise<void>;
   commit: (message: string) => Promise<string>;
   commitStaged: (message: string) => Promise<string>;
   cleanup: () => Promise<void>;
@@ -22,10 +23,13 @@ export async function makeRepo(): Promise<TestRepo> {
     const { stdout } = await execFileAsync('git', args, { cwd: root, env });
     return stdout.trim();
   };
-  const write = async (path: string, content: string): Promise<void> => {
+  const writeBytes = async (path: string, content: Uint8Array): Promise<void> => {
     const absolute = join(root, path);
     await mkdir(dirname(absolute), { recursive: true });
-    await writeFile(absolute, content, 'utf8');
+    await writeFile(absolute, content);
+  };
+  const write = async (path: string, content: string): Promise<void> => {
+    await writeBytes(path, Buffer.from(content, 'utf8'));
   };
   const commit = async (message: string): Promise<string> => {
     await git('add', '-A');
@@ -44,6 +48,7 @@ export async function makeRepo(): Promise<TestRepo> {
     root,
     git,
     write,
+    writeBytes,
     commit,
     commitStaged,
     cleanup: async () => {

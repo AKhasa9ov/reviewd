@@ -17,14 +17,17 @@ export interface GitRunOptions {
   allowFailure?: boolean;
   maxBytes?: number;
   maxStderrBytes?: number;
+  truncateOnOverflow?: boolean;
   signal?: AbortSignal;
   env?: NodeJS.ProcessEnv;
 }
 
 export interface GitResult {
   stdout: string;
+  stdoutBytes: Buffer;
   stderr: string;
   code: number;
+  truncated?: boolean;
 }
 
 const DEFAULT_MAX_BYTES = 16 * 1024 * 1024;
@@ -77,13 +80,32 @@ export async function runGit(
     });
 
     child.stdout.on('data', (chunk: Buffer) => {
-      bytes += chunk.length;
-      if (bytes > maxBytes) {
+      if (settled) return;
+      const remaining = maxBytes - bytes;
+      if (chunk.length > remaining) {
+        if (remaining > 0) {
+          stdout.push(chunk.subarray(0, remaining));
+          bytes += remaining;
+        }
+        if (options.truncateOnOverflow === true) {
+          child.kill('SIGKILL');
+          settled = true;
+          const buffer = Buffer.concat(stdout);
+          resolve({
+            stdout: buffer.toString('utf8'),
+            stdoutBytes: buffer,
+            stderr: Buffer.concat(stderr).toString('utf8'),
+            code: 1,
+            truncated: true,
+          });
+          return;
+        }
         child.kill('SIGKILL');
         fail(new GitError('git-failed', `git output exceeded ${maxBytes} bytes`));
         return;
       }
       stdout.push(chunk);
+      bytes += chunk.length;
     });
 
     child.stderr.on('data', (chunk: Buffer) => {
@@ -98,10 +120,13 @@ export async function runGit(
 
     child.on('close', (code) => {
       if (settled) return;
+      const buffer = Buffer.concat(stdout);
       const result: GitResult = {
-        stdout: Buffer.concat(stdout).toString('utf8'),
+        stdout: buffer.toString('utf8'),
+        stdoutBytes: buffer,
         stderr: Buffer.concat(stderr).toString('utf8'),
         code: code ?? 1,
+        truncated: false,
       };
       if (result.code !== 0 && options.allowFailure !== true) {
         settled = true;
