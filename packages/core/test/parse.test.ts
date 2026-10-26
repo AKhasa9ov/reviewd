@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DiffParseError, parseUnifiedDiff } from '../src/diff/parse.js';
+import { DiffParseError, parseUnifiedDiff } from '../src/index.js';
 
 const SIMPLE = `diff --git a/src/a.ts b/src/a.ts
 index 1111111..2222222 100644
@@ -41,6 +41,14 @@ describe('parseUnifiedDiff', () => {
 
   it('throws DiffParseError for a malformed diff header', () => {
     expect(() => parseUnifiedDiff('diff --git malformed\n')).toThrow(DiffParseError);
+  });
+
+  it('throws DiffParseError for an ambiguous diff header', () => {
+    const ambiguous = `diff --git a/foo b/bar b/baz
+Binary files a/foo and b/bar b/baz differ
+`;
+
+    expect(() => parseUnifiedDiff(ambiguous)).toThrow(DiffParseError);
   });
 
   it('keeps binary diffs with unquoted paths working', () => {

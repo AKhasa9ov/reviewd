@@ -67,9 +67,10 @@ export function parseUnifiedDiff(diff: string): ParsedFile[] {
     if (line.startsWith('diff --git ')) {
       finish();
       const match = FILE_HEADER.exec(line);
-      if (match === null) {
+      const separatorCount = line.split(' b/').length - 1;
+      if (match === null || separatorCount !== 1) {
         throw new DiffParseError(
-          `Malformed diff file header at line ${index + 1}: expected "diff --git a/<path> b/<path>"`,
+          `Malformed or ambiguous diff file header at line ${index + 1}: expected exactly one " b/" separator between a/<path> and b/<path>`,
           index + 1,
         );
       }
