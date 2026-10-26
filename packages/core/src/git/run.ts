@@ -16,6 +16,7 @@ export class GitError extends Error {
 export interface GitRunOptions {
   allowFailure?: boolean;
   maxBytes?: number;
+  maxStderrBytes?: number;
   signal?: AbortSignal;
   env?: NodeJS.ProcessEnv;
 }
@@ -27,6 +28,7 @@ export interface GitResult {
 }
 
 const DEFAULT_MAX_BYTES = 16 * 1024 * 1024;
+const DEFAULT_MAX_STDERR_BYTES = 1024 * 1024;
 
 export async function runGit(
   cwd: string,
@@ -34,6 +36,7 @@ export async function runGit(
   options: GitRunOptions = {},
 ): Promise<GitResult> {
   const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
+  const maxStderrBytes = options.maxStderrBytes ?? DEFAULT_MAX_STDERR_BYTES;
   if (options.signal?.aborted === true) {
     throw new GitError('git-failed', 'git command aborted');
   }
@@ -56,6 +59,7 @@ export async function runGit(
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
     let bytes = 0;
+    let stderrBytes = 0;
     let settled = false;
 
     const fail = (error: GitError): void => {
@@ -83,6 +87,12 @@ export async function runGit(
     });
 
     child.stderr.on('data', (chunk: Buffer) => {
+      stderrBytes += chunk.length;
+      if (stderrBytes > maxStderrBytes) {
+        child.kill('SIGKILL');
+        fail(new GitError('git-failed', `git stderr exceeded ${maxStderrBytes} bytes`));
+        return;
+      }
       stderr.push(chunk);
     });
 

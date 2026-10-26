@@ -5,7 +5,9 @@ export async function resolveRepoRoot(input: string): Promise<string> {
   const absolute = await realpath(input).catch(() => {
     throw new GitError('not-a-repo', `path does not exist: ${input}`);
   });
-  const info = await stat(absolute);
+  const info = await stat(absolute).catch(() => {
+    throw new GitError('not-a-repo', `path does not exist: ${input}`);
+  });
   if (!info.isDirectory()) {
     throw new GitError('not-a-repo', `not a directory: ${input}`);
   }

@@ -40,6 +40,19 @@ describe('runGit', () => {
     const result = await runGit(repo.root, ['rev-parse', 'HEAD'], { allowFailure: true });
     expect(result.code).not.toBe(0);
   });
+
+  it('rejects when stderr exceeds the configured cap', async () => {
+    const repo = await makeRepo();
+    cleanups.push(repo.cleanup);
+
+    const error: unknown = await runGit(repo.root, ['rev-parse', 'HEAD'], {
+      maxStderrBytes: 1,
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(GitError);
+    expect(error).toMatchObject({ name: 'GitError', code: 'git-failed' });
+    expect((error as Error).message).toContain('stderr exceeded');
+  });
 });
 
 describe('resolveRepoRoot', () => {
