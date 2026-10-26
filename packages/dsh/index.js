@@ -91,7 +91,8 @@ var DEFAULT_CONFIG = {
   pollMs: 2e3,
   deliveryPollMs: 1e3,
   heartbeatMs: 2e4,
-  requestTimeoutMs: 3e4
+  requestTimeoutMs: 3e4,
+  reviewerTimeoutMs: 10 * 60 * 1e3
 };
 function stringValue(value, fallback) {
   return typeof value === "string" && value.trim() !== "" ? value.trim() : fallback;
@@ -105,6 +106,7 @@ function normalizeConfig(raw) {
   const model = input.reviewerModel;
   return {
     daemonUrl: stringValue(input.daemonUrl, DEFAULT_CONFIG.daemonUrl).replace(/\/+$/, ""),
+    ...typeof input.publicUrl === "string" && input.publicUrl.trim() !== "" ? { publicUrl: input.publicUrl.trim().replace(/\/+$/, "") } : {},
     token: typeof input.token === "string" ? input.token : "",
     worker: input.worker === true,
     ...typeof input.repoHint === "string" && input.repoHint.trim() !== "" ? { repoHint: input.repoHint.trim() } : {},
@@ -122,12 +124,16 @@ function normalizeConfig(raw) {
     pollMs: positive(input.pollMs, DEFAULT_CONFIG.pollMs),
     deliveryPollMs: positive(input.deliveryPollMs, DEFAULT_CONFIG.deliveryPollMs),
     heartbeatMs: positive(input.heartbeatMs, DEFAULT_CONFIG.heartbeatMs),
-    requestTimeoutMs: positive(input.requestTimeoutMs, DEFAULT_CONFIG.requestTimeoutMs)
+    requestTimeoutMs: positive(input.requestTimeoutMs, DEFAULT_CONFIG.requestTimeoutMs),
+    reviewerTimeoutMs: positive(input.reviewerTimeoutMs, DEFAULT_CONFIG.reviewerTimeoutMs)
   };
 }
 function configProblem(config) {
   if (config.daemonUrl === "") return "daemonUrl is not configured";
   if (!/^https?:\/\//.test(config.daemonUrl)) return "daemonUrl must be an http(s) URL";
+  if (config.publicUrl !== void 0 && !/^https?:\/\//.test(config.publicUrl)) {
+    return "publicUrl must be an http(s) URL";
+  }
   if (config.token.length < 32) return "token must be at least 32 characters";
   return void 0;
 }
@@ -212,7 +218,10 @@ function createProxyHandler(deps) {
         return;
       }
       if (path === "/info" && (req.method === "GET" || req.method === "HEAD")) {
-        const body2 = JSON.stringify({ daemonUrl: deps.config.daemonUrl });
+        const body2 = JSON.stringify({
+          daemonUrl: deps.config.daemonUrl,
+          ...deps.config.publicUrl === void 0 ? {} : { publicUrl: deps.config.publicUrl }
+        });
         res.writeHead(200, {
           "content-type": "application/json; charset=utf-8",
           "content-length": String(Buffer.byteLength(body2)),
@@ -238,9 +247,14 @@ function createProxyHandler(deps) {
         const lastEventId = req.headers["last-event-id"];
         if (typeof lastEventId === "string") headers["last-event-id"] = lastEventId;
       }
+      for (const name2 of ["idempotency-key", "x-review-actor"]) {
+        const value = req.headers[name2];
+        if (typeof value === "string" && value !== "") headers[name2] = value;
+      }
       const controller = new AbortController();
       res.on("close", () => controller.abort());
-      const response = await fetchImpl(`${deps.config.daemonUrl}${path}`, {
+      const daemonPath = path === "/" ? "/api" : `/api${path}`;
+      const response = await fetchImpl(`${deps.config.daemonUrl}${daemonPath}`, {
         method: req.method ?? "GET",
         headers,
         ...body === void 0 ? {} : { body },
@@ -486,6 +500,7 @@ function createReviewTools(ctx, config, api) {
 
 // packages/dsh/src/delivery.ts
 var MAX_FEEDBACK_CHARS = 1e5;
+var MAX_DELIVERY_ATTEMPTS = 3;
 function wait(ms, signal) {
   return new Promise((resolve) => {
     if (signal.aborted) {
@@ -540,6 +555,7 @@ async function deliverOne(deps, record, signal) {
 async function runDeliveryLoop(deps, signal) {
   const sleep = deps.sleep ?? wait;
   let backoff = 1e3;
+  const attempts = /* @__PURE__ */ new Map();
   while (!signal.aborted) {
     try {
       const pending = await deps.api.get(
@@ -550,10 +566,32 @@ async function runDeliveryLoop(deps, signal) {
         if (signal.aborted) return;
         try {
           await deliverOne(deps, record, signal);
+          attempts.delete(record.id);
           backoff = 1e3;
         } catch (error) {
+          const message = error instanceof Error ? error.message : "unknown";
+          const count = (attempts.get(record.id) ?? 0) + 1;
+          attempts.set(record.id, count);
+          if (count >= MAX_DELIVERY_ATTEMPTS) {
+            deps.logger?.warn?.(
+              `code-review: delivery ${record.id} failed ${count} times; marking it failed: ${message}`
+            );
+            try {
+              await deps.api.post(
+                `/api/deliveries/${encodeURIComponent(record.id)}/fail`,
+                { error: message },
+                signal
+              );
+              attempts.delete(record.id);
+            } catch (failError) {
+              deps.logger?.warn?.(
+                `code-review: cannot mark delivery ${record.id} failed: ${failError instanceof Error ? failError.message : "unknown"}`
+              );
+            }
+            continue;
+          }
           deps.logger?.warn?.(
-            `code-review: delivery ${record.id} failed: ${error instanceof Error ? error.message : "unknown"}`
+            `code-review: delivery ${record.id} failed (attempt ${count}/${MAX_DELIVERY_ATTEMPTS}): ${message}`
           );
           await sleep(backoff, signal);
           backoff = Math.min(backoff * 2, 3e4);
@@ -678,17 +716,41 @@ async function runJob(deps, lease, signal) {
     return;
   }
   const agent = handle.agent;
-  const release = agent.ctx?.tools?.restrict({ deny: ["write", "edit", "apply_patch"] });
-  const timeoutMs = 10 * 60 * 1e3;
+  const release = agent.ctx?.tools?.restrict({
+    // The reviewer is strictly read-only: it must not mutate the workspace,
+    // spawn agents that could bypass this policy, or start/refresh reviews.
+    deny: [
+      "bash",
+      "write",
+      "edit",
+      "apply_patch",
+      "workflow",
+      "subagent_fork",
+      "subagent",
+      "review_start",
+      "review_refresh"
+    ]
+  });
+  const timeoutMs = deps.config.reviewerTimeoutMs;
+  const timeoutError = new Error("reviewer timed out");
   let timeout;
-  const onAbort = () => agent.cancel({ kind: "disposed" });
+  let cancelled = false;
+  const cancel = (cause) => {
+    if (cancelled) return;
+    cancelled = true;
+    agent.cancel(cause);
+  };
+  const onAbort = () => cancel({ kind: "disposed" });
   signal.addEventListener("abort", onAbort, { once: true });
   try {
     agent.followup(userMessage(bundle.prompt));
     await Promise.race([
       agent.whenIdle(),
       new Promise((_resolve, reject) => {
-        timeout = setTimeout(() => reject(new Error("reviewer timed out")), timeoutMs);
+        timeout = setTimeout(() => {
+          cancel({ kind: "timeout" });
+          reject(timeoutError);
+        }, timeoutMs);
       })
     ]);
     const events = agent.snapshotEvents?.() ?? [];
@@ -700,6 +762,19 @@ async function runJob(deps, lease, signal) {
           attemptId: job.attemptId,
           code: "invalid-output",
           message: "reviewer returned no JSON report",
+          retryable: false
+        },
+        signal
+      );
+      return;
+    }
+    if (report.schemaVersion !== 1) {
+      await deps.api.post(
+        `/api/jobs/${encodeURIComponent(job.id)}/fail`,
+        {
+          attemptId: job.attemptId,
+          code: "invalid-output",
+          message: `reviewer report must use schemaVersion 1 (received ${String(report.schemaVersion)})`,
           retryable: false
         },
         signal
@@ -733,11 +808,12 @@ async function runJob(deps, lease, signal) {
       signal
     );
   } catch (error) {
+    const timedOut = error === timeoutError;
     await deps.api.post(
       `/api/jobs/${encodeURIComponent(job.id)}/fail`,
       {
         attemptId: job.attemptId,
-        code: "reviewer-failed",
+        code: timedOut ? "reviewer-timeout" : "reviewer-failed",
         message: error instanceof Error ? error.message : "reviewer failed",
         retryable: true
       },
@@ -747,6 +823,8 @@ async function runJob(deps, lease, signal) {
     if (timeout !== void 0) clearTimeout(timeout);
     signal.removeEventListener("abort", onAbort);
     release?.();
+    const disposal = handle.dispose?.();
+    if (disposal !== void 0) await disposal.catch(() => void 0);
   }
 }
 async function runWorkerLoop(deps, signal) {
@@ -756,24 +834,32 @@ async function runWorkerLoop(deps, signal) {
   }
   const sleep = deps.sleep ?? wait2;
   const randomId = deps.randomId ?? (() => `wkr_${randomUUID()}`);
+  const baseId = randomId();
   let workerId;
-  try {
-    const registered = await deps.api.post(
-      "/api/workers/register",
-      {
-        id: randomId(),
-        name: "dsh-code-review",
-        harness: "dsh"
-      },
-      signal
-    );
-    workerId = registered.id;
-  } catch (error) {
-    deps.logger?.warn?.(
-      `code-review: worker registration failed: ${error instanceof Error ? error.message : "unknown"}`
-    );
-    return;
+  let registrationDelayMs = 1e3;
+  for (let attempt = 1; !signal.aborted; attempt += 1) {
+    try {
+      const registered = await deps.api.post(
+        "/api/workers/register",
+        {
+          id: baseId,
+          name: "dsh-code-review",
+          harness: "dsh"
+        },
+        signal
+      );
+      workerId = registered.id;
+      break;
+    } catch (error) {
+      if (signal.aborted) return;
+      deps.logger?.warn?.(
+        `code-review: worker registration failed (attempt ${attempt}, retrying in ${registrationDelayMs}ms): ${error instanceof Error ? error.message : "unknown"}`
+      );
+      await sleep(registrationDelayMs, signal);
+      registrationDelayMs = Math.min(registrationDelayMs * 2, 3e4);
+    }
   }
+  if (workerId === void 0) return;
   const heartbeat = setInterval(() => {
     void deps.api.post(`/api/workers/${encodeURIComponent(workerId)}/heartbeat`, {}, signal).catch(() => void 0);
   }, deps.config.heartbeatMs);
@@ -802,7 +888,17 @@ async function runWorkerLoop(deps, signal) {
 
 // packages/dsh/src/host.ts
 var name = "code-review";
-var inject = ["tools", "commands", "webServer"];
+var inject = ["tools", "commands", "webServer", "connection"];
+function withConnectionGate(connection, handler) {
+  return async (req, res) => {
+    const rejection = connection.requestRejection({ headers: req.headers });
+    if (rejection !== void 0) {
+      res.writeHead(rejection).end();
+      return;
+    }
+    await handler(req, res);
+  };
+}
 function service(ctx, key) {
   const value = ctx.get(key);
   return value === void 0 || value === null ? void 0 : value;
@@ -848,8 +944,9 @@ function apply(ctx, rawConfig) {
   }
   const api = new ReviewApi(config);
   const proxy = createProxyHandler({ config });
+  const gatedProxy = withConnectionGate(ctx.connection, proxy);
   ctx.effect(
-    () => ctx.webServer.register({ kind: "prefix", path: "/api/code-review", handler: proxy })
+    () => ctx.webServer.register({ kind: "prefix", path: "/api/code-review", handler: gatedProxy })
   );
   ctx.effect(() => {
     const disposers = createReviewTools(ctx, config, api);
