@@ -171,7 +171,7 @@ this table is the gate contract for the SDD ledger.
 - Produces: `CORE_VERSION: string` from `@dsh-code-review/core`; `review` binary that prints `review 0.1.0`.
 - Produces commands: `pnpm format`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`, `pnpm verify`.
 
-- [ ] **Step 1: Create the repository directory and guard against an existing one**
+- [x] **Step 1: Create the repository directory and guard against an existing one**
 
 ```bash
 test ! -e "$HOME/projects/dsh-code-review" || { echo "refusing: $HOME/projects/dsh-code-review already exists"; exit 1; }
@@ -180,7 +180,7 @@ cd "$HOME/projects/dsh-code-review"
 mkdir -p .github/workflows docs packages/core/src/git packages/core/src/diff packages/core/test/helpers packages/server/src/cli packages/server/test scripts
 ```
 
-- [ ] **Step 2: Write the root configuration files**
+- [x] **Step 2: Write the root configuration files**
 
 `package.json`:
 
@@ -332,7 +332,7 @@ coverage/
 .DS_Store
 ```
 
-- [ ] **Step 3: Write the workspace packages and build script**
+- [x] **Step 3: Write the workspace packages and build script**
 
 `packages/core/package.json`:
 
@@ -427,7 +427,7 @@ await build({
 await chmod('packages/server/dist/cli.js', 0o755);
 ```
 
-- [ ] **Step 4: Write LICENSE, README, CI and copy the design spec**
+- [x] **Step 4: Write LICENSE, README, CI and copy the design spec**
 
 `LICENSE`:
 
@@ -518,7 +518,7 @@ Copy the approved spec:
 cp "$HOME/projects/harness-tests/gsd-type/docs/superpowers/specs/2026-10-26-code-review-control-plane-design.md" docs/design.md
 ```
 
-- [ ] **Step 5: Install, format and run all gates**
+- [x] **Step 5: Install, format and run all gates**
 
 Run:
 
@@ -530,7 +530,7 @@ pnpm verify
 
 Expected: install succeeds; esbuild writes `packages/core/dist/index.js` and `packages/server/dist/cli.js` twice; `prettier`, `eslint`, `tsc` exit 0; Vitest reports `1 passed`.
 
-- [ ] **Step 6: Smoke-test the built CLI**
+- [x] **Step 6: Smoke-test the built CLI**
 
 Run:
 
@@ -540,7 +540,7 @@ node packages/server/dist/cli.js
 
 Expected output: `review 0.1.0`.
 
-- [ ] **Step 7: Initialize git and commit**
+- [x] **Step 7: Initialize git and commit**
 
 Run:
 
@@ -565,7 +565,7 @@ Expected: the commit succeeds and `git status --porcelain` prints nothing.
 - Produces: `DiffLine`, `DiffHunk`, `ParsedFile`, `FileStatus`, `DiffScope`, `ResolvedScope`, `FileDiff`, `Snapshot`, `SnapshotOptions`.
 - Produces: `parseUnifiedDiff(diff: string): ParsedFile[]`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `packages/core/test/parse.test.ts`:
 
@@ -613,13 +613,13 @@ describe('parseUnifiedDiff', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test and verify it fails**
+- [x] **Step 2: Run the test and verify it fails**
 
 Run: `pnpm test -- packages/core/test/parse.test.ts`
 
 Expected: FAIL because `../src/diff/parse.js` cannot be resolved.
 
-- [ ] **Step 3: Write the domain types**
+- [x] **Step 3: Write the domain types**
 
 `packages/core/src/types.ts`:
 
@@ -715,7 +715,7 @@ export interface SnapshotOptions {
 }
 ```
 
-- [ ] **Step 4: Implement the parser**
+- [x] **Step 4: Implement the parser**
 
 `packages/core/src/diff/parse.ts`:
 
@@ -929,13 +929,13 @@ export type {
 } from './types.js';
 ```
 
-- [ ] **Step 5: Run the test and verify it passes**
+- [x] **Step 5: Run the test and verify it passes**
 
 Run: `pnpm test -- packages/core/test/parse.test.ts`
 
 Expected: PASS, 2 tests.
 
-- [ ] **Step 6: Run all gates and commit**
+- [x] **Step 6: Run all gates and commit**
 
 Run:
 
@@ -958,7 +958,7 @@ git commit -m "feat(core): parse unified diffs into typed hunks"
 - Consumes: `parseUnifiedDiff(diff: string): ParsedFile[]`.
 - Produces: confirmed behavior for `added`, `deleted`, `renamed`, `binary`, multiple files, `\ No newline`, paths with spaces and mode-only changes.
 
-- [ ] **Step 1: Write the failing edge-case tests**
+- [x] **Step 1: Write the failing edge-case tests**
 
 `packages/core/test/parse-edge.test.ts`:
 
@@ -1124,13 +1124,13 @@ describe('parseUnifiedDiff edge cases', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests and verify the failing ones**
+- [x] **Step 2: Run the tests and verify the failing ones**
 
 Run: `pnpm test -- packages/core/test/parse-edge.test.ts`
 
 Expected: the added/deleted/rename/spaces/counts cases FAIL against the Task 2 parser; the hunk-content case may also fail if header detection is not guarded by `hunk === null`. The binary and mode-only cases should pass.
 
-- [ ] **Step 3: Fix the parser**
+- [x] **Step 3: Fix the parser**
 
 Only the failures matter; the expected fixes are:
 
@@ -1151,13 +1151,13 @@ else if (current.oldPath !== undefined && current.oldPath !== current.path) stat
 
 If `path` is wrong for added/deleted, inspect that `+++` and `---` handlers run before the `hunk === null` guard ends. Do not special-case the test strings.
 
-- [ ] **Step 4: Run the tests and verify they pass**
+- [x] **Step 4: Run the tests and verify they pass**
 
 Run: `pnpm test -- packages/core/test/parse-edge.test.ts`
 
 Expected: PASS, 9 tests.
 
-- [ ] **Step 5: Run all gates and commit**
+- [x] **Step 5: Run all gates and commit**
 
 ```bash
 pnpm format:write && pnpm lint && pnpm typecheck && pnpm test
@@ -1177,7 +1177,7 @@ git commit -m "test(core): lock diff parser edge cases"
 - Produces: `runGit(cwd, args, options?): Promise<GitResult>`, `GitError` (codes `git-missing | not-a-repo | git-failed`), `resolveRepoRoot(path): Promise<string>`, test helper `makeRepo()`.
 - Consumes: nothing from earlier tasks.
 
-- [ ] **Step 1: Write the failing test and helper**
+- [x] **Step 1: Write the failing test and helper**
 
 `packages/core/test/helpers/repo.ts`:
 
@@ -1304,13 +1304,13 @@ describe('resolveRepoRoot', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test and verify it fails**
+- [x] **Step 2: Run the test and verify it fails**
 
 Run: `pnpm test -- packages/core/test/git.test.ts`
 
 Expected: FAIL because `runGit` and `resolveRepoRoot` are not exported.
 
-- [ ] **Step 3: Implement the git runner**
+- [x] **Step 3: Implement the git runner**
 
 `packages/core/src/git/run.ts`:
 
@@ -1475,13 +1475,13 @@ export type {
 } from './types.js';
 ```
 
-- [ ] **Step 4: Run the test and verify it passes**
+- [x] **Step 4: Run the test and verify it passes**
 
 Run: `pnpm test -- packages/core/test/git.test.ts`
 
 Expected: PASS, 5 tests.
 
-- [ ] **Step 5: Run all gates and commit**
+- [x] **Step 5: Run all gates and commit**
 
 ```bash
 pnpm format:write && pnpm lint && pnpm typecheck && pnpm test
@@ -1501,7 +1501,7 @@ git commit -m "feat(core): run git safely and resolve repository roots"
 - Consumes: `runGit`, `resolveRepoRoot`.
 - Produces: `EMPTY_TREE_SHA`, `resolveDefaultBase(repoRoot): Promise<string>`, `resolveScope({ repoRoot, scope, signal? }): Promise<ResolvedScope>`, `worktreeDigest(repoRoot, baseSha, signal?): Promise<string>`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `packages/core/test/scope.test.ts`:
 
@@ -1612,13 +1612,13 @@ describe('resolveDefaultBase', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test and verify it fails**
+- [x] **Step 2: Run the test and verify it fails**
 
 Run: `pnpm test -- packages/core/test/scope.test.ts`
 
 Expected: FAIL because the exports do not exist.
 
-- [ ] **Step 3: Implement scope resolution**
+- [x] **Step 3: Implement scope resolution**
 
 `packages/core/src/git/scope.ts`:
 
@@ -1760,13 +1760,13 @@ export { EMPTY_TREE_SHA, resolveDefaultBase, resolveScope, worktreeDigest } from
 export type { ResolveScopeInput } from './git/scope.js';
 ```
 
-- [ ] **Step 4: Run the test and verify it passes**
+- [x] **Step 4: Run the test and verify it passes**
 
 Run: `pnpm test -- packages/core/test/scope.test.ts`
 
 Expected: PASS, 6 tests.
 
-- [ ] **Step 5: Run all gates and commit**
+- [x] **Step 5: Run all gates and commit**
 
 ```bash
 pnpm format:write && pnpm lint && pnpm typecheck && pnpm test
@@ -1787,7 +1787,7 @@ git commit -m "feat(core): resolve range, worktree and commit scopes"
 - Produces: `safeJoin(root, relative): string`; `readBlob(...)`; `buildSnapshot(options: SnapshotOptions): Promise<Snapshot>`.
 - `buildSnapshot` resolves the scope itself and returns sorted files.
 
-- [ ] **Step 1: Write the failing snapshot test**
+- [x] **Step 1: Write the failing snapshot test**
 
 `packages/core/test/snapshot.test.ts`:
 
@@ -1916,13 +1916,13 @@ describe('buildSnapshot', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test and verify it fails**
+- [x] **Step 2: Run the test and verify it fails**
 
 Run: `pnpm test -- packages/core/test/snapshot.test.ts`
 
 Expected: FAIL because `buildSnapshot` is not exported.
 
-- [ ] **Step 3: Implement path safety and content reads**
+- [x] **Step 3: Implement path safety and content reads**
 
 `packages/core/src/paths.ts`:
 
@@ -2035,7 +2035,7 @@ export async function readBlob(
 }
 ```
 
-- [ ] **Step 4: Implement the snapshot builder**
+- [x] **Step 4: Implement the snapshot builder**
 
 `packages/core/src/diff/snapshot.ts`:
 
@@ -2202,13 +2202,13 @@ export { readBlob } from './git/content.js';
 export type { BlobRead } from './git/content.js';
 ```
 
-- [ ] **Step 5: Run the test and verify it passes**
+- [x] **Step 5: Run the test and verify it passes**
 
 Run: `pnpm test -- packages/core/test/snapshot.test.ts`
 
 Expected: PASS, 7 tests.
 
-- [ ] **Step 6: Run all gates and commit**
+- [x] **Step 6: Run all gates and commit**
 
 ```bash
 pnpm format:write && pnpm lint && pnpm typecheck && pnpm test
@@ -2228,7 +2228,7 @@ git commit -m "feat(core): build text diff snapshots with file content"
 - Consumes: `buildSnapshot`.
 - Produces: real `isIgnored(path, patterns)`, untracked `FileDiff` entries, binary/oversized flags, ignore filtering.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `packages/core/test/snapshot-untracked.test.ts`:
 
@@ -2328,13 +2328,13 @@ describe('ignores, binary and limits', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test and verify it fails**
+- [x] **Step 2: Run the test and verify it fails**
 
 Run: `pnpm test -- packages/core/test/snapshot-untracked.test.ts`
 
 Expected: FAIL because untracked files and ignore patterns are not implemented.
 
-- [ ] **Step 3: Implement glob matching**
+- [x] **Step 3: Implement glob matching**
 
 `packages/core/src/diff/glob.ts`:
 
@@ -2376,7 +2376,7 @@ export function isIgnored(path: string, patterns: readonly string[]): boolean {
 }
 ```
 
-- [ ] **Step 4: Add untracked collection and wire it into the snapshot**
+- [x] **Step 4: Add untracked collection and wire it into the snapshot**
 
 Add to `packages/core/src/diff/snapshot.ts`:
 
@@ -2457,13 +2457,13 @@ if (scope.kind === 'worktree' && includeUntracked) {
 }
 ```
 
-- [ ] **Step 5: Run the tests and verify they pass**
+- [x] **Step 5: Run the tests and verify they pass**
 
 Run: `pnpm test -- packages/core/test/snapshot-untracked.test.ts`
 
 Expected: PASS, 5 tests.
 
-- [ ] **Step 6: Run all gates and commit**
+- [x] **Step 6: Run all gates and commit**
 
 ```bash
 pnpm format:write && pnpm lint && pnpm typecheck && pnpm test
@@ -2484,7 +2484,7 @@ git commit -m "feat(core): include untracked files with ignore and size limits"
 - Consumes: `safeJoin`, `buildSnapshot`.
 - Produces: submodule entries with `status: 'submodule'`; symlink warnings; `PathEscapeError` for `..` and absolute paths.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `packages/core/test/snapshot-safety.test.ts`:
 
@@ -2557,13 +2557,13 @@ describe('submodules', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests and verify they fail**
+- [x] **Step 2: Run the tests and verify they fail**
 
 Run: `pnpm test -- packages/core/test/snapshot-safety.test.ts`
 
 Expected: FAIL because symlinks are not warned about and submodules are not marked.
 
-- [ ] **Step 3: Implement the safety behavior**
+- [x] **Step 3: Implement the safety behavior**
 
 In `packages/core/src/diff/snapshot.ts`:
 
@@ -2627,13 +2627,13 @@ if (modes.get(entry.path) === '160000') {
 
 6. For untracked files, the helper `untrackedFile` already returns `null` for symlinks; the caller must warn before calling it (step 2). Remove the duplicate lstat inside `untrackedFile` or keep it as defense in depth.
 
-- [ ] **Step 4: Run the tests and verify they pass**
+- [x] **Step 4: Run the tests and verify they pass**
 
 Run: `pnpm test -- packages/core/test/snapshot-safety.test.ts`
 
 Expected: PASS, 3 tests.
 
-- [ ] **Step 5: Run all gates and commit**
+- [x] **Step 5: Run all gates and commit**
 
 ```bash
 pnpm format:write && pnpm lint && pnpm typecheck && pnpm test
@@ -2654,7 +2654,7 @@ git commit -m "fix(core): reject path escapes and mark submodules"
 - Consumes: `buildSnapshot`, `resolveDefaultBase`, `resolveRepoRoot`, `GitError`.
 - Produces: `runCli(argv: readonly string[], io: CliIO): Promise<number>`; commands `diff`, `help`, `version`; exit codes `0` success, `5` usage/git validation.
 
-- [ ] **Step 1: Write the failing CLI tests**
+- [x] **Step 1: Write the failing CLI tests**
 
 `packages/server/test/cli.test.ts`:
 
@@ -2746,13 +2746,13 @@ describe('review diff', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test and verify it fails**
+- [x] **Step 2: Run the test and verify it fails**
 
 Run: `pnpm test -- packages/server/test/cli.test.ts`
 
 Expected: FAIL because `../src/cli/run.js` does not exist.
 
-- [ ] **Step 3: Implement the CLI**
+- [x] **Step 3: Implement the CLI**
 
 `packages/server/src/cli/run.ts`:
 
@@ -2991,13 +2991,13 @@ const code = await runCli(process.argv.slice(2), {
 process.exitCode = code;
 ```
 
-- [ ] **Step 4: Run the tests and verify they pass**
+- [x] **Step 4: Run the tests and verify they pass**
 
 Run: `pnpm test -- packages/server/test/cli.test.ts`
 
 Expected: PASS, 4 tests.
 
-- [ ] **Step 5: Build and smoke-test the binary**
+- [x] **Step 5: Build and smoke-test the binary**
 
 Run:
 
@@ -3008,7 +3008,7 @@ node packages/server/dist/cli.js version
 
 Expected: `review 0.1.0`; the shebang is preserved and the file is executable.
 
-- [ ] **Step 6: Run all gates and commit**
+- [x] **Step 6: Run all gates and commit**
 
 ```bash
 pnpm format:write && pnpm lint && pnpm typecheck && pnpm test
@@ -3029,7 +3029,7 @@ git commit -m "feat(cli): expose review diff snapshots"
 - Consumes: the built `review` binary.
 - Produces: a documented, reproducible verification run with real command output.
 
-- [ ] **Step 1: Update the README with the snapshot contract and limits**
+- [x] **Step 1: Update the README with the snapshot contract and limits**
 
 Replace the `Inspect a repository` block with:
 
@@ -3058,14 +3058,14 @@ Limits: 2 MiB diff, 500 files, 20 000 lines per file. Git commands are read-only
 run with `--no-ext-diff --no-textconv`; external diff drivers are never executed.
 ```
 
-- [ ] **Step 2: Copy the plan into the repository**
+- [x] **Step 2: Copy the plan into the repository**
 
 ```bash
 mkdir -p docs/plans
 cp "$HOME/projects/harness-tests/gsd-type/docs/superpowers/plans/2026-10-26-code-review-foundation.md" docs/plans/
 ```
 
-- [ ] **Step 3: Run the full verification**
+- [x] **Step 3: Run the full verification**
 
 ```bash
 pnpm verify
@@ -3073,7 +3073,7 @@ pnpm verify
 
 Expected: esbuild, `prettier`, `eslint`, `tsc`, all Vitest tests, and the final esbuild exit 0. Record the test count.
 
-- [ ] **Step 4: Prove the binary against a real temporary repository**
+- [x] **Step 4: Prove the binary against a real temporary repository**
 
 ```bash
 fixture=$(mktemp -d)
@@ -3101,7 +3101,7 @@ console.log('snapshot ok', s.files[0].path, s.totals);
 
 Expected: `snapshot ok a.txt { files: 1, added: 2, deleted: 1, truncated: false }`.
 
-- [ ] **Step 5: Verify the worktree path and path safety**
+- [x] **Step 5: Verify the worktree path and path safety**
 
 ```bash
 cd "$fixture"
@@ -3113,7 +3113,7 @@ node "$HOME/projects/dsh-code-review/packages/server/dist/cli.js" \
 
 Expected: `worktree ok { files: 1, added: 1, deleted: 1, truncated: false }` (the assertion is the null head and exit 0).
 
-- [ ] **Step 6: Confirm the repository is clean and commit**
+- [x] **Step 6: Confirm the repository is clean and commit**
 
 ```bash
 cd "$HOME/projects/dsh-code-review"
@@ -3122,7 +3122,7 @@ git add -A
 git commit -m "docs: document the snapshot foundation"
 ```
 
-- [ ] **Step 7: Final gate evidence**
+- [x] **Step 7: Final gate evidence**
 
 Run:
 
