@@ -258,6 +258,71 @@ describe('ReviewServiceImpl', () => {
     expect(events.map((event) => event.seq)).toEqual(events.map((_event, index) => 4 + index));
   });
 
+  it('scopes idempotency keys to the operation and review', async () => {
+    const h = await harness();
+    const first = await h.service.create(
+      { repoRoot: '/tmp/repo', title: 'First', scope: h.scope },
+      { actor },
+    );
+    const second = await h.service.create(
+      { repoRoot: '/tmp/repo', title: 'Second', scope: h.scope },
+      { actor },
+    );
+    const input = {
+      body: 'Same request id',
+      path: 'src/a.ts',
+      side: 'new' as const,
+      lineStart: 2,
+    };
+    const firstComment = await h.service.addComment(first.review.id, input, {
+      actor,
+      requestId: 'shared',
+    });
+    const secondComment = await h.service.addComment(
+      second.review.id,
+      { ...input, body: 'Second response' },
+      { actor, requestId: 'shared' },
+    );
+    expect(secondComment.comment.id).not.toBe(firstComment.comment.id);
+    expect(secondComment.comment.body).toBe('Second response');
+
+    const reply = await h.service.reply(
+      first.review.id,
+      firstComment.comment.id,
+      { body: 'Distinct method' },
+      { actor, requestId: 'shared' },
+    );
+    expect(reply.comment.replies).toHaveLength(1);
+
+    const firstEvents = await h.service.events(first.review.id);
+    const secondEvents = await h.service.events(second.review.id);
+    expect(firstEvents.filter((event) => event.type === 'comment/added')).toHaveLength(1);
+    expect(secondEvents.filter((event) => event.type === 'comment/added')).toHaveLength(1);
+    expect(firstEvents.filter((event) => event.type === 'comment/replied')).toHaveLength(1);
+  });
+
+  it('executes concurrent duplicate requests once', async () => {
+    const h = await harness();
+    const view = await h.service.create(
+      { repoRoot: '/tmp/repo', title: 'Concurrent', scope: h.scope },
+      { actor },
+    );
+    const input = {
+      body: 'Only once',
+      path: 'src/a.ts',
+      side: 'new' as const,
+      lineStart: 2,
+    };
+    const [first, second] = await Promise.all([
+      h.service.addComment(view.review.id, input, { actor, requestId: 'burst' }),
+      h.service.addComment(view.review.id, input, { actor, requestId: 'burst' }),
+    ]);
+    expect(second.comment.id).toBe(first.comment.id);
+    const events = await h.service.events(view.review.id);
+    expect(events.filter((event) => event.type === 'comment/added')).toHaveLength(1);
+    expect((await h.service.get(view.review.id)).review.comments).toHaveLength(1);
+  });
+
   it('translates missing reviews, rounds, comments and invalid input to typed errors', async () => {
     const h = await harness();
     await expectError(h.service.get('rev_missing'), 'not-found');

@@ -144,6 +144,7 @@ export class ReviewServiceImpl implements ReviewService {
   private readonly runGit?: ReviewServiceImplDeps['runGit'];
   private readonly idempotencyLimit: number;
   private readonly results = new Map<string, unknown>();
+  private readonly inflight = new Map<string, Promise<unknown>>();
   private readonly running = new Set<ReviewId>();
   private readonly active = new Map<
     ReviewId,
@@ -163,42 +164,46 @@ export class ReviewServiceImpl implements ReviewService {
 
   async create(input: ServiceCreateInput, ctx: CallContext): Promise<ReviewView> {
     assertContext(ctx);
-    return await this.idempotent(async () => {
-      if (typeof input.title !== 'string' || input.title.trim() === '') {
-        throw new ReviewError('validation', 'title must be non-empty');
-      }
-      if (typeof input.repoRoot !== 'string' || input.repoRoot.trim() === '') {
-        throw new ReviewError('validation', 'repoRoot must be non-empty');
-      }
-      if (typeof input.scope !== 'object' || input.scope === null) {
-        throw new ReviewError('validation', 'scope is required');
-      }
-      const reviewer = input.reviewer ?? { backend: 'none' as const };
-      validateReviewer(reviewer);
-      validateInitiator(input.initiator);
+    return await this.idempotent(
+      async () => {
+        if (typeof input.title !== 'string' || input.title.trim() === '') {
+          throw new ReviewError('validation', 'title must be non-empty');
+        }
+        if (typeof input.repoRoot !== 'string' || input.repoRoot.trim() === '') {
+          throw new ReviewError('validation', 'repoRoot must be non-empty');
+        }
+        if (typeof input.scope !== 'object' || input.scope === null) {
+          throw new ReviewError('validation', 'scope is required');
+        }
+        const reviewer = input.reviewer ?? { backend: 'none' as const };
+        validateReviewer(reviewer);
+        validateInitiator(input.initiator);
 
-      let snapshot: Snapshot;
-      try {
-        snapshot = await this.snapshots.build({ repoRoot: input.repoRoot, scope: input.scope });
-      } catch (error) {
-        throw this.translate(error);
-      }
+        let snapshot: Snapshot;
+        try {
+          snapshot = await this.snapshots.build({ repoRoot: input.repoRoot, scope: input.scope });
+        } catch (error) {
+          throw this.translate(error);
+        }
 
-      let state: ReviewState;
-      try {
-        state = await this.lifecycle.create({
-          title: input.title,
-          repoRoot: input.repoRoot,
-          actor: ctx.actor,
-          reviewer,
-          ...(input.initiator === undefined ? {} : { initiator: input.initiator }),
-        });
-        await this.lifecycle.addRound(state.id, snapshot, ctx.actor);
-      } catch (error) {
-        throw this.translate(error);
-      }
-      return await this.get(state.id);
-    }, ctx.requestId);
+        let state: ReviewState;
+        try {
+          state = await this.lifecycle.create({
+            title: input.title,
+            repoRoot: input.repoRoot,
+            actor: ctx.actor,
+            reviewer,
+            ...(input.initiator === undefined ? {} : { initiator: input.initiator }),
+          });
+          await this.lifecycle.addRound(state.id, snapshot, ctx.actor);
+        } catch (error) {
+          throw this.translate(error);
+        }
+        return await this.get(state.id);
+      },
+      'reviews.create',
+      ctx.requestId,
+    );
   }
 
   async get(id: ReviewId): Promise<ReviewView> {
@@ -268,17 +273,21 @@ export class ReviewServiceImpl implements ReviewService {
 
   async addComment(id: ReviewId, input: AddCommentInput, ctx: CallContext): Promise<CommentView> {
     assertContext(ctx);
-    return await this.idempotent(async () => {
-      if (typeof input.body !== 'string' || input.body.trim() === '') {
-        throw new ReviewError('validation', 'comment body must be non-empty');
-      }
-      try {
-        const comment = await this.lifecycle.addComment(id, input, ctx.actor);
-        return { comment };
-      } catch (error) {
-        throw this.translate(error);
-      }
-    }, ctx.requestId);
+    return await this.idempotent(
+      async () => {
+        if (typeof input.body !== 'string' || input.body.trim() === '') {
+          throw new ReviewError('validation', 'comment body must be non-empty');
+        }
+        try {
+          const comment = await this.lifecycle.addComment(id, input, ctx.actor);
+          return { comment };
+        } catch (error) {
+          throw this.translate(error);
+        }
+      },
+      `comment.add:${id}`,
+      ctx.requestId,
+    );
   }
 
   async reply(
@@ -288,17 +297,21 @@ export class ReviewServiceImpl implements ReviewService {
     ctx: CallContext,
   ): Promise<CommentView> {
     assertContext(ctx);
-    return await this.idempotent(async () => {
-      if (typeof input.body !== 'string' || input.body.trim() === '') {
-        throw new ReviewError('validation', 'reply body must be non-empty');
-      }
-      try {
-        const comment = await this.lifecycle.reply(id, commentId, input.body, ctx.actor);
-        return { comment };
-      } catch (error) {
-        throw this.translate(error);
-      }
-    }, ctx.requestId);
+    return await this.idempotent(
+      async () => {
+        if (typeof input.body !== 'string' || input.body.trim() === '') {
+          throw new ReviewError('validation', 'reply body must be non-empty');
+        }
+        try {
+          const comment = await this.lifecycle.reply(id, commentId, input.body, ctx.actor);
+          return { comment };
+        } catch (error) {
+          throw this.translate(error);
+        }
+      },
+      `comment.reply:${id}:${commentId}`,
+      ctx.requestId,
+    );
   }
 
   async setCommentState(
@@ -308,17 +321,21 @@ export class ReviewServiceImpl implements ReviewService {
     ctx: CallContext,
   ): Promise<CommentView> {
     assertContext(ctx);
-    return await this.idempotent(async () => {
-      if (!COMMENT_STATES.has(state)) {
-        throw new ReviewError('validation', `unknown comment state: ${String(state)}`);
-      }
-      try {
-        const comment = await this.lifecycle.setCommentState(id, commentId, state, ctx.actor);
-        return { comment };
-      } catch (error) {
-        throw this.translate(error);
-      }
-    }, ctx.requestId);
+    return await this.idempotent(
+      async () => {
+        if (!COMMENT_STATES.has(state)) {
+          throw new ReviewError('validation', `unknown comment state: ${String(state)}`);
+        }
+        try {
+          const comment = await this.lifecycle.setCommentState(id, commentId, state, ctx.actor);
+          return { comment };
+        } catch (error) {
+          throw this.translate(error);
+        }
+      },
+      `comment.state:${id}:${commentId}`,
+      ctx.requestId,
+    );
   }
 
   async events(id: ReviewId, after = 0): Promise<ReviewEvent[]> {
@@ -339,147 +356,164 @@ export class ReviewServiceImpl implements ReviewService {
     ctx: CallContext,
   ): Promise<CommentView> {
     assertContext(ctx);
-    return await this.idempotent(async () => {
-      if (!['accept', 'decline', 'apply'].includes(action)) {
-        throw new ReviewError('validation', `unknown suggestion action: ${String(action)}`);
-      }
-      const review = await this.requireReview(id);
-      if (review.status === 'closed') {
-        throw new ReviewError('conflict', `review is closed: ${id}`, { id });
-      }
-      const comment = review.comments.find((candidate) => candidate.id === commentId);
-      if (comment === undefined) {
-        throw new ReviewError('not-found', `unknown comment: ${commentId}`, { id, commentId });
-      }
-      if (comment.suggestion === undefined) {
-        throw new ReviewError('validation', `comment has no suggestion: ${commentId}`, {
-          id,
-          commentId,
-        });
-      }
-      if (action === 'apply') {
-        const round = review.rounds.at(-1);
-        if (round === undefined) throw new ReviewError('validation', `review has no rounds: ${id}`);
-        try {
-          await this.store.append(
-            id,
-            createEvent({
-              reviewId: id,
-              type: 'suggestion/applied',
-              actor: ctx.actor,
-              data: { commentId, round: round.no },
-              now: this.now,
-            }),
-          );
-        } catch (error) {
-          throw this.translate(error);
+    return await this.idempotent(
+      async () => {
+        if (!['accept', 'decline', 'apply'].includes(action)) {
+          throw new ReviewError('validation', `unknown suggestion action: ${String(action)}`);
         }
-      } else {
-        const state = action === 'accept' ? 'accepted' : 'declined';
-        try {
-          await this.store.append(
-            id,
-            createEvent({
-              reviewId: id,
-              type: 'suggestion/state',
-              actor: ctx.actor,
-              data: { commentId, state },
-              now: this.now,
-            }),
-          );
-        } catch (error) {
-          throw this.translate(error);
+        const review = await this.requireReview(id);
+        if (review.status === 'closed') {
+          throw new ReviewError('conflict', `review is closed: ${id}`, { id });
         }
-      }
-      return await this.getComment(id, commentId);
-    }, ctx.requestId);
+        const comment = review.comments.find((candidate) => candidate.id === commentId);
+        if (comment === undefined) {
+          throw new ReviewError('not-found', `unknown comment: ${commentId}`, { id, commentId });
+        }
+        if (comment.suggestion === undefined) {
+          throw new ReviewError('validation', `comment has no suggestion: ${commentId}`, {
+            id,
+            commentId,
+          });
+        }
+        if (action === 'apply') {
+          const round = review.rounds.at(-1);
+          if (round === undefined)
+            throw new ReviewError('validation', `review has no rounds: ${id}`);
+          try {
+            await this.store.append(
+              id,
+              createEvent({
+                reviewId: id,
+                type: 'suggestion/applied',
+                actor: ctx.actor,
+                data: { commentId, round: round.no },
+                now: this.now,
+              }),
+            );
+          } catch (error) {
+            throw this.translate(error);
+          }
+        } else {
+          const state = action === 'accept' ? 'accepted' : 'declined';
+          try {
+            await this.store.append(
+              id,
+              createEvent({
+                reviewId: id,
+                type: 'suggestion/state',
+                actor: ctx.actor,
+                data: { commentId, state },
+                now: this.now,
+              }),
+            );
+          } catch (error) {
+            throw this.translate(error);
+          }
+        }
+        return await this.getComment(id, commentId);
+      },
+      `comment.suggestion:${id}:${commentId}`,
+      ctx.requestId,
+    );
   }
 
   async refresh(id: ReviewId, input: RefreshInput, ctx: CallContext): Promise<ReviewView> {
     assertContext(ctx);
-    return await this.idempotent(async () => {
-      const review = await this.requireReview(id);
-      if (review.status === 'closed') {
-        throw new ReviewError('conflict', `review is closed: ${id}`, { id });
-      }
-      if (this.running.has(id) || agentIsActive(review)) {
-        throw new ReviewError('agent-busy', `a reviewer is active for ${id}`, { id });
-      }
-      const latest = await this.latestSnapshotOrThrow(review);
-      const scope = input.scope ?? scopeFromSnapshot(latest);
-      let snapshot: Snapshot;
-      try {
-        snapshot = await this.snapshots.build({ repoRoot: review.repoRoot, scope });
-      } catch (error) {
-        throw this.translate(error);
-      }
-      try {
-        await this.lifecycle.refresh(id, snapshot, ctx.actor);
-      } catch (error) {
-        throw this.translate(error);
-      }
-      return await this.get(id);
-    }, ctx.requestId);
+    return await this.idempotent(
+      async () => {
+        const review = await this.requireReview(id);
+        if (review.status === 'closed') {
+          throw new ReviewError('conflict', `review is closed: ${id}`, { id });
+        }
+        if (this.running.has(id) || agentIsActive(review)) {
+          throw new ReviewError('agent-busy', `a reviewer is active for ${id}`, { id });
+        }
+        const latest = await this.latestSnapshotOrThrow(review);
+        const scope = input.scope ?? scopeFromSnapshot(latest);
+        let snapshot: Snapshot;
+        try {
+          snapshot = await this.snapshots.build({ repoRoot: review.repoRoot, scope });
+        } catch (error) {
+          throw this.translate(error);
+        }
+        try {
+          await this.lifecycle.refresh(id, snapshot, ctx.actor);
+        } catch (error) {
+          throw this.translate(error);
+        }
+        return await this.get(id);
+      },
+      `review.refresh:${id}`,
+      ctx.requestId,
+    );
   }
 
   async close(id: ReviewId, verdict: 'approved' | 'closed', ctx: CallContext): Promise<ReviewView> {
     assertContext(ctx);
-    return await this.idempotent(async () => {
-      if (verdict !== 'approved' && verdict !== 'closed') {
-        throw new ReviewError('validation', `unknown close verdict: ${String(verdict)}`);
-      }
-      try {
-        await this.lifecycle.close(id, verdict, ctx.actor);
-      } catch (error) {
-        throw this.translate(error);
-      }
-      return await this.get(id);
-    }, ctx.requestId);
+    return await this.idempotent(
+      async () => {
+        if (verdict !== 'approved' && verdict !== 'closed') {
+          throw new ReviewError('validation', `unknown close verdict: ${String(verdict)}`);
+        }
+        try {
+          await this.lifecycle.close(id, verdict, ctx.actor);
+        } catch (error) {
+          throw this.translate(error);
+        }
+        return await this.get(id);
+      },
+      `review.close:${id}`,
+      ctx.requestId,
+    );
   }
 
   async claimFixStatus(id: ReviewId, input: FixStatusInput, ctx: CallContext): Promise<void> {
     assertContext(ctx);
-    await this.idempotent(async () => {
-      if (!Array.isArray(input.items) || input.items.length === 0) {
-        throw new ReviewError('validation', 'items must be a non-empty array');
-      }
-      const review = await this.requireReview(id);
-      if (review.status === 'closed') {
-        throw new ReviewError('conflict', `review is closed: ${id}`, { id });
-      }
-      const known = new Set(review.comments.map((comment) => comment.id));
-      const claims = input.items.map((item) => {
-        if (!['fixed', 'not-fixed', 'unclear'].includes(item.status)) {
-          throw new ReviewError('validation', `unknown fix status: ${String(item.status)}`);
+    await this.idempotent(
+      async () => {
+        if (!Array.isArray(input.items) || input.items.length === 0) {
+          throw new ReviewError('validation', 'items must be a non-empty array');
         }
-        if (!known.has(item.commentId)) {
-          throw new ReviewError('not-found', `unknown comment: ${item.commentId}`, {
-            id,
+        const review = await this.requireReview(id);
+        if (review.status === 'closed') {
+          throw new ReviewError('conflict', `review is closed: ${id}`, { id });
+        }
+        const known = new Set(review.comments.map((comment) => comment.id));
+        const claims = input.items.map((item) => {
+          if (!['fixed', 'not-fixed', 'unclear'].includes(item.status)) {
+            throw new ReviewError('validation', `unknown fix status: ${String(item.status)}`);
+          }
+          if (!known.has(item.commentId)) {
+            throw new ReviewError('not-found', `unknown comment: ${item.commentId}`, {
+              id,
+              commentId: item.commentId,
+            });
+          }
+          if (item.evidence !== undefined && typeof item.evidence !== 'string') {
+            throw new ReviewError('validation', 'evidence must be a string');
+          }
+          return {
             commentId: item.commentId,
-          });
-        }
-        if (item.evidence !== undefined && typeof item.evidence !== 'string') {
-          throw new ReviewError('validation', 'evidence must be a string');
-        }
-        return {
-          commentId: item.commentId,
-          status: item.status,
-          ...(item.evidence === undefined ? {} : { evidence: item.evidence }),
-          by: ctx.actor,
-          at: this.now().toISOString(),
-        };
-      });
-      await this.store.append(
-        id,
-        createEvent({
-          reviewId: id,
-          type: 'fix/claim',
-          actor: ctx.actor,
-          data: { claims },
-          now: this.now,
-        }),
-      );
-    }, ctx.requestId);
+            status: item.status,
+            ...(item.evidence === undefined ? {} : { evidence: item.evidence }),
+            by: ctx.actor,
+            at: this.now().toISOString(),
+          };
+        });
+        await this.store.append(
+          id,
+          createEvent({
+            reviewId: id,
+            type: 'fix/claim',
+            actor: ctx.actor,
+            data: { claims },
+            now: this.now,
+          }),
+        );
+      },
+      `review.fix-status:${id}`,
+      ctx.requestId,
+    );
   }
 
   async latestFeedback(id: ReviewId): Promise<LatestFeedbackView | null> {
@@ -503,98 +537,108 @@ export class ReviewServiceImpl implements ReviewService {
 
   async submit(id: ReviewId, input: SubmitInput, ctx: CallContext): Promise<SubmissionView> {
     assertContext(ctx);
-    return await this.idempotent(async () => {
-      if (!VERDICTS.has(input.verdict)) {
-        throw new ReviewError('validation', `unknown verdict: ${String(input.verdict)}`);
-      }
-      if (input.summary !== undefined && typeof input.summary !== 'string') {
-        throw new ReviewError('validation', 'summary must be a string');
-      }
-      const review = await this.requireReview(id);
-      if (review.status === 'closed') {
-        throw new ReviewError('conflict', `review is closed: ${id}`, { id });
-      }
-      const round = review.rounds.at(-1);
-      if (round === undefined) {
-        throw new ReviewError('validation', `review has no rounds: ${id}`, { id });
-      }
-      if ((review.submissions ?? []).some((submission) => submission.round === round.no)) {
-        throw new ReviewError('conflict', `round ${round.no} was already submitted`, {
-          id,
+    return await this.idempotent(
+      async () => {
+        if (!VERDICTS.has(input.verdict)) {
+          throw new ReviewError('validation', `unknown verdict: ${String(input.verdict)}`);
+        }
+        if (input.summary !== undefined && typeof input.summary !== 'string') {
+          throw new ReviewError('validation', 'summary must be a string');
+        }
+        const review = await this.requireReview(id);
+        if (review.status === 'closed') {
+          throw new ReviewError('conflict', `review is closed: ${id}`, { id });
+        }
+        const round = review.rounds.at(-1);
+        if (round === undefined) {
+          throw new ReviewError('validation', `review has no rounds: ${id}`, { id });
+        }
+        if ((review.submissions ?? []).some((submission) => submission.round === round.no)) {
+          throw new ReviewError('conflict', `round ${round.no} was already submitted`, {
+            id,
+            round: round.no,
+          });
+        }
+        let snapshot: Snapshot;
+        try {
+          snapshot = await this.store.readSnapshot(round.snapshotId);
+        } catch (error) {
+          throw this.translate(error);
+        }
+        const report =
+          review.report !== undefined && review.report.round === round.no ? review.report : null;
+        const submissionId = this.newId('sub');
+        const deliveryKey = `${id}:${round.no}:${submissionId}`;
+        const feedback = buildFeedback({
+          review,
+          snapshot,
+          report,
           round: round.no,
+          verdict: input.verdict,
+          deliveryKey,
+          ...(input.summary === undefined ? {} : { summary: input.summary }),
+          ...(input.includeResolved === undefined
+            ? {}
+            : { includeResolved: input.includeResolved }),
         });
-      }
-      let snapshot: Snapshot;
-      try {
-        snapshot = await this.store.readSnapshot(round.snapshotId);
-      } catch (error) {
-        throw this.translate(error);
-      }
-      const report =
-        review.report !== undefined && review.report.round === round.no ? review.report : null;
-      const submissionId = this.newId('sub');
-      const deliveryKey = `${id}:${round.no}:${submissionId}`;
-      const feedback = buildFeedback({
-        review,
-        snapshot,
-        report,
-        round: round.no,
-        verdict: input.verdict,
-        deliveryKey,
-        ...(input.summary === undefined ? {} : { summary: input.summary }),
-        ...(input.includeResolved === undefined ? {} : { includeResolved: input.includeResolved }),
-      });
-      const submission: SubmissionRecord = {
-        submissionId,
-        round: round.no,
-        verdict: input.verdict,
-        deliveryKey,
-        createdAt: this.now().toISOString(),
-      };
-      try {
-        await this.store.append(
-          id,
-          createEvent({
-            reviewId: id,
-            type: 'review/submitted',
-            actor: ctx.actor,
-            data: {
-              submission,
-              feedback: {
-                markdown: feedback.markdown,
-                json: feedback.json,
-                deliveryKey,
+        const submission: SubmissionRecord = {
+          submissionId,
+          round: round.no,
+          verdict: input.verdict,
+          deliveryKey,
+          createdAt: this.now().toISOString(),
+        };
+        try {
+          await this.store.append(
+            id,
+            createEvent({
+              reviewId: id,
+              type: 'review/submitted',
+              actor: ctx.actor,
+              data: {
+                submission,
+                feedback: {
+                  markdown: feedback.markdown,
+                  json: feedback.json,
+                  deliveryKey,
+                },
               },
-            },
-            now: this.now,
-          }),
-        );
-      } catch (error) {
-        throw this.translate(error);
-      }
-      return {
-        reviewId: id,
-        round: round.no,
-        verdict: input.verdict,
-        feedback,
-        deliveryKey,
-      };
-    }, ctx.requestId);
+              now: this.now,
+            }),
+          );
+        } catch (error) {
+          throw this.translate(error);
+        }
+        return {
+          reviewId: id,
+          round: round.no,
+          verdict: input.verdict,
+          feedback,
+          deliveryKey,
+        };
+      },
+      `review.submit:${id}`,
+      ctx.requestId,
+    );
   }
 
   async runReviewer(id: ReviewId, ctx: CallContext): Promise<AgentReport> {
     assertContext(ctx);
-    return await this.idempotent(async () => {
-      if (this.running.has(id)) {
-        throw new ReviewError('agent-busy', `a reviewer is already running for ${id}`, { id });
-      }
-      this.running.add(id);
-      try {
-        return await this.runReviewerOnce(id, ctx);
-      } finally {
-        this.running.delete(id);
-      }
-    }, ctx.requestId);
+    return await this.idempotent(
+      async () => {
+        if (this.running.has(id)) {
+          throw new ReviewError('agent-busy', `a reviewer is already running for ${id}`, { id });
+        }
+        this.running.add(id);
+        try {
+          return await this.runReviewerOnce(id, ctx);
+        } finally {
+          this.running.delete(id);
+        }
+      },
+      `review.run:${id}`,
+      ctx.requestId,
+    );
   }
 
   async cancelAgent(id: ReviewId, ctx: CallContext): Promise<void> {
@@ -828,16 +872,31 @@ export class ReviewServiceImpl implements ReviewService {
     }
   }
 
-  private async idempotent<T>(operation: () => Promise<T>, requestId?: string): Promise<T> {
+  private async idempotent<T>(
+    operation: () => Promise<T>,
+    scope: string,
+    requestId?: string,
+  ): Promise<T> {
     if (requestId === undefined || requestId === '') return await operation();
-    if (this.results.has(requestId)) return clone(this.results.get(requestId) as T);
-    const result = await operation();
-    if (this.results.size >= this.idempotencyLimit) {
-      const oldest = this.results.keys().next().value as string | undefined;
-      if (oldest !== undefined) this.results.delete(oldest);
+    // The request id is only unique per operation (route and review), so a
+    // client retry on a different route must not reuse another response.
+    const key = `${scope}\u0000${requestId}`;
+    if (this.results.has(key)) return clone(this.results.get(key) as T);
+    const pending = this.inflight.get(key);
+    if (pending !== undefined) return clone((await pending) as T);
+    const run = operation();
+    this.inflight.set(key, run);
+    try {
+      const result = await run;
+      if (this.results.size >= this.idempotencyLimit) {
+        const oldest = this.results.keys().next().value as string | undefined;
+        if (oldest !== undefined) this.results.delete(oldest);
+      }
+      this.results.set(key, clone(result));
+      return result;
+    } finally {
+      if (this.inflight.get(key) === run) this.inflight.delete(key);
     }
-    this.results.set(requestId, clone(result));
-    return result;
   }
 
   private translate(error: unknown): ReviewError {
