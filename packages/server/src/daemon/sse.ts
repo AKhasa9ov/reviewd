@@ -103,17 +103,17 @@ export class EventHub {
     const ready = this.globalAfter(after);
     if (ready.length > 0) return Promise.resolve(ready);
     return new Promise((resolve) => {
-      let timer: NodeJS.Timeout | undefined;
+      const listeners = this.listeners;
       const finish = (entries: GlobalEntry[]): void => {
-        if (timer !== undefined) clearTimeout(timer);
-        this.listeners.delete(listener);
+        clearTimeout(timer);
+        listeners.delete(listener);
         resolve(entries);
       };
       const listener = (): void => {
         const entries = this.globalAfter(after);
         if (entries.length > 0) finish(entries);
       };
-      timer = setTimeout(() => finish([]), timeoutMs);
+      const timer = setTimeout(() => finish([]), timeoutMs);
       signal?.addEventListener(
         'abort',
         () => {
@@ -121,7 +121,7 @@ export class EventHub {
         },
         { once: true },
       );
-      this.listeners.add(listener);
+      listeners.add(listener);
     });
   }
 
