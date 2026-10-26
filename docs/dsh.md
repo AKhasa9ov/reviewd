@@ -93,9 +93,9 @@ retries a stable worker id with 1s..30s backoff instead of giving up after one f
 The subagent:
 
 - runs in the review's workspace cwd and inherits the configured preset/model;
-- is strictly read-only: `bash`, `write`, `edit`, `apply_patch`, `workflow`, `subagent`,
-  `subagent_fork`, `review_start` and `review_refresh` are all denied, so it can only
-  read the workspace and the prompt;
+- is strictly read-only: tools are restricted to an allowlist of `read`, `read_image`,
+  `grep`, `glob`, `review_status` and `review_feedback`; shell, write, network,
+  delegation and review-mutating tools are not visible;
 - receives the job prompt with a bounded unified diff (60k characters, with an explicit
   truncation marker), then returns one JSON report;
 - must return `schemaVersion: 1`; anything else is rejected as non-retryable

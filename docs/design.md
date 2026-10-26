@@ -594,7 +594,7 @@ interface Job {
   await Promise.race([handle.agent.whenIdle(), timeout]);
   ```
 - На `handle.agent.ctx` регистрируются scoped tools `review_submit_finding` и `review_submit_report`; параллельно работает fallback: если агент записал `output.json` в cwd, worker читает его.
-- Ограничения: на ctx ревьюера запрещены `bash`, `write`, `edit`, `apply_patch`, `workflow`, `subagent`, `subagent_fork`, `review_start`, `review_refresh`; ревьюер получает ограниченный unified diff в промпте и работает только read-only инструментами.
+- Ограничения: на ctx ревьюера включён allowlist `read`, `read_image`, `grep`, `glob`, `review_status`, `review_feedback`; shell, запись, сеть, делегирование и review-мутации недоступны. Ревьюер получает ограниченный unified diff в промпте.
 - Отчёт обязан содержать `schemaVersion: 1`; иначе job падает с non-retryable `invalid-output` без записи findings/report.
 - На завершении: `POST findings` инкрементально (каждый finding валидируется daemon), `POST report`, `POST /api/jobs/:id/ack`; dispose reviewer-агента в `finally` на любом пути.
 - Ошибка → `POST fail` с кодом; таймаут `reviewerTimeoutMs` отменяет агента (`cancel({kind:'timeout'})`) и падает с retryable `reviewer-timeout`; daemon решает retry/requeue.
@@ -1035,7 +1035,7 @@ services:
 
 - **Токен**: без него daemon не стартует; не логируется; сравнение constant-time; rotation инвалидирует cookie.
 - **XSS**: markdown рендерится безопасно (текст/код, без `dangerouslySetInnerHTML` для произвольного HTML); ссылки только http(s); code/quote — текст.
-- **Prompt injection**: вывод ревьюера — данные; suggestions показываются как diff и применяются только человеком; reviewer worker ограничен read-only (запрещены `bash`, `write`, `edit`, `apply_patch`, `workflow`, `subagent*`, `review_start`, `review_refresh`).
+- **Prompt injection**: вывод ревьюера — данные; suggestions показываются как diff и применяются только человеком; reviewer worker ограничен read-only allowlist'ом (`read`, `read_image`, `grep`, `glob`, `review_status`, `review_feedback`).
 - **Git**: `--no-ext-diff`, `--no-textconv`, `-c diff.external=`, без hooks; `apply` — только в `repo.root`, realpath-проверка, `--3way`, отказ при stale; после apply — повторный diff и событие.
 - **Path traversal**: все пути нормализуются и проверяются; symlink наружу → отказ.
 - **Command backend**: исполнение команды из конфига — доверенная граница; `shell:false` по умолчанию; env без токена daemon; process group kill.

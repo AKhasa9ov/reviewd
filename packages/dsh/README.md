@@ -19,6 +19,6 @@ Install with `plugin_manager install_bundle` pointing at this directory. Configu
 
 `token` is a secret. It is used only by the Host half and is never sent to the Client or rendered. The Client calls same-origin `/api/code-review/*`, which the Host proxies to the daemon with a bearer token; `idempotency-key` and `x-review-actor` are forwarded, any client `authorization` is replaced.
 
-The reviewer subagent is read-only: `bash`, `write`, `edit`, `apply_patch`, `workflow`, `subagent`, `subagent_fork`, `review_start` and `review_refresh` are denied. It must return a `schemaVersion: 1` report; timeouts cancel the agent and fail the job retryably.
+The reviewer subagent is read-only: tools are restricted to `read`, `read_image`, `grep`, `glob`, `review_status` and `review_feedback`; shell, write, network, delegation and review-mutating tools are not visible. It must return a `schemaVersion: 1` report; timeouts cancel the agent and fail the job retryably.
 
 Tools: `review_start`, `review_status`, `review_refresh`, `review_feedback`. Command: `/review <title>`.

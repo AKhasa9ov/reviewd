@@ -128,7 +128,7 @@ The browser suite runs axe WCAG 2.1 A/AA checks and fails on serious or critical
 - `reviewd` is plain HTTP. Terminate TLS at a reverse proxy and keep the listener on
   loopback or a private network. There are no per-user accounts or token revocation lists.
 - Reviewer output and comments are untrusted data. Rendering is safe text/code; reviewer
-  tools deny `write`/`edit`; command backends run as a trusted operator boundary with
+  tools use a read-only allowlist; command backends run as a trusted operator boundary with
   `shell:false`, a minimal environment (no inherited `CODE_REVIEW_TOKEN`), bounded output
   and process-group termination on timeout.
 - Git access removes inherited repository environment, disables external diff/textconv and
