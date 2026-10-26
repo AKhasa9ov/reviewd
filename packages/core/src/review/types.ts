@@ -88,6 +88,8 @@ export interface ReviewState {
   rounds: Round[];
   comments: Comment[];
   version: number;
+  /** Non-fatal recovery notices, e.g. a torn final JSONL line. */
+  warnings?: string[];
 }
 
 export interface ReviewSummary {

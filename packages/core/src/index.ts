@@ -71,3 +71,10 @@ export type {
   Side,
   Suggestion,
 } from './review/types.js';
+export { fold, ReviewFoldError } from './review/fold.js';
+export {
+  ReviewNotFoundError,
+  ReviewStore,
+  ReviewStoreCorruptionError,
+  ReviewStoreLockedError,
+} from './review/store.js';
