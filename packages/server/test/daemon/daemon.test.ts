@@ -657,6 +657,55 @@ describe('daemon limits, leases and gc', () => {
     expect(none.status).toBe(204);
   });
 
+  it('drops invalid incremental findings and reports how many were rejected', async () => {
+    const { daemonUrl } = await running();
+    const checkout = await repo();
+    await createReview(daemonUrl, { backend: 'worker' }, checkout.root);
+    const registered = await read(
+      await fetch(`${daemonUrl}/api/workers/register`, {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ name: 'findings-worker' }),
+      }),
+    );
+    const lease = await read(
+      await fetch(`${daemonUrl}/api/jobs/next?workerId=${registered.id}&wait=2`, {
+        headers: headers(),
+      }),
+    );
+    const valid = {
+      id: 'f-valid',
+      severity: 'major',
+      category: 'correctness',
+      confidence: 'high',
+      kind: 'issue',
+      file: 'src/a.ts',
+      lineStart: 2,
+      lineEnd: 2,
+      title: 'second line',
+      rationale: 'the line is new',
+      evidence: '+two',
+    };
+    const response = await fetch(`${daemonUrl}/api/jobs/${lease.job.id as string}/findings`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({
+        attemptId: lease.job.attemptId,
+        findings: [valid, { ...valid, id: 'f-bad', severity: 'nope' }, { id: 'f-empty' }],
+      }),
+    });
+    expect(response.status).toBe(200);
+    expect(await read(response)).toMatchObject({ accepted: 1, rejected: 2 });
+    const events = await read(
+      await fetch(`${daemonUrl}/api/events?after=0&wait=0`, { headers: headers() }),
+    );
+    const findingEvents = events.events.filter(
+      (entry: { event: { type: string } }) => entry.event.type === 'agent/finding',
+    );
+    expect(findingEvents).toHaveLength(1);
+    expect(findingEvents[0].event.data.finding.id).toBe('f-valid');
+  });
+
   it('rejects oversized bodies', async () => {
     const { daemonUrl } = await running({ maxBodyBytes: 32 });
     const response = await fetch(`${daemonUrl}/api/reviews`, {

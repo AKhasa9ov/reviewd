@@ -244,6 +244,31 @@ function validateFinding(
   return finding;
 }
 
+export interface FindingItemValidation {
+  finding: Finding | null;
+  rejected: RejectedReportItem[];
+  warnings: string[];
+}
+
+/**
+ * Validate one incremental finding against the same rules as a full report.
+ * Used by the job route so an agent cannot append malformed findings to the
+ * event-sourced review before its final report is validated.
+ */
+export function validateFindingItem(
+  value: unknown,
+  options: { snapshot?: Snapshot; maxTextBytes?: number } = {},
+): FindingItemValidation {
+  const ctx: Context = {
+    rejected: [],
+    warnings: [],
+    maxTextBytes: options.maxTextBytes ?? MAX_TEXT_BYTES,
+    ...(options.snapshot === undefined ? {} : { snapshot: options.snapshot }),
+  };
+  const finding = validateFinding(ctx, value, 0, new Set<string>());
+  return { finding, rejected: ctx.rejected, warnings: ctx.warnings };
+}
+
 function validateQuestion(
   ctx: Context,
   value: unknown,

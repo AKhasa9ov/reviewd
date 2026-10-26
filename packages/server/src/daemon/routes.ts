@@ -9,6 +9,7 @@ import {
   createEvent,
   runGit,
   resolveRepoRoot,
+  validateFindingItem,
   validateReport,
 } from '@dsh-code-review/core';
 import type {
@@ -17,7 +18,6 @@ import type {
   AgentReport,
   CommentState,
   DiffScope,
-  Finding,
   Initiator,
   ReviewEvent,
   ReviewService,
@@ -621,15 +621,26 @@ export async function handle(
     if (action === 'findings') {
       if (!Array.isArray(body.findings))
         throw new ApiError('validation', 'findings must be an array');
+      const snapshot = (job.diff ?? { files: [] }) as never;
+      const seen = new Set<string>();
       let accepted = 0;
+      let rejected = 0;
       for (const raw of body.findings) {
-        const finding = object(raw, 'finding') as unknown as Finding;
-        if (ctx.jobs.acceptFinding(jobId, attemptId, str(finding.id, 'finding.id')) !== null) {
+        const validation = validateFindingItem(raw, { snapshot });
+        const finding = validation.finding;
+        if (finding === null || seen.has(finding.id)) {
+          rejected += 1;
+          continue;
+        }
+        seen.add(finding.id);
+        if (ctx.jobs.acceptFinding(jobId, attemptId, finding.id) !== null) {
           await append(ctx, job.reviewId, 'agent/finding', { finding, round: job.round } as never);
           accepted += 1;
+        } else {
+          rejected += 1;
         }
       }
-      sendJson(res, 200, { accepted });
+      sendJson(res, 200, { accepted, rejected });
       return;
     }
     if (action === 'report') {

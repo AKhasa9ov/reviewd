@@ -110,8 +110,10 @@ export {
   MAX_TEXT_BYTES,
   normalizeCode,
   ReportValidationError,
+  validateFindingItem,
   validateReport,
 } from './reviewer/validate.js';
+export type { FindingItemValidation } from './reviewer/validate.js';
 export type {
   AgentReport,
   Finding,
