@@ -11,4 +11,4 @@
 services:
   reviewd:
     volumes:
-      - ${CODE_REVIEW_REPOS:?set CODE_REVIEW_REPOS to an absolute host path}:${CODE_REVIEW_REPOS:?set CODE_REVIEW_REPOS to an absolute host path}:rw
+      - ${CODE_REVIEW_REPOS:?set CODE_REVIEW_REPOS to an absolute host path}:${CODE_REVIEW_REPOS:?set CODE_REVIEW_REPOS to an absolute host path}:ro
