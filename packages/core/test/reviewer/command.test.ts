@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -252,10 +252,15 @@ describe('CommandReviewer', () => {
   it('kills descendant processes when the reviewer times out', async () => {
     const root = await repo();
     const pidFile = join(root, 'grandchild.pid');
+    const heartbeatFile = join(root, 'heartbeat.txt');
+    const childCode = [
+      'const fs = require("node:fs");',
+      `setInterval(() => fs.appendFileSync(${JSON.stringify(heartbeatFile)}, "x"), 50);`,
+    ].join('');
     const script = [
       'const {spawn} = require("node:child_process");',
       'const fs = require("node:fs");',
-      'const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"],',
+      `const child = spawn(process.execPath, ["-e", ${JSON.stringify(childCode)}],`,
       '  {stdio: "ignore"});',
       `fs.writeFileSync(${JSON.stringify(pidFile)}, String(child.pid));`,
       'setInterval(() => {}, 1000);',
@@ -263,7 +268,7 @@ describe('CommandReviewer', () => {
     const backend = new CommandReviewer({
       command: [process.execPath, '-e', script],
       runGit: cleanGit,
-      timeoutMs: 500,
+      timeoutMs: 1000,
     });
     let pid: number | undefined;
     try {
@@ -272,13 +277,17 @@ describe('CommandReviewer', () => {
       ).rejects.toMatchObject({ name: 'ReviewerError', code: 'timeout' });
       pid = Number(await readFile(pidFile, 'utf8'));
       expect(Number.isSafeInteger(pid) && pid > 0).toBe(true);
-      expect(() => process.kill(pid as number, 0)).toThrow();
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      const before = (await stat(heartbeatFile)).size;
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      const after = (await stat(heartbeatFile)).size;
+      expect(after).toBe(before);
     } finally {
       if (pid !== undefined) {
         try {
           process.kill(pid, 'SIGKILL');
         } catch {
-          // Already gone.
+          // Already gone; the process group was killed on timeout.
         }
       }
     }
