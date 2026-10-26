@@ -91,14 +91,22 @@ route feedback even after the originating turn ends.
 With `worker: true`, the bundle registers a worker named `dsh-code-review`, heartbeats,
 long-polls for jobs and creates a subagent through `ctx.agents.create`. Registration
 retries a stable worker id with 1s..30s backoff instead of giving up after one failure.
+If the daemon restarted and forgot the id, `/api/jobs/next` answers 401 and the worker
+registers again before polling.
+
 The subagent:
 
-- runs in the review's workspace cwd and inherits the configured preset/model;
-- is strictly read-only: tools are restricted to an allowlist of `read`, `grep`, `glob`,
-  `review_status` and `review_feedback`; shell, write, network, delegation and
-  review-mutating tools are not visible; if restriction cannot be applied the job fails;
+- runs in the review's workspace cwd; a configured `reviewerPreset` is mounted
+  explicitly because `agents.create({meta: {agentPreset}})` only labels the session and
+  does not compose the preset's tools/model by itself;
+- is strictly read-only: every tool execution passes through `tools.guard()`, which
+  allows only `read`, `grep`, `glob`, `review_status` and `review_feedback`; shell,
+  write, network, delegation and review-mutating tools fail closed. Global
+  `tools.restrict()` cannot hide preset-scoped tools, so the guard is the boundary;
 - receives the job prompt with a bounded unified diff (60k characters, with an explicit
-  truncation marker), then returns one JSON report;
+  truncation marker) and an exact report schema, then returns one JSON report;
+- reads the report from the durable session log (`agent.session.snapshotEvents()`),
+  falling back to the newest earlier parseable report if the last message is prose;
 - must return `schemaVersion: 1`; anything else is rejected as non-retryable
   `invalid-output` without posting findings or a report;
 - posts findings (server-side validated), report and ack;
