@@ -2,6 +2,8 @@ export type ReviewerBackend = 'worker' | 'command' | 'none';
 
 export interface ReviewConfig {
   daemonUrl: string;
+  /** Browser-reachable standalone UI origin; daemonUrl may be loopback-only. */
+  publicUrl?: string;
   token: string;
   worker: boolean;
   repoHint?: string;
@@ -49,6 +51,9 @@ export function normalizeConfig(raw: unknown): ReviewConfig {
   const model = input.reviewerModel;
   return {
     daemonUrl: stringValue(input.daemonUrl, DEFAULT_CONFIG.daemonUrl).replace(/\/+$/, ''),
+    ...(typeof input.publicUrl === 'string' && input.publicUrl.trim() !== ''
+      ? { publicUrl: input.publicUrl.trim().replace(/\/+$/, '') }
+      : {}),
     token: typeof input.token === 'string' ? input.token : '',
     worker: input.worker === true,
     ...(typeof input.repoHint === 'string' && input.repoHint.trim() !== ''
@@ -82,6 +87,9 @@ export function normalizeConfig(raw: unknown): ReviewConfig {
 export function configProblem(config: ReviewConfig): string | undefined {
   if (config.daemonUrl === '') return 'daemonUrl is not configured';
   if (!/^https?:\/\//.test(config.daemonUrl)) return 'daemonUrl must be an http(s) URL';
+  if (config.publicUrl !== undefined && !/^https?:\/\//.test(config.publicUrl)) {
+    return 'publicUrl must be an http(s) URL';
+  }
   if (config.token.length < 32) return 'token must be at least 32 characters';
   return undefined;
 }

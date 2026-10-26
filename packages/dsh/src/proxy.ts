@@ -48,7 +48,10 @@ export function createProxyHandler(deps: ProxyDeps) {
         return;
       }
       if (path === '/info' && (req.method === 'GET' || req.method === 'HEAD')) {
-        const body = JSON.stringify({ daemonUrl: deps.config.daemonUrl });
+        const body = JSON.stringify({
+          daemonUrl: deps.config.daemonUrl,
+          ...(deps.config.publicUrl === undefined ? {} : { publicUrl: deps.config.publicUrl }),
+        });
         res.writeHead(200, {
           'content-type': 'application/json; charset=utf-8',
           'content-length': String(Buffer.byteLength(body)),
@@ -73,6 +76,12 @@ export function createProxyHandler(deps: ProxyDeps) {
       if (req.headers['last-event-id'] !== undefined) {
         const lastEventId = req.headers['last-event-id'];
         if (typeof lastEventId === 'string') headers['last-event-id'] = lastEventId;
+      }
+      // Preserve the caller's review attribution and retry-safety key; anything
+      // else the browser sends (notably authorization) is deliberately dropped.
+      for (const name of ['idempotency-key', 'x-review-actor'] as const) {
+        const value = req.headers[name];
+        if (typeof value === 'string' && value !== '') headers[name] = value;
       }
       const controller = new AbortController();
       res.on('close', () => controller.abort());

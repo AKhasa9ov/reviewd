@@ -121,7 +121,13 @@ window.__ModuleLoader__.load({
         setState((current) => ({ ...current, status: 'loading', error: null }));
         try {
           const [page, info] = await Promise.all([request('/reviews?limit=50'), request('/info')]);
-          setUiBase(info && typeof info.daemonUrl === 'string' ? info.daemonUrl : '');
+          setUiBase(
+            info && typeof info.publicUrl === 'string' && info.publicUrl !== ''
+              ? info.publicUrl
+              : info && typeof info.daemonUrl === 'string'
+                ? info.daemonUrl
+                : '',
+          );
           setState({ status: 'ready', reviews: page.items || [], error: null });
         } catch (error) {
           setState({ status: 'error', reviews: [], error });
