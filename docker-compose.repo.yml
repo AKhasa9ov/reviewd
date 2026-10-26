@@ -1,0 +1,14 @@
+# Optional override for reviews of repositories on the host.
+#
+# The host path and the container path must be identical: the daemon, the CLI/DSH
+# client and worker all use absolute repository paths from the same namespace.
+#
+#   CODE_REVIEW_REPOS=/srv/repos \
+#     docker compose -f docker-compose.yml -f docker-compose.repo.yml up -d
+#
+# This grants the daemon read/write access to the whole tree. Prefer a dedicated
+# directory and make it read-only unless you need the Apply suggestion action.
+services:
+  reviewd:
+    volumes:
+      - ${CODE_REVIEW_REPOS:?set CODE_REVIEW_REPOS to an absolute host path}:${CODE_REVIEW_REPOS:?set CODE_REVIEW_REPOS to an absolute host path}:rw
