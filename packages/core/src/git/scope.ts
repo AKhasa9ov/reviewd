@@ -1,5 +1,8 @@
-import { createHash } from 'node:crypto';
+import { createHash, type Hash } from 'node:crypto';
+import { createReadStream } from 'node:fs';
+import { lstat, readlink } from 'node:fs/promises';
 import type { DiffScope, ResolvedScope } from '../types.js';
+import { hasSymlinkParent, safeJoin } from '../paths.js';
 import { resolveRepoRoot } from './repo.js';
 import { GitError, runGit } from './run.js';
 
@@ -131,6 +134,61 @@ interface WorktreeDigestState {
   truncated: boolean;
 }
 
+function compareBytePaths(left: string, right: string): number {
+  return Buffer.compare(Buffer.from(left, 'utf8'), Buffer.from(right, 'utf8'));
+}
+
+function abortedError(): GitError {
+  return new GitError('git-failed', 'git command aborted');
+}
+
+function isAborted(signal?: AbortSignal): boolean {
+  return signal?.aborted === true;
+}
+
+async function hashUntrackedFile(
+  hash: Hash,
+  repoRoot: string,
+  path: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  if (isAborted(signal)) throw abortedError();
+  const absolute = safeJoin(repoRoot, path);
+  if (await hasSymlinkParent(repoRoot, path)) {
+    hash.update('unreadable');
+    return;
+  }
+
+  let info;
+  try {
+    info = await lstat(absolute);
+  } catch {
+    hash.update('unreadable');
+    return;
+  }
+  if (isAborted(signal)) throw abortedError();
+
+  try {
+    if (info.isSymbolicLink()) {
+      const target = await readlink(absolute, { encoding: 'buffer' });
+      if (isAborted(signal)) throw abortedError();
+      hash.update(target);
+      hash.update('\n');
+      return;
+    }
+    if (!info.isFile()) {
+      hash.update('unreadable');
+      return;
+    }
+    for await (const chunk of createReadStream(absolute, { signal })) {
+      hash.update(chunk);
+    }
+  } catch {
+    if (isAborted(signal)) throw abortedError();
+    hash.update('unreadable');
+  }
+}
+
 async function worktreeDigestState(
   repoRoot: string,
   baseSha: string,
@@ -156,8 +214,23 @@ async function worktreeDigestState(
     ],
     { signal, maxBytes: 8 * 1024 * 1024, truncateOnOverflow: true },
   );
+  const untracked = await runGit(repoRoot, ['ls-files', '--others', '--exclude-standard', '-z'], {
+    signal,
+    maxBytes: 8 * 1024 * 1024,
+  });
+  const hash = createHash('sha256').update(status.stdout).update('\0').update(diff.stdout);
+  const paths = untracked.stdout
+    .split('\0')
+    .filter((path) => path.length > 0)
+    .sort(compareBytePaths);
+  for (const path of paths) {
+    hash.update('\0');
+    hash.update(path);
+    hash.update('\0');
+    await hashUntrackedFile(hash, repoRoot, path, signal);
+  }
   return {
-    hash: createHash('sha256').update(status.stdout).update('\0').update(diff.stdout).digest('hex'),
+    hash: hash.digest('hex'),
     truncated: status.truncated === true || diff.truncated === true,
   };
 }

@@ -56,17 +56,11 @@ interface DiffText {
   synthetic?: ParsedFile;
 }
 
-function diffArgs(scope: Snapshot['scope']): string[] {
-  const common = [
-    'diff',
-    '--no-color',
-    '--no-ext-diff',
-    '--no-textconv',
-    '--unified=3',
-    '--find-renames=50%',
-    '--src-prefix=a/',
-    '--dst-prefix=b/',
-  ];
+function diffArgs(scope: Snapshot['scope'], raw = false): string[] {
+  const common = ['diff', '--no-color', '--no-ext-diff', '--no-textconv'];
+  if (raw) common.push('--raw', '-z');
+  else common.push('--unified=3');
+  common.push('--find-renames=50%', '--src-prefix=a/', '--dst-prefix=b/');
   if (scope.kind === 'worktree') return [...common, scope.baseSha, '--'];
   return [...common, `${scope.baseSha}..${scope.headSha}`, '--'];
 }
@@ -139,6 +133,58 @@ function syntheticFileFromCut(cut: string): ParsedFile | undefined {
   };
   if (oldPath !== path) file.oldPath = oldPath;
   return file;
+}
+
+function candidateKey(entry: ParsedFile): string {
+  return `${entry.path}\0${entry.oldPath ?? ''}`;
+}
+
+function rawStatus(letter: string, oldMode: string, newMode: string): ParsedFile['status'] {
+  if (letter === 'R') return 'renamed';
+  if (oldMode === '160000' || newMode === '160000') return 'submodule';
+  if (letter === 'A') return 'added';
+  if (letter === 'D') return 'deleted';
+  return 'modified';
+}
+
+function parseRawDiff(raw: string): ParsedFile[] {
+  const tokens = raw.split('\0');
+  const entries: ParsedFile[] = [];
+  for (let index = 0; index < tokens.length;) {
+    const header = tokens[index++];
+    if (header === undefined || !header.startsWith(':')) continue;
+    const fields = header.slice(1).split(' ');
+    const oldMode = fields[0] ?? '';
+    const newMode = fields[1] ?? '';
+    const letter = (fields[4] ?? 'M').charAt(0);
+    let oldPath: string | undefined;
+    let path = tokens[index++] ?? '';
+    if (letter === 'R' || letter === 'C') {
+      oldPath = path;
+      path = tokens[index++] ?? '';
+    }
+    if (path === '') continue;
+    const entry: ParsedFile = {
+      path,
+      status: rawStatus(letter, oldMode, newMode),
+      binary: false,
+      hunks: [],
+      added: 0,
+      deleted: 0,
+      backfill: true,
+    };
+    if (oldPath !== undefined) entry.oldPath = oldPath;
+    entries.push(entry);
+  }
+  return entries;
+}
+
+async function listRawChanges(
+  scope: Snapshot['scope'],
+  signal?: AbortSignal,
+): Promise<ParsedFile[]> {
+  const result = await runGit(scope.repoRoot, diffArgs(scope, true), { signal });
+  return parseRawDiff(result.stdout);
 }
 
 async function listUntracked(repoRoot: string, signal?: AbortSignal): Promise<string[]> {
@@ -326,6 +372,28 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
   ].sort((left, right) => comparePaths(left.path, right.path));
 
   let truncated = diffTruncated || limited.truncated;
+  if (truncated) {
+    const seen = new Set(candidates.map((entry) => candidateKey(entry)));
+    const byKey = new Map(candidates.map((entry) => [candidateKey(entry), entry]));
+    for (const entry of await listRawChanges(scope, options.signal)) {
+      const key = candidateKey(entry);
+      const warning = `diff-file-skipped:${entry.path}`;
+      if (seen.has(key)) {
+        const existing = byKey.get(key);
+        if (existing?.synthetic === true) {
+          existing.skipped = true;
+          if (!warnings.includes(warning)) warnings.push(warning);
+        }
+        continue;
+      }
+      seen.add(key);
+      byKey.set(key, entry);
+      candidates.push(entry);
+      if (!warnings.includes(warning)) warnings.push(warning);
+    }
+    candidates.sort((left, right) => comparePaths(left.path, right.path));
+  }
+
   let selected = candidates;
   const reviewableCandidates = candidates.filter((entry) => !isIgnored(entry.path, ignore));
   if (reviewableCandidates.length > maxFiles) {
@@ -348,6 +416,24 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
   };
   const files: FileDiff[] = [];
   for (const entry of selected) {
+    if (entry.backfill === true) {
+      const skipped: FileDiff = {
+        path: entry.path,
+        status: entry.status,
+        binary: false,
+        oversized: false,
+        added: 0,
+        deleted: 0,
+        hunks: [],
+        contentHash: null,
+        truncated: true,
+        reason: 'diff-truncated',
+      };
+      if (entry.oldPath !== undefined) skipped.oldPath = entry.oldPath;
+      if (isIgnored(entry.path, ignore)) skipped.ignored = true;
+      files.push(skipped);
+      continue;
+    }
     if (entry.synthetic === true) {
       const synthetic: FileDiff = {
         path: entry.path,
@@ -360,6 +446,10 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
         contentHash: null,
       };
       if (entry.oldPath !== undefined) synthetic.oldPath = entry.oldPath;
+      if (entry.skipped === true) {
+        synthetic.truncated = true;
+        synthetic.reason = 'diff-truncated';
+      }
       if (isIgnored(entry.path, ignore)) {
         synthetic.ignored = true;
         synthetic.oversized = false;

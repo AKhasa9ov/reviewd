@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { chmod, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -127,6 +127,85 @@ describe('resolveScope', () => {
     const second = await worktreeDigest(repo.root, repo.baseSha);
 
     expect(first).not.toBe(second);
+  });
+
+  it('changes the worktree digest when untracked content changes', async () => {
+    const repo = await makeRepo();
+    cleanups.push(repo.cleanup);
+    await repo.write('base.txt', 'base\n');
+    const baseSha = await repo.commit('base');
+
+    await repo.write('notes.txt', 'first\n');
+    const first = await worktreeDigest(repo.root, baseSha);
+    const stable = await worktreeDigest(repo.root, baseSha);
+    await repo.write('notes.txt', 'second\n');
+    const changed = await worktreeDigest(repo.root, baseSha);
+
+    expect(stable).toBe(first);
+    expect(changed).not.toBe(first);
+  });
+
+  it('sorts untracked paths before hashing their content', async () => {
+    const repo = await makeRepo();
+    cleanups.push(repo.cleanup);
+    await repo.write('base.txt', 'base\n');
+    const baseSha = await repo.commit('base');
+    const a = join(repo.root, 'a.txt');
+    const b = join(repo.root, 'b.txt');
+
+    await repo.write('b.txt', 'b\n');
+    await repo.write('a.txt', 'a\n');
+    const first = await worktreeDigest(repo.root, baseSha);
+
+    await rm(a);
+    await rm(b);
+    await repo.write('a.txt', 'a\n');
+    await repo.write('b.txt', 'b\n');
+    const second = await worktreeDigest(repo.root, baseSha);
+
+    expect(second).toBe(first);
+  });
+
+  it('hashes symlink targets without reading them', async () => {
+    const repo = await makeRepo();
+    cleanups.push(repo.cleanup);
+    await repo.write('base.txt', 'base\n');
+    const baseSha = await repo.commit('base');
+    const outside = await mkdtemp(join(tmpdir(), 'cr-digest-target-'));
+    cleanups.push(async () => rm(outside, { recursive: true, force: true }));
+    const target = join(outside, 'target.txt');
+    const link = join(repo.root, 'link');
+    await writeFile(target, 'first target content\n');
+    await symlink(target, link);
+
+    const first = await worktreeDigest(repo.root, baseSha);
+    await writeFile(target, 'changed target content\n');
+    const targetChanged = await worktreeDigest(repo.root, baseSha);
+    await rm(link);
+    await symlink(join(outside, 'other.txt'), link);
+    const linkChanged = await worktreeDigest(repo.root, baseSha);
+
+    expect(targetChanged).toBe(first);
+    expect(linkChanged).not.toBe(first);
+  });
+
+  it('hashes an unreadable untracked path without rejecting', async () => {
+    if (process.getuid?.() === 0) return;
+    const repo = await makeRepo();
+    cleanups.push(repo.cleanup);
+    await repo.write('base.txt', 'base\n');
+    const baseSha = await repo.commit('base');
+    const secret = join(repo.root, 'secret.txt');
+    await repo.write('secret.txt', 'secret\n');
+    await chmod(secret, 0o000);
+    try {
+      const first = await worktreeDigest(repo.root, baseSha);
+      const second = await worktreeDigest(repo.root, baseSha);
+      expect(first).toMatch(/^[0-9a-f]{64}$/);
+      expect(second).toBe(first);
+    } finally {
+      await chmod(secret, 0o600);
+    }
   });
 });
 

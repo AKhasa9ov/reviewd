@@ -21,7 +21,7 @@ export type FileStatus = 'added' | 'modified' | 'deleted' | 'renamed' | 'submodu
 export interface ParsedFile {
   path: string;
   oldPath?: string;
-  status: 'added' | 'modified' | 'deleted' | 'renamed';
+  status: 'added' | 'modified' | 'deleted' | 'renamed' | 'submodule';
   binary: boolean;
   hunks: DiffHunk[];
   added: number;
@@ -31,6 +31,10 @@ export interface ParsedFile {
   indexMode?: string;
   /** Present when the diff was cut inside this file before a hunk was complete. */
   synthetic?: true;
+  /** Present when metadata was recovered after the file fell wholly beyond the diff cap. */
+  backfill?: true;
+  /** Present when raw metadata confirmed this synthetic file was cut by the diff cap. */
+  skipped?: true;
 }
 
 export type DiffScope =
@@ -58,12 +62,12 @@ export interface FileDiff {
   oversized: boolean;
   /** Ignored entries stay visible but carry no content. */
   ignored?: boolean;
-  /** Content was omitted because the snapshot-wide content budget was exhausted. */
+  /** Content was omitted by the snapshot-wide budget or because the file lies beyond the diff cap. */
   truncated?: boolean;
   /** Set when the raw bytes are not valid UTF-8. */
   encoding?: 'unknown';
-  /** Set when a per-file read failed (for example EACCES or an ENOENT race). */
-  reason?: 'unreadable';
+  /** Set when content was unavailable: an unreadable read or diff-cap backfill. */
+  reason?: 'unreadable' | 'diff-truncated';
   added: number;
   deleted: number;
   hunks: DiffHunk[];

@@ -55,14 +55,17 @@ The JSON shape is stable for Plan 1:
 - `binary` — NUL bytes or invalid UTF-8; `encoding` is `"unknown"` for the latter.
 - `oversized` — the file exceeded the line or per-file content cap; no lines and no hash.
 - `ignored` — matched `--ignore`; the file stays visible but has no content or hash.
-- `truncated` — the snapshot-wide content budget was exhausted; no lines and no hash.
-- `reason` — set to `"unreadable"` when a per-file read failed (for example `EACCES` or an
-  `ENOENT` race); the file stays visible and the snapshot continues.
+- `truncated` — content was omitted by the snapshot-wide content budget or because the file
+  lies beyond the diff cap; no lines and no hash.
+- `reason` — `"unreadable"` when a per-file read failed (for example `EACCES` or an `ENOENT`
+  race), or `"diff-truncated"` when metadata was recovered after the file fell beyond the
+  diff cap. The file stays visible and the snapshot continues.
 
 `contentHash` is a SHA-256 of the raw bytes when content was retained. It is `null` for
-`--no-content`, oversized, ignored, budget-truncated and unreadable entries, and for
-submodules. `--no-content`, ignored files and oversized files do not add warnings; budget
-truncation and unreadable files do.
+`--no-content`, oversized, ignored, budget/diff-truncated and unreadable entries, and for
+submodules. `--no-content`, ignored files, oversized files and files recovered from raw
+metadata do not trigger content reads; budget truncation, diff backfill and unreadable files
+add warnings.
 
 `--worktree` diffs the base against the working tree (staged, unstaged and, by default,
 untracked files; `--no-untracked` excludes untracked files). `--commit <sha>` diffs a commit
@@ -74,12 +77,19 @@ ignored entries remain visible and never consume that cap.
 
 Limits: 2 MiB of diff text, 500 files, 20 000 lines per file, 1 MiB of content per file and
 64 MiB of content per snapshot. `totals.truncated` is true for diff, file-count or
-content-budget truncation. A file cut by the diff cap is still reported with its path and
-kind as an `oversized` entry. Reports include `diff-truncated`,
-`diff-file-truncated:<path>`, `files-truncated`, `content-budget-truncated`,
-`worktree-digest-truncated`, `symlink-not-followed:<path>` and `unreadable:<path>` where
-relevant. `scope.worktreeDigestTruncated` is present when the digest itself had to be
-computed from truncated status/diff output.
+content-budget truncation. A file cut by the diff cap remains visible as an `oversized`
+synthetic entry; every changed path wholly beyond the cap is recovered from one `--raw -z`
+metadata call as a `truncated`/`diff-truncated` entry with no content or hash. Reports include
+`diff-truncated`, `diff-file-truncated:<path>`, `diff-file-skipped:<path>`,
+`files-truncated`, `content-budget-truncated`, `worktree-digest-truncated`,
+`symlink-not-followed:<path>` and `unreadable:<path>` where relevant.
+`scope.worktreeDigestTruncated` is present when the digest itself had to be computed from
+truncated status/diff output.
+
+For a worktree, `worktreeDigest` also hashes untracked file contents. Paths are sorted by
+UTF-8 bytes, regular files are streamed, symlinks hash their link target rather than the
+target contents, and unreadable or raced paths hash a stable marker. Untracked content is not
+subject to the snapshot content caps.
 
 The human output prefixes the change letter with `I` (ignored), `B` (binary) or `L`
 (oversized), for example `IM src/a.ts` or `B? image.bin`.

@@ -290,6 +290,127 @@ describe('buildSnapshot', () => {
     expect(result.warnings).toContain('diff-file-truncated:z.txt');
   });
 
+  it('backfills a file wholly beyond the diff cap', async () => {
+    const repo = await makeRepo();
+    cleanups.push(repo.cleanup);
+    await repo.write('base.txt', 'base\n');
+    await repo.commit('base');
+    await repo.git('checkout', '-b', 'feature');
+    await repo.write('a.txt', 'small\n');
+    await repo.write('z.txt', `${'x'.repeat(3 * 1024 * 1024)}\n`);
+    await repo.commit('small and large');
+
+    const result = await snapshot(repo.root);
+    const last = result.files.find((file) => file.path === 'z.txt');
+
+    expect(result.files.map((file) => file.path)).toEqual(['a.txt', 'z.txt']);
+    expect(last?.status).toBe('added');
+    expect(last?.truncated).toBe(true);
+    expect(last?.reason).toBe('diff-truncated');
+    expect(last?.hunks).toEqual([]);
+    expect(last?.contentHash).toBeNull();
+    expect(result.warnings).toContain('diff-truncated');
+    expect(result.warnings).toContain('diff-file-skipped:z.txt');
+    expect(result.warnings).not.toContain('diff-file-skipped:a.txt');
+  });
+
+  it('backfills a large middle file and a later file without duplicates', async () => {
+    const repo = await makeRepo();
+    cleanups.push(repo.cleanup);
+    await repo.write('base.txt', 'base\n');
+    await repo.commit('base');
+    await repo.git('checkout', '-b', 'feature');
+    await repo.write('a.txt', 'small\n');
+    await repo.write('m.txt', `${'x'.repeat(3 * 1024 * 1024)}\n`);
+    await repo.write('z.txt', 'later\n');
+    await repo.commit('small, large and later');
+
+    const result = await snapshot(repo.root);
+    const middle = result.files.filter((file) => file.path === 'm.txt');
+    const last = result.files.find((file) => file.path === 'z.txt');
+
+    expect(result.files.map((file) => file.path)).toEqual(['a.txt', 'm.txt', 'z.txt']);
+    expect(middle).toHaveLength(1);
+    expect(middle[0]?.oversized).toBe(true);
+    expect(last?.truncated).toBe(true);
+    expect(last?.reason).toBe('diff-truncated');
+    expect(result.warnings).toContain('diff-file-skipped:z.txt');
+  });
+
+  it('backfills a rename beyond the diff cap with its old path', async () => {
+    const repo = await makeRepo();
+    cleanups.push(repo.cleanup);
+    await repo.write('old.txt', `${'old'.repeat(30)}\n`);
+    await repo.commit('base');
+    await repo.git('checkout', '-b', 'feature');
+    await repo.write('a.txt', 'small\n');
+    await repo.write('m.txt', `${'x'.repeat(5000)}\n`);
+    await repo.git('mv', 'old.txt', 'new.txt');
+    await repo.commit('large and rename');
+
+    const result = await snapshot(repo.root, { maxDiffBytes: 1024 });
+    const renamed = result.files.find((file) => file.path === 'new.txt');
+
+    expect(renamed?.status).toBe('renamed');
+    expect(renamed?.oldPath).toBe('old.txt');
+    expect(renamed?.truncated).toBe(true);
+    expect(renamed?.reason).toBe('diff-truncated');
+    expect(result.warnings).toContain('diff-file-skipped:new.txt');
+  });
+
+  it('backfills a submodule type change beyond the diff cap', async () => {
+    const repo = await makeRepo();
+    cleanups.push(repo.cleanup);
+    await repo.write('a.txt', 'a\n');
+    await repo.write('vendor/lib', 'regular\n');
+    await repo.commit('base');
+    await repo.git('checkout', '-b', 'feature');
+    await repo.write('m.txt', `${'x'.repeat(5000)}\n`);
+    await repo.git('rm', 'vendor/lib');
+    await repo.git('add', 'm.txt');
+    await repo.git(
+      'update-index',
+      '--add',
+      '--cacheinfo',
+      '160000,1111111111111111111111111111111111111111,vendor/lib',
+    );
+    await repo.commitStaged('type change and large file');
+
+    const result = await snapshot(repo.root, { maxDiffBytes: 1024 });
+    const submodule = result.files.find((file) => file.path === 'vendor/lib');
+
+    expect(submodule?.status).toBe('submodule');
+    expect(submodule?.truncated).toBe(true);
+    expect(submodule?.reason).toBe('diff-truncated');
+    expect(result.warnings).toContain('diff-file-skipped:vendor/lib');
+  });
+
+  it('keeps an ignored backfilled path visible without consuming maxFiles', async () => {
+    const repo = await makeRepo();
+    cleanups.push(repo.cleanup);
+    await repo.write('base.txt', 'base\n');
+    await repo.commit('base');
+    await repo.git('checkout', '-b', 'feature');
+    await repo.write('a.txt', 'small\n');
+    await repo.write('m.txt', `${'x'.repeat(3 * 1024 * 1024)}\n`);
+    await repo.write('zzz/000.txt', 'ignored\n');
+    await repo.commit('small, large and ignored');
+
+    const result = await snapshot(repo.root, {
+      maxFiles: 1,
+      ignore: ['m.txt', 'zzz/**'],
+    });
+    const ignored = result.files.find((file) => file.path === 'zzz/000.txt');
+
+    expect(result.files.map((file) => file.path)).toEqual(['a.txt', 'm.txt', 'zzz/000.txt']);
+    expect(result.files.find((file) => file.path === 'a.txt')).toBeDefined();
+    expect(ignored?.ignored).toBe(true);
+    expect(ignored?.truncated).toBe(true);
+    expect(ignored?.reason).toBe('diff-truncated');
+    expect(result.warnings).toContain('diff-file-skipped:zzz/000.txt');
+    expect(result.warnings).not.toContain('files-truncated');
+  });
+
   it('sorts paths by UTF-8 bytes rather than UTF-16 code units', async () => {
     const repo = await featureRepo();
     await repo.write('\u{1f600}.txt', 'emoji\n');
