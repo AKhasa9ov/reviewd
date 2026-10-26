@@ -67,9 +67,10 @@ own patch layer (the layer applied after every bundle):
 
 `reviewd` rejects tokens shorter than 32 bytes. The token is never sent to the Client,
 rendered in a panel, logged, or placed in a URL. The Client calls only same-origin
-`/api/code-review/*`; the Host replaces any Client-supplied authorization header with
-`Authorization: Bearer <token>`, forwards `idempotency-key` and `x-review-actor`, and
-serves `/api/code-review/info` without the token as `{daemonUrl, publicUrl?}`.
+`/api/code-review/*`; the Host applies DSH's `connection.requestRejection` gate (Host/Origin
+fence plus browser/API credentials), replaces any Client-supplied authorization header with
+`Authorization: Bearer <token>`, forwards `idempotency-key` and `x-review-actor`, and serves
+the authenticated `/api/code-review/info` as `{daemonUrl, publicUrl?}` without the token.
 
 ## Tools and command
 
