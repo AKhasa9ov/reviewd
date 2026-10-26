@@ -75,6 +75,15 @@ old mode 100644
 new mode 100755
 `;
 
+const GITLINK_MODIFIED = `diff --git a/vendor/lib b/vendor/lib
+index 1111111..2222222 160000
+--- a/vendor/lib
++++ b/vendor/lib
+@@ -1 +1 @@
+-Subproject commit 1111111111111111111111111111111111111111
++Subproject commit 2222222222222222222222222222222222222222
+`;
+
 const HUNK_TEXT = `diff --git a/notes.txt b/notes.txt
 --- a/notes.txt
 +++ b/notes.txt
@@ -139,6 +148,14 @@ describe('parseUnifiedDiff edge cases', () => {
     expect(file?.oldMode).toBe('100644');
     expect(file?.newMode).toBe('100755');
     expect(file?.hunks).toEqual([]);
+  });
+
+  it('records the gitlink mode from the index line', () => {
+    const [file] = parseUnifiedDiff(GITLINK_MODIFIED);
+    expect(file?.indexMode).toBe('160000');
+    expect(file?.oldMode).toBeUndefined();
+    expect(file?.newMode).toBeUndefined();
+    expect(file?.status).toBe('modified');
   });
 
   it('does not mistake hunk content for file headers', () => {

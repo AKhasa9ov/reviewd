@@ -52,11 +52,16 @@ async function listUntracked(repoRoot: string, signal?: AbortSignal): Promise<st
   return result.stdout.split('\0').filter((path) => path.length > 0);
 }
 
+interface ModeListing {
+  modes: Map<string, string>;
+  available: boolean;
+}
+
 async function headModes(
   repoRoot: string,
   headSha: string | null,
   signal?: AbortSignal,
-): Promise<Map<string, string>> {
+): Promise<ModeListing> {
   let result: GitResult;
   try {
     result = await runGit(
@@ -66,9 +71,9 @@ async function headModes(
     );
   } catch (error) {
     if (signal?.aborted === true) throw error;
-    return new Map();
+    return { modes: new Map(), available: false };
   }
-  if (result.code !== 0) return new Map();
+  if (result.code !== 0) return { modes: new Map(), available: false };
 
   const modes = new Map<string, string>();
   for (const entry of result.stdout.split('\0')) {
@@ -78,7 +83,7 @@ async function headModes(
     const path = entry.slice(tab + 1);
     if (mode !== undefined && path !== '') modes.set(path, mode);
   }
-  return modes;
+  return { modes, available: true };
 }
 
 async function untrackedFile(
@@ -174,12 +179,18 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
     warnings.push('files-truncated');
   }
 
-  const modes = await headModes(scope.repoRoot, scope.headSha, options.signal);
+  const modeListing = await headModes(scope.repoRoot, scope.headSha, options.signal);
+  if (!modeListing.available) warnings.push('submodule-modes-unavailable');
 
   const files: FileDiff[] = [];
   for (const entry of selected) {
     const oldPath = entry.oldPath ?? entry.path;
-    if (modes.get(entry.path) === '160000') {
+    const hasMode =
+      entry.oldMode !== undefined || entry.newMode !== undefined || entry.indexMode !== undefined;
+    const isGitlink = hasMode
+      ? entry.oldMode === '160000' || entry.newMode === '160000' || entry.indexMode === '160000'
+      : modeListing.modes.get(entry.path) === '160000';
+    if (isGitlink) {
       // A gitlink addresses a commit, not a worktree path: never read content for it.
       const submodule: FileDiff = {
         path: entry.path,

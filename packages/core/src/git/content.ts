@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { lstat, readFile } from 'node:fs/promises';
+import { lstat, readFile, readlink } from 'node:fs/promises';
 import { hasSymlinkParent, safeJoin } from '../paths.js';
 import { GitError, runGit } from './run.js';
 import type { GitResult } from './run.js';
@@ -44,9 +44,22 @@ export async function readBlob(
       return { ...EMPTY, symlink: true };
     }
     const info = await lstat(absolute).catch(() => null);
-    if (info === null || !info.isFile()) {
-      return { ...EMPTY, symlink: info?.isSymbolicLink() ?? false };
+    if (info === null) return EMPTY;
+    if (info.isSymbolicLink()) {
+      const target = await readlink(absolute).catch(() => null);
+      if (target === null) return { ...EMPTY, symlink: true };
+      const targetBuffer = Buffer.from(target, 'utf8');
+      const targetLines = splitLines(targetBuffer);
+      if (targetLines.length > maxLines) return { ...EMPTY, oversized: true };
+      return {
+        lines: targetLines,
+        binary: false,
+        oversized: false,
+        symlink: true,
+        hash: hashOf(targetBuffer),
+      };
     }
+    if (!info.isFile()) return EMPTY;
     if (info.size > 8 * 1024 * 1024) {
       return { ...EMPTY, oversized: true };
     }

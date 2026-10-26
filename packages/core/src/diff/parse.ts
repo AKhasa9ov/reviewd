@@ -10,12 +10,14 @@ interface MutableFile {
   deleted: number;
   oldMode?: string;
   newMode?: string;
+  indexMode?: string;
   oldIsNull: boolean;
   newIsNull: boolean;
 }
 
 const FILE_HEADER = /^diff --git a\/(.+) b\/(.+)$/;
 const HUNK_HEADER = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(?: ?(.*))?$/;
+const INDEX_LINE = /^index [0-9a-f]+\.\.[0-9a-f]+ (\d{6})$/;
 
 export class DiffParseError extends Error {
   readonly line: number;
@@ -57,6 +59,7 @@ export function parseUnifiedDiff(diff: string): ParsedFile[] {
     }
     if (current.oldMode !== undefined) parsed.oldMode = current.oldMode;
     if (current.newMode !== undefined) parsed.newMode = current.newMode;
+    if (current.indexMode !== undefined) parsed.indexMode = current.indexMode;
     files.push(parsed);
 
     current = null;
@@ -133,6 +136,11 @@ export function parseUnifiedDiff(diff: string): ParsedFile[] {
       }
       if (line.startsWith('new mode ')) {
         current.newMode = line.slice('new mode '.length);
+        continue;
+      }
+      if (line.startsWith('index ')) {
+        const match = INDEX_LINE.exec(line);
+        if (match?.[1] !== undefined) current.indexMode = match[1];
         continue;
       }
       if (line.startsWith('rename from ')) {

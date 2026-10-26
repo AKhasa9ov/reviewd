@@ -29,6 +29,7 @@ export interface ParsedFile {
   deleted: number;
   oldMode?: string;
   newMode?: string;
+  indexMode?: string;
 }
 
 export type DiffScope =
