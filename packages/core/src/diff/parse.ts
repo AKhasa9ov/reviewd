@@ -17,6 +17,16 @@ interface MutableFile {
 const FILE_HEADER = /^diff --git a\/(.+) b\/(.+)$/;
 const HUNK_HEADER = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(?: ?(.*))?$/;
 
+export class DiffParseError extends Error {
+  readonly line: number;
+
+  constructor(message: string, line: number) {
+    super(message);
+    this.name = 'DiffParseError';
+    this.line = line;
+  }
+}
+
 export function parseUnifiedDiff(diff: string): ParsedFile[] {
   const files: ParsedFile[] = [];
   let current: MutableFile | null = null;
@@ -53,12 +63,18 @@ export function parseUnifiedDiff(diff: string): ParsedFile[] {
     hunk = null;
   };
 
-  for (const line of diff.split('\n')) {
+  for (const [index, line] of diff.split('\n').entries()) {
     if (line.startsWith('diff --git ')) {
       finish();
       const match = FILE_HEADER.exec(line);
-      const oldPath = match?.[1] ?? '';
-      const newPath = match?.[2] ?? oldPath;
+      if (match === null) {
+        throw new DiffParseError(
+          `Malformed diff file header at line ${index + 1}: expected "diff --git a/<path> b/<path>"`,
+          index + 1,
+        );
+      }
+      const oldPath = match[1];
+      const newPath = match[2];
       current = {
         path: newPath,
         ...(oldPath !== newPath ? { oldPath } : {}),

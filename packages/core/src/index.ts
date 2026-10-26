@@ -1,5 +1,5 @@
 export const CORE_VERSION = '0.1.0';
-export { parseUnifiedDiff } from './diff/parse.js';
+export { DiffParseError, parseUnifiedDiff } from './diff/parse.js';
 export type {
   DiffHunk,
   DiffLine,

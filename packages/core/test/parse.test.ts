@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseUnifiedDiff } from '../src/diff/parse.js';
+import { DiffParseError, parseUnifiedDiff } from '../src/diff/parse.js';
 
 const SIMPLE = `diff --git a/src/a.ts b/src/a.ts
 index 1111111..2222222 100644
@@ -37,5 +37,40 @@ describe('parseUnifiedDiff', () => {
 
   it('returns an empty array for an empty diff', () => {
     expect(parseUnifiedDiff('')).toEqual([]);
+  });
+
+  it('throws DiffParseError for a malformed diff header', () => {
+    expect(() => parseUnifiedDiff('diff --git malformed\n')).toThrow(DiffParseError);
+  });
+
+  it('keeps binary diffs with unquoted paths working', () => {
+    const files = parseUnifiedDiff(`diff --git a/assets/logo.png b/assets/logo.png
+index 1111111..2222222 100644
+Binary files a/assets/logo.png and b/assets/logo.png differ
+`);
+
+    expect(files).toHaveLength(1);
+    expect(files[0]).toMatchObject({
+      path: 'assets/logo.png',
+      status: 'modified',
+      binary: true,
+      added: 0,
+      deleted: 0,
+    });
+  });
+
+  it('keeps paths with spaces working', () => {
+    const files = parseUnifiedDiff(`diff --git a/docs/my file.md b/docs/my file.md
+index 1111111..2222222 100644
+--- a/docs/my file.md
++++ b/docs/my file.md
+@@ -1 +1 @@
+-old
++new
+`);
+
+    expect(files[0]?.path).toBe('docs/my file.md');
+    expect(files[0]?.added).toBe(1);
+    expect(files[0]?.deleted).toBe(1);
   });
 });
