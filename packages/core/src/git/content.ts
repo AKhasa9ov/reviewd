@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { lstat, readFile } from 'node:fs/promises';
-import { safeJoin } from '../paths.js';
+import { hasSymlinkParent, safeJoin } from '../paths.js';
 import { GitError, runGit } from './run.js';
 import type { GitResult } from './run.js';
 
@@ -40,6 +40,9 @@ export async function readBlob(
 
   if (revision === null) {
     const absolute = safeJoin(repoRoot, path);
+    if (await hasSymlinkParent(repoRoot, path)) {
+      return { ...EMPTY, symlink: true };
+    }
     const info = await lstat(absolute).catch(() => null);
     if (info === null || !info.isFile()) {
       return { ...EMPTY, symlink: info?.isSymbolicLink() ?? false };

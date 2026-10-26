@@ -1,9 +1,10 @@
 import { lstat } from 'node:fs/promises';
 import type { DiffHunk, FileDiff, Snapshot, SnapshotOptions } from '../types.js';
-import { safeJoin } from '../paths.js';
+import { hasSymlinkParent, safeJoin } from '../paths.js';
 import { readBlob } from '../git/content.js';
 import { resolveScope } from '../git/scope.js';
 import { runGit } from '../git/run.js';
+import type { GitResult } from '../git/run.js';
 import { parseUnifiedDiff } from './parse.js';
 import { isIgnored } from './glob.js';
 
@@ -51,6 +52,35 @@ async function listUntracked(repoRoot: string, signal?: AbortSignal): Promise<st
   return result.stdout.split('\0').filter((path) => path.length > 0);
 }
 
+async function headModes(
+  repoRoot: string,
+  headSha: string | null,
+  signal?: AbortSignal,
+): Promise<Map<string, string>> {
+  let result: GitResult;
+  try {
+    result = await runGit(
+      repoRoot,
+      headSha === null ? ['ls-files', '-s', '-z'] : ['ls-tree', '-r', '-z', headSha],
+      { allowFailure: true, signal, maxBytes: 8 * 1024 * 1024 },
+    );
+  } catch (error) {
+    if (signal?.aborted === true) throw error;
+    return new Map();
+  }
+  if (result.code !== 0) return new Map();
+
+  const modes = new Map<string, string>();
+  for (const entry of result.stdout.split('\0')) {
+    const tab = entry.indexOf('\t');
+    if (tab < 0) continue;
+    const mode = entry.slice(0, tab).split(' ')[0];
+    const path = entry.slice(tab + 1);
+    if (mode !== undefined && path !== '') modes.set(path, mode);
+  }
+  return modes;
+}
+
 async function untrackedFile(
   repoRoot: string,
   path: string,
@@ -58,6 +88,7 @@ async function untrackedFile(
   includeContent: boolean,
 ): Promise<FileDiff | null> {
   const absolute = safeJoin(repoRoot, path);
+  if (await hasSymlinkParent(repoRoot, path)) return null;
   const info = await lstat(absolute).catch(() => null);
   if (info === null || info.isSymbolicLink() || !info.isFile()) return null;
 
@@ -143,9 +174,27 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
     warnings.push('files-truncated');
   }
 
+  const modes = await headModes(scope.repoRoot, scope.headSha, options.signal);
+
   const files: FileDiff[] = [];
   for (const entry of selected) {
     const oldPath = entry.oldPath ?? entry.path;
+    if (modes.get(entry.path) === '160000') {
+      // A gitlink addresses a commit, not a worktree path: never read content for it.
+      const submodule: FileDiff = {
+        path: entry.path,
+        status: 'submodule',
+        binary: false,
+        oversized: false,
+        added: entry.added,
+        deleted: entry.deleted,
+        hunks: entry.hunks,
+        contentHash: null,
+      };
+      if (entry.oldPath !== undefined) submodule.oldPath = entry.oldPath;
+      files.push(submodule);
+      continue;
+    }
     const base =
       entry.status === 'added' || !includeContent
         ? null
@@ -187,6 +236,12 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
     const untrackedPaths = await listUntracked(scope.repoRoot, options.signal);
     for (const path of untrackedPaths) {
       if (isIgnored(path, ignore)) continue;
+      const absolute = safeJoin(scope.repoRoot, path);
+      const info = await lstat(absolute).catch(() => null);
+      if (info?.isSymbolicLink() === true || (await hasSymlinkParent(scope.repoRoot, path))) {
+        warnings.push(`symlink-not-followed:${path}`);
+        continue;
+      }
       const file = await untrackedFile(scope.repoRoot, path, maxFileLines, includeContent);
       if (file !== null) files.push(file);
     }
