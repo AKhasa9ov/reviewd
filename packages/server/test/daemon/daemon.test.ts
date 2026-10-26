@@ -347,6 +347,85 @@ describe('jobs, workers and deliveries', () => {
   });
 });
 
+describe('delivery persistence', () => {
+  it('keeps pending deliveries and acknowledgements across a daemon restart', async () => {
+    const storeDir = await mkdtemp(join(tmpdir(), 'reviewd-store-'));
+    cleanups.push(async () => {
+      await rm(storeDir, { recursive: true, force: true });
+    });
+    const start = async (): Promise<Running> => {
+      const daemon = await startDaemon({
+        host: '127.0.0.1',
+        port: 0,
+        storeDir,
+        token: TOKEN,
+        longPollMs: 50,
+        heartbeatMs: 50,
+        jobLeaseMs: 200,
+        rateLimit: { mutations: 100, reads: 1000, windowMs: 60_000 },
+      });
+      cleanups.push(async () => {
+        await daemon.close();
+      });
+      return { daemon, daemonUrl: daemon.url, token: TOKEN, storeDir };
+    };
+
+    const checkout = await repo();
+    const first = await start();
+    const created = await createReview(first.daemonUrl, { backend: 'none' }, checkout.root, {
+      harness: 'dsh',
+      sessionId: 'session-persist',
+    });
+    const reviewId = created.body.review.review.id as string;
+    const submit = await fetch(`${first.daemonUrl}/api/reviews/${reviewId}/submit`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ verdict: 'comment', harness: 'dsh' }),
+    });
+    expect(submit.status).toBe(200);
+    const before = await read(
+      await fetch(`${first.daemonUrl}/api/deliveries/pending?harness=dsh`, {
+        headers: headers(),
+      }),
+    );
+    expect(before.deliveries).toHaveLength(1);
+    const deliveryId = before.deliveries[0].id as string;
+    await first.daemon.close();
+
+    const second = await start();
+    const restored = await read(
+      await fetch(`${second.daemonUrl}/api/deliveries/pending?harness=dsh`, {
+        headers: headers(),
+      }),
+    );
+    expect(restored.deliveries.map((item: { id: string }) => item.id)).toEqual([deliveryId]);
+    const ack = await fetch(`${second.daemonUrl}/api/deliveries/${deliveryId}/ack`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ by: 'dsh' }),
+    });
+    expect(ack.status).toBe(200);
+    expect((await read(ack)).status).toBe('acked');
+    await second.daemon.close();
+
+    const third = await start();
+    const after = await read(
+      await fetch(`${third.daemonUrl}/api/deliveries/pending?harness=dsh`, {
+        headers: headers(),
+      }),
+    );
+    expect(after.deliveries).toEqual([]);
+    const reack = await fetch(`${third.daemonUrl}/api/deliveries/${deliveryId}/ack`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ by: 'dsh' }),
+    });
+    expect(reack.status).toBe(200);
+    expect((await read(reack)).status).toBe('acked');
+    await third.daemon.close();
+  });
+});
+
 describe('daemon limits, leases and gc', () => {
   it('requeues an expired lease once and then fails the job', async () => {
     const { daemonUrl } = await running({ jobLeaseMs: 60, jobMaxAttempts: 2 });

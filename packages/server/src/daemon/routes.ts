@@ -432,7 +432,7 @@ export async function handle(
       const submission = await ctx.service.submit(reviewId, input, ctxFor(req, options.auth));
       const review = await ctx.service.get(reviewId);
       const initiator = review.review.initiator;
-      const delivery = ctx.deliveries.create({
+      const delivery = await ctx.deliveries.create({
         deliveryKey: submission.deliveryKey,
         reviewId,
         round: submission.round,
@@ -644,7 +644,7 @@ export async function handle(
     const action = segments[3];
     const body = await readJson(req, ctx.config.maxBodyBytes);
     if (action === 'ack') {
-      const record = ctx.deliveries.ack(
+      const record = await ctx.deliveries.ack(
         deliveryId,
         typeof body.by === 'string' ? body.by : 'unknown',
       );
@@ -653,7 +653,7 @@ export async function handle(
       return;
     }
     if (action === 'fail') {
-      const record = ctx.deliveries.fail(
+      const record = await ctx.deliveries.fail(
         deliveryId,
         typeof body.error === 'string' ? body.error : 'delivery failed',
       );

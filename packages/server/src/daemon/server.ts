@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { join } from 'node:path';
 import {
   ReviewLifecycle,
   ReviewServiceImpl,
@@ -74,7 +75,16 @@ export async function startDaemon(
     maxAttempts: config.jobMaxAttempts ?? DEFAULTS.jobMaxAttempts,
     heartbeatMs: 20_000,
   });
-  const deliveries = new DeliveryQueue(now);
+  const deliveries = new DeliveryQueue(now, {
+    path: join(config.storeDir, 'deliveries.json'),
+  });
+  try {
+    await deliveries.load();
+  } catch (error) {
+    jobs.close();
+    await store.close();
+    throw error;
+  }
   const rateLimiter = new RateLimiter(config.rateLimit ?? DEFAULTS.rateLimit);
   const publicUrl = config.publicUrl ?? '';
   const webDir = await resolveWebDir(config.webDir);
@@ -162,6 +172,7 @@ export async function startDaemon(
     });
   } catch (error) {
     jobs.close();
+    await deliveries.close();
     await store.close();
     throw error;
   }
@@ -186,6 +197,7 @@ export async function startDaemon(
         server.close(() => resolve());
         server.closeAllConnections?.();
       });
+      await deliveries.close();
       await store.close();
     },
   };
