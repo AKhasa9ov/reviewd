@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 import { isReviewEvent, ReviewEventError } from './events.js';
 import type { ReviewEvent } from './events.js';
 import { fold } from './fold.js';
+import type { Snapshot } from '../types.js';
 import type { Comment, ReviewId, ReviewState, ReviewStatus, ReviewSummary } from './types.js';
 
 interface StoreOptions {
@@ -118,6 +119,24 @@ function safeReviewId(reviewId: ReviewId): string {
     throw new ReviewNotFoundError(reviewId);
   }
   return reviewId;
+}
+
+function safeSnapshotId(snapshotId: string): string {
+  if (typeof snapshotId !== 'string' || !/^snap_[A-Za-z0-9]+$/.test(snapshotId)) {
+    throw new ReviewNotFoundError(snapshotId);
+  }
+  return snapshotId;
+}
+
+function isSnapshot(value: unknown): value is Snapshot {
+  if (!isRecord(value)) return false;
+  if (value.schemaVersion !== 1) return false;
+  if (!isRecord(value.scope) || typeof value.scope.baseSha !== 'string') return false;
+  if (!Array.isArray(value.files)) return false;
+  if (!isRecord(value.totals) || !Array.isArray(value.warnings)) return false;
+  return value.files.every(
+    (file) => isRecord(file) && typeof file.path === 'string' && Array.isArray(file.hunks),
+  );
 }
 
 function isPidAlive(pid: number): boolean {
@@ -384,6 +403,55 @@ export class ReviewStore {
       return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
     });
     return summaries;
+  }
+
+  async writeSnapshot(snapshotId: string, snapshot: Snapshot): Promise<void> {
+    if (this.closed) throw new Error('review store is closed');
+    const id = safeSnapshotId(snapshotId);
+    if (!isSnapshot(snapshot)) {
+      throw new ReviewNotFoundError(id);
+    }
+
+    const dir = join(this.root, 'snapshots');
+    await mkdir(dir, { recursive: true });
+    const target = join(dir, `${id}.json`);
+    const temp = join(dir, `.${id}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`);
+    const handle = await open(temp, 'wx');
+    try {
+      await handle.writeFile(JSON.stringify(snapshot));
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    try {
+      await rename(temp, target);
+    } catch (error) {
+      await unlink(temp).catch(() => undefined);
+      throw error;
+    }
+  }
+
+  async readSnapshot(snapshotId: string): Promise<Snapshot> {
+    if (this.closed) throw new Error('review store is closed');
+    const id = safeSnapshotId(snapshotId);
+    let raw: string;
+    try {
+      raw = await readFile(join(this.root, 'snapshots', `${id}.json`), 'utf8');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        throw new ReviewNotFoundError(id);
+      }
+      throw error;
+    }
+
+    let value: unknown;
+    try {
+      value = JSON.parse(raw);
+    } catch {
+      throw new ReviewNotFoundError(id);
+    }
+    if (!isSnapshot(value)) throw new ReviewNotFoundError(id);
+    return structuredClone(value);
   }
 
   async close(): Promise<void> {

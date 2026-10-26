@@ -48,6 +48,10 @@ export function fold(state: ReviewState, event: ReviewEvent): ReviewState {
       if (next.rounds.some((round) => round.no === event.data.round.no)) {
         throw new ReviewFoldError(`duplicate round: ${event.data.round.no}`);
       }
+      const expected = next.rounds.length + 1;
+      if (event.data.round.no !== expected) {
+        throw new ReviewFoldError(`round order: expected ${expected}, got ${event.data.round.no}`);
+      }
       next.rounds.push(structuredClone(event.data.round));
       break;
     }
