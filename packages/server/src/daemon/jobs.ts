@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { ApiError } from './errors.js';
 import type { LeaseView } from './types.js';
 
 export interface WorkerRegistration {
@@ -136,7 +137,11 @@ export class JobQueue {
 
   async next(workerId: string, waitMs: number, signal?: AbortSignal): Promise<LeaseView | null> {
     const worker = this.workers.get(workerId);
-    if (worker === undefined) return null;
+    if (worker === undefined) {
+      // A daemon restart forgets registrations. Tell the worker so it can
+      // register again instead of polling forever with a dead id.
+      throw new ApiError('unauthorized', 'unknown worker; register again');
+    }
     const deadline = this.now().getTime() + Math.max(0, waitMs);
     for (;;) {
       this.sweep();

@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, it } from 'vitest';
+import { ReviewApiError } from '../src/api.js';
 import { extractReviewerReport, runWorkerLoop } from '../src/worker.js';
 
 const config = {
@@ -21,15 +22,20 @@ function reviewerAgent(options: {
   onDispose?: () => void;
   whenIdle?: () => Promise<void>;
   restrict?: (filter: unknown) => void;
+  guard?: (guard: (execution: { name: string }) => string | undefined) => void;
 }): { agent: any; dispose: () => Promise<void> } {
   return {
     agent: {
       followup: () => undefined,
       whenIdle: options.whenIdle ?? (async () => undefined),
       cancel: options.cancel ?? (() => undefined),
-      snapshotEvents: () => options.events ?? [],
+      session: { snapshotEvents: () => options.events ?? [] },
       ctx: {
         tools: {
+          guard: (guard: (execution: { name: string }) => string | undefined) => {
+            options.guard?.(guard);
+            return () => undefined;
+          },
           restrict: (filter: unknown) => {
             options.restrict?.(filter);
             return () => undefined;
@@ -83,6 +89,26 @@ describe('reviewer output', () => {
     expect(extractReviewerReport(events)).toMatchObject({ schemaVersion: 1, summary: 'ok' });
   });
 
+  it('falls back to an earlier report when the final message is prose', () => {
+    const events = [
+      {
+        type: 'assistant/message',
+        data: {
+          message: {
+            content: [
+              { type: 'text', text: '```json\n{"schemaVersion":1,"summary":"early"}\n```' },
+            ],
+          },
+        },
+      },
+      {
+        type: 'assistant/message',
+        data: { message: { content: [{ type: 'text', text: 'I ran out of time.' }] } },
+      },
+    ];
+    expect(extractReviewerReport(events)).toMatchObject({ summary: 'early' });
+  });
+
   it('returns undefined for non-JSON output', () => {
     expect(
       extractReviewerReport([
@@ -122,7 +148,7 @@ describe('worker loop', () => {
         return {};
       },
     } as any;
-    let restricted: unknown;
+    let guardFn: ((execution: { name: string }) => string | undefined) | undefined;
     let disposed = 0;
     const agents = {
       create: async () =>
@@ -142,8 +168,8 @@ describe('worker loop', () => {
               },
             },
           ],
-          restrict: (filter) => {
-            restricted = filter;
+          guard: (guard) => {
+            guardFn = guard;
           },
           onDispose: () => {
             disposed += 1;
@@ -152,9 +178,10 @@ describe('worker loop', () => {
     };
     await runWorkerLoop({ config, api, agents, sleep: async () => undefined }, controller.signal);
     expect(calls[0]).toMatchObject({ path: '/api/workers/register' });
-    expect(restricted).toEqual({
-      allow: ['read', 'grep', 'glob', 'review_status', 'review_feedback'],
-    });
+    expect(guardFn?.({ name: 'read' })).toBeUndefined();
+    expect(guardFn?.({ name: 'grep' })).toBeUndefined();
+    expect(guardFn?.({ name: 'write' })).toContain('read-only');
+    expect(guardFn?.({ name: 'bash' })).toContain('read-only');
     expect(calls.some((call) => call.path.endsWith('/findings'))).toBe(true);
     expect(calls.some((call) => call.path.endsWith('/report'))).toBe(true);
     expect(calls.some((call) => call.path.endsWith('/ack'))).toBe(true);
@@ -246,6 +273,36 @@ describe('worker loop', () => {
     expect(attempts).toBe(3);
     expect(new Set(ids).size).toBe(1);
     expect(sleeps).toEqual([1000, 2000]);
+  });
+
+  it('registers again when a daemon restarted and forgot the worker id', async () => {
+    const controller = new AbortController();
+    let registrations = 0;
+    let polls = 0;
+    const api = {
+      get: async () => {
+        polls += 1;
+        if (polls === 1) {
+          throw new ReviewApiError('unauthorized', 401, 'unknown worker; register again');
+        }
+        controller.abort();
+        return null;
+      },
+      post: async (path: string, body: any) => {
+        if (path === '/api/workers/register') {
+          registrations += 1;
+          return { id: body.id };
+        }
+        return {};
+      },
+    } as any;
+    await drive({
+      api,
+      agents: { create: async () => reviewerAgent({}) },
+      signal: controller.signal,
+      sleep: async () => undefined,
+    });
+    expect(registrations).toBe(2);
   });
 
   it('rejects a report that does not carry schemaVersion 1', async () => {

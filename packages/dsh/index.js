@@ -612,6 +612,13 @@ async function runDeliveryLoop(deps, signal) {
 
 // packages/dsh/src/worker.ts
 import { randomUUID } from "node:crypto";
+var READ_ONLY_REVIEWER_TOOLS = /* @__PURE__ */ new Set([
+  "read",
+  "grep",
+  "glob",
+  "review_status",
+  "review_feedback"
+]);
 function wait2(ms, signal) {
   return new Promise((resolve) => {
     if (signal.aborted) {
@@ -635,18 +642,9 @@ function textOfContent(content) {
     (part) => typeof part === "object" && part !== null && part.type === "text" ? String(part.text ?? "") : ""
   ).join("\n");
 }
-function extractReviewerReport(events) {
-  let lastText = "";
-  for (const event of events) {
-    if (typeof event !== "object" || event === null) continue;
-    const record = event;
-    if (record.type !== "assistant/message") continue;
-    const text = textOfContent(record.data?.message?.content);
-    if (text.trim() !== "") lastText = text;
-  }
-  if (lastText === "") return void 0;
-  const fenced = [...lastText.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)].at(-1);
-  const candidate = fenced?.[1] ?? lastText;
+function reportFromText(text) {
+  const fenced = [...text.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)].at(-1);
+  const candidate = fenced?.[1] ?? text;
   const start = candidate.indexOf("{");
   const end = candidate.lastIndexOf("}");
   if (start < 0 || end <= start) return void 0;
@@ -656,6 +654,21 @@ function extractReviewerReport(events) {
   } catch {
     return void 0;
   }
+}
+function extractReviewerReport(events) {
+  const texts = [];
+  for (const event of events) {
+    if (typeof event !== "object" || event === null) continue;
+    const record = event;
+    if (record.type !== "assistant/message") continue;
+    const text = textOfContent(record.data?.message?.content);
+    if (text.trim() !== "") texts.push(text);
+  }
+  for (let index = texts.length - 1; index >= 0; index -= 1) {
+    const parsed = reportFromText(texts[index]);
+    if (parsed !== void 0) return parsed;
+  }
+  return void 0;
 }
 function userMessage(text) {
   return {
@@ -716,15 +729,34 @@ async function runJob(deps, lease, signal) {
     return;
   }
   const agent = handle.agent;
+  if (parent === void 0 && deps.config.reviewerPreset !== void 0) {
+    const preset = deps.config.reviewerPreset;
+    const presets = agent.ctx?.get?.("agentPresets");
+    try {
+      if (presets?.mount === void 0) throw new Error("agent preset service is unavailable");
+      await presets.mount(agent.ctx, preset);
+    } catch (error) {
+      await deps.api.post(
+        `/api/jobs/${encodeURIComponent(job.id)}/fail`,
+        {
+          attemptId: job.attemptId,
+          code: "reviewer-preset",
+          message: error instanceof Error ? error.message : `cannot mount preset ${preset}`,
+          retryable: false
+        },
+        signal
+      ).catch(() => void 0);
+      await handle.dispose?.().catch(() => void 0);
+      return;
+    }
+  }
   let release;
   try {
     const tools = agent.ctx?.tools;
-    if (tools?.restrict === void 0) throw new Error("reviewer tool service is unavailable");
-    release = tools.restrict({
-      // The reviewer is strictly read-only. An allowlist is safer than a deny
-      // list: new mutating or network tools cannot silently become available.
-      allow: ["read", "grep", "glob", "review_status", "review_feedback"]
-    });
+    if (tools?.guard === void 0) throw new Error("reviewer tool service is unavailable");
+    release = tools.guard(
+      (execution) => READ_ONLY_REVIEWER_TOOLS.has(execution.name) ? void 0 : `reviewer is read-only: ${execution.name} is not allowed`
+    );
   } catch (error) {
     await deps.api.post(
       `/api/jobs/${encodeURIComponent(job.id)}/fail`,
@@ -761,7 +793,7 @@ async function runJob(deps, lease, signal) {
         }, timeoutMs);
       })
     ]);
-    const events = agent.snapshotEvents?.() ?? [];
+    const events = agent.session?.snapshotEvents?.() ?? agent.snapshotEvents?.() ?? [];
     const report = extractReviewerReport(events);
     if (report === void 0) {
       await deps.api.post(
@@ -843,54 +875,68 @@ async function runWorkerLoop(deps, signal) {
   const sleep = deps.sleep ?? wait2;
   const randomId = deps.randomId ?? (() => `wkr_${randomUUID()}`);
   const baseId = randomId();
-  let workerId;
-  let registrationDelayMs = 1e3;
-  for (let attempt = 1; !signal.aborted; attempt += 1) {
-    try {
-      const registered = await deps.api.post(
-        "/api/workers/register",
-        {
-          id: baseId,
-          name: "dsh-code-review",
-          harness: "dsh"
-        },
-        signal
-      );
-      workerId = registered.id;
-      break;
-    } catch (error) {
-      if (signal.aborted) return;
-      deps.logger?.warn?.(
-        `code-review: worker registration failed (attempt ${attempt}, retrying in ${registrationDelayMs}ms): ${error instanceof Error ? error.message : "unknown"}`
-      );
-      await sleep(registrationDelayMs, signal);
-      registrationDelayMs = Math.min(registrationDelayMs * 2, 3e4);
-    }
-  }
-  if (workerId === void 0) return;
-  const heartbeat = setInterval(() => {
-    void deps.api.post(`/api/workers/${encodeURIComponent(workerId)}/heartbeat`, {}, signal).catch(() => void 0);
-  }, deps.config.heartbeatMs);
-  heartbeat.unref?.();
-  try {
-    while (!signal.aborted) {
+  const register = async () => {
+    let delayMs = 1e3;
+    for (let attempt = 1; !signal.aborted; attempt += 1) {
       try {
-        const lease = await deps.api.get(
-          `/api/jobs/next?workerId=${encodeURIComponent(workerId)}&wait=25`,
+        const registered = await deps.api.post(
+          "/api/workers/register",
+          {
+            id: baseId,
+            name: "dsh-code-review",
+            harness: "dsh"
+          },
           signal
         );
-        if (lease === null) continue;
-        await runJob(deps, lease, signal);
+        return registered.id;
       } catch (error) {
-        if (signal.aborted) return;
+        if (signal.aborted) return void 0;
         deps.logger?.warn?.(
-          `code-review: worker poll failed: ${error instanceof Error ? error.message : "unknown"}`
+          `code-review: worker registration failed (attempt ${attempt}, retrying in ${delayMs}ms): ${error instanceof Error ? error.message : "unknown"}`
         );
-        await sleep(deps.config.pollMs, signal);
+        await sleep(delayMs, signal);
+        delayMs = Math.min(delayMs * 2, 3e4);
       }
     }
-  } finally {
-    clearInterval(heartbeat);
+    return void 0;
+  };
+  while (!signal.aborted) {
+    const workerId = await register();
+    if (workerId === void 0) return;
+    const heartbeat = setInterval(() => {
+      void deps.api.post(`/api/workers/${encodeURIComponent(workerId)}/heartbeat`, {}, signal).catch(() => void 0);
+    }, deps.config.heartbeatMs);
+    heartbeat.unref?.();
+    let stale = false;
+    try {
+      while (!signal.aborted) {
+        try {
+          const lease = await deps.api.get(
+            `/api/jobs/next?workerId=${encodeURIComponent(workerId)}&wait=25`,
+            signal
+          );
+          if (lease === null) {
+            if (!signal.aborted) await sleep(deps.config.pollMs, signal);
+            continue;
+          }
+          await runJob(deps, lease, signal);
+        } catch (error) {
+          if (signal.aborted) return;
+          if (error instanceof ReviewApiError && (error.status === 401 || error.status === 404 || error.code === "unauthorized")) {
+            stale = true;
+            break;
+          }
+          deps.logger?.warn?.(
+            `code-review: worker poll failed: ${error instanceof Error ? error.message : "unknown"}`
+          );
+          await sleep(deps.config.pollMs, signal);
+        }
+      }
+    } finally {
+      clearInterval(heartbeat);
+    }
+    if (!stale) return;
+    deps.logger?.warn?.("code-review: worker registration is stale; registering again");
   }
 }
 

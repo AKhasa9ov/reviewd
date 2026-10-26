@@ -332,6 +332,15 @@ describe('review routes and events', () => {
 });
 
 describe('jobs, workers and deliveries', () => {
+  it('tells a worker with a forgotten id to register again', async () => {
+    const { daemonUrl } = await running();
+    const response = await fetch(`${daemonUrl}/api/jobs/next?workerId=wkr_gone&wait=0`, {
+      headers: headers(),
+    });
+    expect(response.status).toBe(401);
+    expect((await read(response)).error.code).toBe('unauthorized');
+  });
+
   it('leases a job once, accepts idempotent reports and queues a delivery', async () => {
     const { daemonUrl } = await running({ longPollMs: 50 });
     const checkout = await repo();
