@@ -1,7 +1,7 @@
 # Code Review Control Plane — дизайн
 
 **Дата:** 2026-10-26
-**Статус:** принято 2026-10-26; реализация — по планам в `docs/superpowers/plans/`
+**Статус:** принято 2026-10-26; реализация — по планам в `docs/plans/`
 **Рабочие имена:** репозиторий `dsh-code-review`, daemon `reviewd`, CLI `review`, Cordis bundle `dsh-code-review`
 **Область v1:** harness-agnostic core + daemon + standalone web app + CLI + Docker + DSH-адаптер.
 **Следующий change:** adapters для Pi / Claude Code / Codex (сначала CLI/MCP-совместимый контракт, затем упаковка).
