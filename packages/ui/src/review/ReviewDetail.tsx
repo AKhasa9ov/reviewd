@@ -20,6 +20,7 @@ import { ArrowLeftIcon, GitBranchIcon } from '../icons.js';
 import { CommentComposer } from './CommentComposer.js';
 import { CommentThread } from './CommentThread.js';
 import { DiffViewer } from './DiffViewer.js';
+import { clearDraft, readDraft, writeDraft, type StoredCommentDraft } from './drafts.js';
 import { FixStatusBoard } from './FixStatusBoard.js';
 import { ReportPanel } from './ReportPanel.js';
 import { SignalsPanel } from './SignalsPanel.js';
@@ -150,6 +151,7 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
   const { toast } = useToast();
   const liveLocation = useLiveLocation(location);
   const deep = useMemo(() => parseReviewLocation(liveLocation), [liveLocation]);
+  const restoredDraft = useMemo(() => readDraft(id), [id]);
   const [view, setView] = useState<ReviewView | null>(null);
   const [loading, setLoading] = useState(true);
   const [reviewError, setReviewError] = useState<string | null>(null);
@@ -160,16 +162,27 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
   const [previousSnapshot, setPreviousSnapshot] = useState<Snapshot | null>(null);
   const [snapshotLoading, setSnapshotLoading] = useState(false);
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
-  const [tab, setTab] = useState<ReviewTab>(() =>
-    parseTab(new URL(liveLocation, 'http://local').searchParams.get('tab')),
-  );
+  const [tab, setTab] = useState<ReviewTab>(() => {
+    const explicit = new URL(liveLocation, 'http://local').searchParams.get('tab');
+    return explicit === null && restoredDraft !== null ? 'files' : parseTab(explicit);
+  });
   const [delta, setDelta] = useState(false);
   const [fixFilter, setFixFilter] = useState<FixFilter>('all');
   const [activeFile, setActiveFile] = useState<string | undefined>(deep.file);
   const [activeLine, setActiveLine] = useState<number | undefined>(deep.line);
   const [activeCommentId, setActiveCommentId] = useState<string | undefined>();
   const [selection, setSelection] = useState<SelectionState | null>(null);
-  const [composer, setComposer] = useState<ComposerState | null>(null);
+  const [composer, setComposer] = useState<ComposerState | null>(() =>
+    restoredDraft === null
+      ? null
+      : {
+          path: restoredDraft.path,
+          side: restoredDraft.side,
+          lineStart: restoredDraft.lineStart,
+          lineEnd: restoredDraft.lineEnd,
+        },
+  );
+  const [draftSeed, setDraftSeed] = useState<StoredCommentDraft | null>(restoredDraft);
   const [commentSubmitting, setCommentSubmitting] = useState(false);
   const [commentError, setCommentError] = useState<string | null>(null);
   const [pendingCommentId, setPendingCommentId] = useState<string | undefined>();
@@ -203,6 +216,56 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
   );
 
   const reloadReview = useCallback(() => setReloadKey((value) => value + 1), []);
+
+  useEffect(() => {
+    setDraftSeed(restoredDraft);
+    if (restoredDraft === null) return;
+    setComposer({
+      path: restoredDraft.path,
+      side: restoredDraft.side,
+      lineStart: restoredDraft.lineStart,
+      lineEnd: restoredDraft.lineEnd,
+    });
+    setSelection({
+      path: restoredDraft.path,
+      side: restoredDraft.side,
+      lineStart: restoredDraft.lineStart,
+      lineEnd: restoredDraft.lineEnd,
+    });
+    setActiveFile(restoredDraft.path);
+    setActiveLine(restoredDraft.lineStart);
+    setTab('files');
+    setBanner('Draft restored from this browser. Post it or cancel to remove it.');
+  }, [restoredDraft]);
+
+  useEffect(() => {
+    if (draftSeed === null || snapshot === null) return;
+    const file = snapshot.files.find((item) => item.path === draftSeed.path);
+    const maxLine = file === undefined ? 0 : fileLineCount(file, draftSeed.side);
+    if (file === undefined || draftSeed.lineStart < 1 || draftSeed.lineEnd > maxLine) {
+      clearDraft(id);
+      setDraftSeed(null);
+      setComposer(null);
+      setSelection(null);
+      setBanner('A saved draft no longer fits this round and was discarded.');
+    }
+  }, [snapshot, draftSeed, id]);
+
+  const persistDraft = useCallback(
+    (draft: CommentDraft) => {
+      if (composer === null) return;
+      if (draft.body.trim() === '' && !draft.suggestionEnabled) {
+        clearDraft(id);
+        return;
+      }
+      writeDraft(id, {
+        path: composer.path,
+        side: composer.side,
+        ...draft,
+      });
+    },
+    [composer, id],
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -437,6 +500,8 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
   }
 
   function openComposer(file: FileDiff, side: Side, lineStart: number, lineEnd = lineStart): void {
+    clearDraft(id);
+    setDraftSeed(null);
     setTab('files');
     setComposer({ path: file.path, side, lineStart, lineEnd });
     setSelection({ path: file.path, side, lineStart, lineEnd });
@@ -482,6 +547,8 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
           ? { suggestion: { original: draft.original, replacement: draft.replacement } }
           : {}),
       });
+      clearDraft(id);
+      setDraftSeed(null);
       setComposer(null);
       setSelection(null);
       setPendingCommentId(result.comment.id);
@@ -636,6 +703,13 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
     function onKeyDown(event: KeyboardEvent): void {
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
       if (document.documentElement.hasAttribute('data-shortcuts-off')) return;
+      if (event.key === 'Escape' && helpOpen) {
+        // The dialog focuses its first control asynchronously; if focus has not
+        // landed yet, the dialog's own Escape handler never sees the key.
+        event.preventDefault();
+        setHelpOpen(false);
+        return;
+      }
       if (submitOpen || refreshOpen || helpOpen) return;
       if (event.key === 'Escape') {
         if (composer !== null) {
@@ -802,7 +876,11 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
             maxLine={maxLine}
             submitting={commentSubmitting}
             serverError={commentError}
+            initialDraft={draftSeed ?? undefined}
+            onDraftChange={persistDraft}
             onCancel={() => {
+              clearDraft(id);
+              setDraftSeed(null);
               setComposer(null);
               setCommentError(null);
             }}
@@ -1279,6 +1357,12 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
           if (!submitting) setSubmitOpen(false);
         }}
         onSubmit={(input) => void submitReview(input)}
+        onJumpComment={(commentId) => {
+          const comment = review.comments.find((item) => item.id === commentId);
+          if (comment === undefined) return;
+          setSubmitOpen(false);
+          jumpToComment(comment);
+        }}
       />
 
       <Dialog

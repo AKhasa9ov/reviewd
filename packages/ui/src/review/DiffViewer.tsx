@@ -10,6 +10,7 @@ import {
   diffFileId,
   diffLineId,
   firstChangedLine,
+  latestAnchor,
   type DiffRow,
 } from './model.js';
 
@@ -463,6 +464,13 @@ export function DiffViewer({
       : visibleFiles.filter((file) => file.path.toLowerCase().includes(query));
   const groups = groupByDirectory(filteredFiles);
   const canDelta = round > 1;
+  const openCommentsByPath = new Map<string, number>();
+  for (const comment of comments) {
+    if (comment.state !== 'open') continue;
+    const anchor = latestAnchor(comment);
+    if (anchor === undefined) continue;
+    openCommentsByPath.set(anchor.path, (openCommentsByPath.get(anchor.path) ?? 0) + 1);
+  }
 
   if (snapshot.files.length === 0) {
     return (
@@ -545,6 +553,15 @@ export function DiffViewer({
                             {file.added > 0 ? `+${file.added}` : ''}
                             {file.deleted > 0 ? ` −${file.deleted}` : ''}
                           </span>
+                          {(openCommentsByPath.get(file.path) ?? 0) > 0 ? (
+                            <span
+                              className="cr-tree-comments"
+                              aria-label={`${openCommentsByPath.get(file.path) ?? 0} open comments`}
+                              title={`${openCommentsByPath.get(file.path) ?? 0} open comments`}
+                            >
+                              {openCommentsByPath.get(file.path)}
+                            </span>
+                          ) : null}
                         </button>
                       ))}
                 </div>

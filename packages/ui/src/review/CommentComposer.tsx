@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { FileDiff, Side } from '@dsh-code-review/core';
 import { Button } from '../primitives/Button.js';
 import { Input, Textarea } from '../primitives/Field.js';
@@ -17,8 +17,11 @@ export interface CommentComposerProps {
   maxLine: number;
   submitting?: boolean;
   serverError?: string | null;
+  /** A locally restored draft for the same review, location and range. */
+  initialDraft?: Partial<CommentDraft> | undefined;
   onCancel: () => void;
   onSubmit: (draft: CommentDraft) => void;
+  onDraftChange?: (draft: CommentDraft) => void;
 }
 
 export function CommentComposer({
@@ -29,21 +32,37 @@ export function CommentComposer({
   maxLine,
   submitting = false,
   serverError,
+  initialDraft,
   onCancel,
   onSubmit,
+  onDraftChange,
 }: CommentComposerProps): JSX.Element {
-  const [body, setBody] = useState('');
-  const [start, setStart] = useState(lineStart);
-  const [end, setEnd] = useState(lineEnd);
-  const [suggestionEnabled, setSuggestionEnabled] = useState(false);
+  const [body, setBody] = useState(initialDraft?.body ?? '');
+  const [start, setStart] = useState(initialDraft?.lineStart ?? lineStart);
+  const [end, setEnd] = useState(initialDraft?.lineEnd ?? lineEnd);
+  const [suggestionEnabled, setSuggestionEnabled] = useState(
+    initialDraft?.suggestionEnabled ?? false,
+  );
   const suggested = useMemo(
     () => selectedLines(file, side, start, end).join('\n'),
     [file, side, start, end],
   );
-  const [original, setOriginal] = useState(suggested);
-  const [replacement, setReplacement] = useState('');
+  const [original, setOriginal] = useState(() => initialDraft?.original || suggested);
+  const [replacement, setReplacement] = useState(initialDraft?.replacement ?? '');
   const [errors, setErrors] = useState<DraftErrors>({});
   const lineLabel = start === end ? `line ${start}` : `lines ${start}–${end}`;
+  const restored = initialDraft !== undefined && (initialDraft.body ?? '') !== '';
+
+  useEffect(() => {
+    onDraftChange?.({
+      body,
+      lineStart: start,
+      lineEnd: end,
+      suggestionEnabled,
+      original: suggestionEnabled ? original || suggested : '',
+      replacement,
+    });
+  }, [body, start, end, suggestionEnabled, original, replacement, suggested, onDraftChange]);
 
   function submit(): void {
     const draft: CommentDraft = {
@@ -75,6 +94,11 @@ export function CommentComposer({
           {file.path} · {side} side
         </span>
       </header>
+      {restored ? (
+        <p className="cr-draft-note" role="status">
+          Draft restored from this browser. It will be discarded after posting or cancel.
+        </p>
+      ) : null}
 
       <div className="cr-composer-range">
         <Input

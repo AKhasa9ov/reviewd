@@ -1967,7 +1967,7 @@ a:hover {
 
 .cr-tree-file {
   display: grid;
-  grid-template-columns: 16px minmax(0, 1fr) auto;
+  grid-template-columns: 16px minmax(0, 1fr) auto auto;
   gap: 6px;
   align-items: center;
   width: 100%;
@@ -2423,6 +2423,17 @@ a:hover {
   gap: var(--cr-space-2);
 }
 
+.cr-draft-note {
+  margin: 0 0 var(--cr-space-2);
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--cr-info) 35%, var(--cr-border));
+  border-radius: var(--cr-radius-control);
+  background: color-mix(in srgb, var(--cr-info) 8%, var(--cr-surface));
+  color: var(--cr-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .cr-composer-suggestion {
   display: grid;
   gap: var(--cr-space-2);
@@ -2759,6 +2770,93 @@ a:hover {
   display: flex;
   flex-wrap: wrap;
   gap: var(--cr-space-2);
+}
+
+.cr-tree-comments {
+  display: inline-grid;
+  min-width: 18px;
+  height: 18px;
+  place-items: center;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--cr-warning) 18%, transparent);
+  color: var(--cr-warning);
+  font-family: var(--cr-font-mono);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.cr-submit-pending {
+  display: grid;
+  gap: var(--cr-space-2);
+  padding-top: var(--cr-space-3);
+  border-top: 1px solid var(--cr-border);
+}
+
+.cr-submit-pending-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cr-space-2);
+}
+
+.cr-submit-pending-head h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.cr-submit-pending-head span {
+  color: var(--cr-text-muted);
+  font-family: var(--cr-font-mono);
+  font-size: 11px;
+}
+
+.cr-submit-pending-list {
+  display: grid;
+  gap: 6px;
+  max-height: 220px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.cr-submit-pending-item {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--cr-border);
+  border-radius: var(--cr-radius-control);
+  background: var(--cr-surface);
+  color: var(--cr-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.cr-submit-pending-item:hover:not(:disabled),
+.cr-submit-pending-item:focus-visible {
+  border-color: var(--cr-primary);
+  background: color-mix(in srgb, var(--cr-primary) 7%, var(--cr-surface));
+}
+
+.cr-submit-pending-item:disabled {
+  cursor: default;
+}
+
+.cr-submit-pending-path {
+  color: var(--cr-text-muted);
+  font-size: 11px;
+}
+
+.cr-submit-pending-body {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .cr-refresh {

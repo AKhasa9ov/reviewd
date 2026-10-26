@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ReviewState, SubmitInput } from '@dsh-code-review/core';
 import { Badge } from '../primitives/Feedback.js';
+import { latestAnchor } from './model.js';
 import { Button } from '../primitives/Button.js';
 import { Dialog } from '../primitives/Dialog.js';
 import { Textarea } from '../primitives/Field.js';
@@ -26,6 +27,7 @@ export interface SubmitDialogProps {
   error?: string | null;
   onClose: () => void;
   onSubmit: (input: SubmitInput) => void;
+  onJumpComment?: (commentId: string) => void;
 }
 
 export function SubmitDialog({
@@ -35,12 +37,14 @@ export function SubmitDialog({
   error,
   onClose,
   onSubmit,
+  onJumpComment,
 }: SubmitDialogProps): JSX.Element {
   const [verdict, setVerdict] = useState<SubmitInput['verdict']>('request-changes');
   const [summary, setSummary] = useState('');
   const [includeResolved, setIncludeResolved] = useState(false);
   const previous = (review.submissions?.length ?? 0) > 0;
-  const unresolved = review.comments.filter((comment) => comment.state === 'open').length;
+  const pending = review.comments.filter((comment) => comment.state === 'open');
+  const unresolved = pending.length;
   const resolved = review.comments.filter((comment) => comment.state === 'resolved').length;
 
   useEffect(() => {
@@ -119,6 +123,40 @@ export function SubmitDialog({
           <Badge tone="neutral">{resolved} resolved</Badge>
           {previous ? <Badge tone="info">follow-up submission</Badge> : null}
         </div>
+
+        {pending.length > 0 ? (
+          <section className="cr-submit-pending" aria-label="Pending comments in this submission">
+            <div className="cr-submit-pending-head">
+              <h3>Pending comments</h3>
+              <span>{pending.length}</span>
+            </div>
+            <p className="cr-meta">
+              These unresolved threads will be sent to the agent. Double-check them before
+              submitting.
+            </p>
+            <ol className="cr-submit-pending-list">
+              {pending.map((comment) => {
+                const anchor = latestAnchor(comment);
+                const body = comment.body.replace(/\s+/g, ' ').trim();
+                return (
+                  <li key={comment.id}>
+                    <button
+                      type="button"
+                      className="cr-submit-pending-item"
+                      disabled={onJumpComment === undefined}
+                      onClick={() => onJumpComment?.(comment.id)}
+                    >
+                      <span className="cr-submit-pending-path cr-mono">
+                        {anchor === undefined ? 'unanchored' : `${anchor.path}:${anchor.lineStart}`}
+                      </span>
+                      <span className="cr-submit-pending-body">{body}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+          </section>
+        ) : null}
 
         <label className="cr-check">
           <input

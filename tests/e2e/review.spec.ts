@@ -39,6 +39,8 @@ test('lists reviews and completes comment, reply, resolve and submit from the re
   await page.getByRole('button', { name: 'Submit', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Submit review' });
   await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('heading', { name: 'Pending comments' })).toBeVisible();
+  await expect(dialog.locator('.cr-submit-pending-item').first()).toBeVisible();
   await dialog.getByLabel('Comment only').check();
   await dialog.getByRole('textbox', { name: 'Summary' }).fill('E2E browser feedback.');
   await dialog.getByRole('button', { name: 'Submit feedback' }).click();
@@ -106,4 +108,32 @@ test('supports c, ?, and g l keyboard shortcuts outside form fields', async ({ p
   await page.keyboard.press('l');
   await expect(page).toHaveURL(`${fx.baseUrl}/`);
   await expect(page.getByRole('heading', { name: 'Reviews', exact: true })).toBeVisible();
+});
+
+test('restores an unsent comment draft after a browser reload', async ({ page }) => {
+  await openReview(page);
+  await page.getByRole('tab', { name: /Files changed/ }).click();
+  const line = page.getByRole('row', { name: /line 3, context/ }).first();
+  await expect(line).toBeVisible();
+  await line.click();
+  await page.keyboard.press('c');
+  const composer = page.getByRole('form', { name: /Comment on line 3/ });
+  await expect(composer).toBeVisible();
+  const body = 'Draft survives a refresh.';
+  await composer.getByRole('textbox', { name: 'Comment', exact: true }).fill(body);
+
+  await page.reload();
+  await expect(page.getByRole('tab', { name: /Files changed/ })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  const restored = page.getByRole('form', { name: /Comment on line 3/ });
+  await expect(restored).toBeVisible();
+  await expect(restored.getByRole('textbox', { name: 'Comment', exact: true })).toHaveValue(body);
+  await expect(restored.getByRole('status')).toContainText('Draft restored');
+
+  await restored.getByRole('button', { name: 'Cancel' }).click();
+  await expect(restored).not.toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('form', { name: /Comment on line 3/ })).not.toBeVisible();
 });
