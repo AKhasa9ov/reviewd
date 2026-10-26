@@ -69,6 +69,27 @@ describe('runGit', () => {
     });
   });
 
+  it('ignores an inherited GIT_DIR and GIT_WORK_TREE', async () => {
+    const repo = await makeRepo();
+    cleanups.push(repo.cleanup);
+    await repo.write('a.txt', 'hello\n');
+    await repo.commit('base');
+
+    const previousDir = process.env.GIT_DIR;
+    const previousTree = process.env.GIT_WORK_TREE;
+    process.env.GIT_DIR = join(repo.root, 'missing-git-dir');
+    process.env.GIT_WORK_TREE = join(repo.root, 'missing-work-tree');
+    try {
+      const result = await runGit(repo.root, ['rev-parse', 'HEAD']);
+      expect(result.stdout.trim()).toMatch(/^[0-9a-f]{40}$/);
+    } finally {
+      if (previousDir === undefined) delete process.env.GIT_DIR;
+      else process.env.GIT_DIR = previousDir;
+      if (previousTree === undefined) delete process.env.GIT_WORK_TREE;
+      else process.env.GIT_WORK_TREE = previousTree;
+    }
+  });
+
   it('rejects when stderr exceeds the configured cap', async () => {
     const repo = await makeRepo();
     cleanups.push(repo.cleanup);

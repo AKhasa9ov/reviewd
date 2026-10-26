@@ -19,6 +19,24 @@ const FILE_HEADER = /^diff --git a\/(.+) b\/(.+)$/;
 const HUNK_HEADER = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(?: ?(.*))?$/;
 const INDEX_LINE = /^index [0-9a-f]+\.\.[0-9a-f]+ (\d{6})$/;
 
+export interface DiffHeader {
+  oldPath: string;
+  newPath: string;
+}
+
+/** Parse a `diff --git` line and fail closed on ambiguous paths. */
+export function parseDiffHeader(line: string, lineNumber = 1): DiffHeader {
+  const match = FILE_HEADER.exec(line);
+  const separatorCount = line.split(' b/').length - 1;
+  if (match === null || separatorCount !== 1) {
+    throw new DiffParseError(
+      `Malformed or ambiguous diff file header at line ${lineNumber}: expected exactly one " b/" separator between a/<path> and b/<path>`,
+      lineNumber,
+    );
+  }
+  return { oldPath: match[1], newPath: match[2] };
+}
+
 export class DiffParseError extends Error {
   readonly line: number;
 
@@ -69,16 +87,7 @@ export function parseUnifiedDiff(diff: string): ParsedFile[] {
   for (const [index, line] of diff.split('\n').entries()) {
     if (line.startsWith('diff --git ')) {
       finish();
-      const match = FILE_HEADER.exec(line);
-      const separatorCount = line.split(' b/').length - 1;
-      if (match === null || separatorCount !== 1) {
-        throw new DiffParseError(
-          `Malformed or ambiguous diff file header at line ${index + 1}: expected exactly one " b/" separator between a/<path> and b/<path>`,
-          index + 1,
-        );
-      }
-      const oldPath = match[1];
-      const newPath = match[2];
+      const { oldPath, newPath } = parseDiffHeader(line, index + 1);
       current = {
         path: newPath,
         ...(oldPath !== newPath ? { oldPath } : {}),
@@ -208,6 +217,8 @@ export function parseUnifiedDiff(diff: string): ParsedFile[] {
   return files;
 }
 
-function stripPrefix(path: string): string {
+export function stripDiffPrefix(path: string): string {
   return path.startsWith('a/') || path.startsWith('b/') ? path.slice(2) : path;
 }
+
+const stripPrefix = stripDiffPrefix;

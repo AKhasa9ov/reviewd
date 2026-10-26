@@ -162,6 +162,120 @@ describe('buildSnapshot', () => {
     expect(readPaths).toEqual(['src/a.ts', 'src/a.ts']);
   });
 
+  it('keeps a synthetic oversized entry when one file exceeds the diff cap', async () => {
+    const repo = await makeRepo();
+    cleanups.push(repo.cleanup);
+    await repo.write('src/a.ts', 'a\n');
+    await repo.commit('base');
+    await repo.git('checkout', '-b', 'feature');
+    await repo.write('src/a.ts', `a\n${'x'.repeat(5000)}\n`);
+    await repo.commit('large');
+
+    const result = await snapshot(repo.root, { maxDiffBytes: 1024 });
+
+    expect(result.files).toHaveLength(1);
+    const file = result.files[0];
+    expect(file?.path).toBe('src/a.ts');
+    expect(file?.status).toBe('modified');
+    expect(file?.oversized).toBe(true);
+    expect(file?.binary).toBe(false);
+    expect(file?.hunks).toEqual([]);
+    expect(file?.added).toBe(0);
+    expect(file?.deleted).toBe(0);
+    expect(file?.contentHash).toBeNull();
+    expect(result.totals.truncated).toBe(true);
+    expect(result.warnings).toContain('diff-truncated');
+    expect(result.warnings).toContain('diff-file-truncated:src/a.ts');
+  });
+
+  it('ignores local diff prefix configuration', async () => {
+    const repo = await featureRepo();
+    await repo.git('config', 'diff.noprefix', 'true');
+    await repo.git('config', 'diff.mnemonicPrefix', 'true');
+    await repo.git('config', 'core.quotePath', 'true');
+
+    const result = await snapshot(repo.root);
+
+    expect(result.files).toHaveLength(1);
+    expect(result.files[0]?.path).toBe('src/a.ts');
+    expect(result.files[0]?.status).toBe('modified');
+  });
+
+  it('treats invalid UTF-8 as binary-like and keeps the raw hash', async () => {
+    const repo = await featureRepo();
+    const raw = Buffer.from([0xff, 0xfe, 0x41]);
+    await repo.writeBytes('src/bad.txt', raw);
+    await repo.commit('invalid utf-8');
+
+    const result = await snapshot(repo.root);
+    const bad = result.files.find((file) => file.path === 'src/bad.txt');
+
+    expect(bad?.status).toBe('added');
+    expect(bad?.binary).toBe(true);
+    expect(bad?.encoding).toBe('unknown');
+    expect(bad?.newLines).toBeUndefined();
+    expect(bad?.oldLines).toBeUndefined();
+    expect(bad?.hunks).toEqual([]);
+    expect(bad?.contentHash).toBe(createHash('sha256').update(raw).digest('hex'));
+  });
+
+  it('marks a file over maxContentBytes as oversized without content or hash', async () => {
+    const repo = await featureRepo();
+    await repo.write('src/large.txt', '0123456789\n');
+    await repo.commit('large');
+
+    const result = await snapshot(repo.root, { maxContentBytes: 4 });
+    const large = result.files.find((file) => file.path === 'src/large.txt');
+
+    expect(large?.status).toBe('added');
+    expect(large?.oversized).toBe(true);
+    expect(large?.newLines).toBeUndefined();
+    expect(large?.contentHash).toBeNull();
+  });
+
+  it('enforces the total content budget and keeps later files visible', async () => {
+    const repo = await makeRepo();
+    cleanups.push(repo.cleanup);
+    await repo.write('a.txt', 'a\n');
+    await repo.write('b.txt', 'b\n');
+    await repo.commit('base');
+    await repo.git('checkout', '-b', 'feature');
+    await repo.write('a.txt', 'aa\n');
+    await repo.write('b.txt', 'bb\n');
+    await repo.commit('feature');
+
+    const result = await snapshot(repo.root, { maxTotalContentBytes: 8 });
+    const first = result.files.find((file) => file.path === 'a.txt');
+    const second = result.files.find((file) => file.path === 'b.txt');
+
+    expect(result.files).toHaveLength(2);
+    expect(first?.truncated).toBeUndefined();
+    expect(first?.newLines).toEqual(['aa']);
+    expect(first?.contentHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(second?.truncated).toBe(true);
+    expect(second?.newLines).toBeUndefined();
+    expect(second?.oldLines).toBeUndefined();
+    expect(second?.contentHash).toBeNull();
+    expect(
+      result.warnings.filter((warning) => warning === 'content-budget-truncated'),
+    ).toHaveLength(1);
+  });
+
+  it('sorts paths by UTF-8 bytes rather than UTF-16 code units', async () => {
+    const repo = await featureRepo();
+    await repo.write('\u{1f600}.txt', 'emoji\n');
+    await repo.write('\uf8ff.txt', 'bmp\n');
+    await repo.commit('unicode paths');
+
+    const result = await snapshot(repo.root);
+
+    expect(result.files.map((file) => file.path)).toEqual([
+      'src/a.ts',
+      '\uf8ff.txt',
+      '\u{1f600}.txt',
+    ]);
+  });
+
   it('sorts files by path', async () => {
     const repo = await featureRepo();
     await repo.write('src/z.ts', 'z\n');

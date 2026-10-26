@@ -1,11 +1,11 @@
 import { lstat } from 'node:fs/promises';
-import type { DiffHunk, FileDiff, Snapshot, SnapshotOptions } from '../types.js';
+import type { DiffHunk, FileDiff, ParsedFile, Snapshot, SnapshotOptions } from '../types.js';
 import { hasSymlinkParent, safeJoin } from '../paths.js';
 import { readBlob } from '../git/content.js';
 import { resolveScope } from '../git/scope.js';
 import { runGit } from '../git/run.js';
 import type { GitResult } from '../git/run.js';
-import { parseUnifiedDiff } from './parse.js';
+import { parseDiffHeader, parseUnifiedDiff, stripDiffPrefix } from './parse.js';
 import { isIgnored } from './glob.js';
 
 const DEFAULTS = {
@@ -13,12 +13,47 @@ const DEFAULTS = {
   includeContent: true,
   maxDiffBytes: 2 * 1024 * 1024,
   maxFileLines: 20_000,
+  maxContentBytes: 1024 * 1024,
+  maxTotalContentBytes: 64 * 1024 * 1024,
   maxFiles: 500,
 } as const;
+
+interface ContentBudget {
+  includeContent: boolean;
+  maxTotalBytes: number;
+  usedBytes: number;
+  exhausted: boolean;
+  warned: boolean;
+  warnings: string[];
+}
+
+function fitsContent(budget: ContentBudget, bytes: number): boolean {
+  if (!budget.includeContent) return false;
+  if (budget.exhausted || budget.usedBytes + bytes > budget.maxTotalBytes) {
+    if (!budget.warned) {
+      budget.warnings.push('content-budget-truncated');
+      budget.warned = true;
+    }
+    budget.exhausted = true;
+    return false;
+  }
+  budget.usedBytes += bytes;
+  return true;
+}
+
+function comparePaths(left: string, right: string): number {
+  return Buffer.compare(Buffer.from(left, 'utf8'), Buffer.from(right, 'utf8'));
+}
+
+function warnUnreadable(warnings: string[], path: string): void {
+  const warning = `unreadable:${path}`;
+  if (!warnings.includes(warning)) warnings.push(warning);
+}
 
 interface DiffText {
   text: string;
   truncated: boolean;
+  synthetic?: ParsedFile;
 }
 
 function diffArgs(scope: Snapshot['scope']): string[] {
@@ -29,6 +64,8 @@ function diffArgs(scope: Snapshot['scope']): string[] {
     '--no-textconv',
     '--unified=3',
     '--find-renames=50%',
+    '--src-prefix=a/',
+    '--dst-prefix=b/',
   ];
   if (scope.kind === 'worktree') return [...common, scope.baseSha, '--'];
   return [...common, `${scope.baseSha}..${scope.headSha}`, '--'];
@@ -40,8 +77,61 @@ function truncateAtFileBoundary(text: string, maxBytes: number): DiffText {
   }
   const cut = Buffer.from(text, 'utf8').subarray(0, maxBytes).toString('utf8');
   const boundary = cut.lastIndexOf('\ndiff --git ');
-  if (boundary <= 0) return { text: '', truncated: true };
-  return { text: cut.slice(0, boundary + 1), truncated: true };
+  if (boundary > 0) return { text: cut.slice(0, boundary + 1), truncated: true };
+  if (cut.startsWith('diff --git ')) {
+    const synthetic = syntheticFileFromCut(cut);
+    return { text: '', truncated: true, ...(synthetic === undefined ? {} : { synthetic }) };
+  }
+  return { text: '', truncated: true };
+}
+
+function syntheticFileFromCut(cut: string): ParsedFile | undefined {
+  const firstLineEnd = cut.indexOf('\n');
+  const headerLine = firstLineEnd < 0 ? cut : cut.slice(0, firstLineEnd);
+  if (!headerLine.startsWith('diff --git ')) return undefined;
+
+  const header = parseDiffHeader(headerLine, 1);
+  let oldPath = header.oldPath;
+  let newPath = header.newPath;
+  let status: ParsedFile['status'] = 'modified';
+  let oldIsNull = false;
+  let newIsNull = false;
+
+  for (const line of cut.split('\n').slice(1)) {
+    if (line.startsWith('@@ ') || line === 'GIT binary patch') break;
+    if (line.startsWith('new file mode ')) status = 'added';
+    else if (line.startsWith('deleted file mode ')) status = 'deleted';
+    else if (line.startsWith('rename from ')) {
+      oldPath = line.slice('rename from '.length);
+      status = 'renamed';
+    } else if (line.startsWith('rename to ')) {
+      newPath = line.slice('rename to '.length);
+      status = 'renamed';
+    } else if (line.startsWith('--- ')) {
+      const value = line.slice(4);
+      if (value === '/dev/null') oldIsNull = true;
+      else oldPath = stripDiffPrefix(value);
+    } else if (line.startsWith('+++ ')) {
+      const value = line.slice(4);
+      if (value === '/dev/null') newIsNull = true;
+      else newPath = stripDiffPrefix(value);
+    }
+  }
+
+  if (oldIsNull) status = 'added';
+  if (newIsNull) status = 'deleted';
+  const path = newIsNull ? oldPath : newPath;
+  const file: ParsedFile = {
+    path,
+    status,
+    binary: false,
+    hunks: [],
+    added: 0,
+    deleted: 0,
+    synthetic: true,
+  };
+  if (oldPath !== path) file.oldPath = oldPath;
+  return file;
 }
 
 async function listUntracked(repoRoot: string, signal?: AbortSignal): Promise<string[]> {
@@ -90,19 +180,65 @@ async function untrackedFile(
   repoRoot: string,
   path: string,
   maxFileLines: number,
+  maxContentBytes: number,
   includeContent: boolean,
+  ignored: boolean,
+  budget: ContentBudget,
+  warnings: string[],
 ): Promise<FileDiff | null> {
   const absolute = safeJoin(repoRoot, path);
   if (await hasSymlinkParent(repoRoot, path)) return null;
   const info = await lstat(absolute).catch(() => null);
-  if (info === null || info.isSymbolicLink() || !info.isFile()) return null;
+  if (info === null) {
+    warnUnreadable(warnings, path);
+    return {
+      path,
+      status: 'untracked',
+      binary: false,
+      oversized: false,
+      added: 0,
+      deleted: 0,
+      hunks: [],
+      contentHash: null,
+      reason: 'unreadable',
+    };
+  }
+  if (info.isSymbolicLink() || !info.isFile()) return null;
 
-  const read = await readBlob(repoRoot, null, path, maxFileLines);
-  const contentHash = includeContent && !read.oversized && read.hash !== '' ? read.hash : null;
+  const read = await readBlob(repoRoot, null, path, maxFileLines, maxContentBytes);
+  if (read.reason === 'unreadable') {
+    warnUnreadable(warnings, path);
+    return {
+      path,
+      status: 'untracked',
+      binary: false,
+      oversized: false,
+      added: 0,
+      deleted: 0,
+      hunks: [],
+      contentHash: null,
+      reason: 'unreadable',
+    };
+  }
+
+  if (ignored) {
+    if (read.lines === null && !read.binary && !read.oversized) return null;
+    return {
+      path,
+      status: 'untracked',
+      binary: read.binary,
+      oversized: read.oversized,
+      ignored: true,
+      added: read.lines?.length ?? 0,
+      deleted: 0,
+      hunks: [],
+      contentHash: null,
+    };
+  }
 
   if (read.lines === null) {
     if (!read.binary && !read.oversized) return null;
-    return {
+    const binaryLike: FileDiff = {
       path,
       status: 'untracked',
       binary: read.binary,
@@ -110,10 +246,13 @@ async function untrackedFile(
       added: 0,
       deleted: 0,
       hunks: [],
-      contentHash,
+      contentHash: includeContent && !read.oversized ? read.hash : null,
     };
+    if (read.encoding !== undefined) binaryLike.encoding = read.encoding;
+    return binaryLike;
   }
 
+  const truncated = includeContent && !fitsContent(budget, read.bytes);
   const hunk: DiffHunk = {
     oldStart: 0,
     oldLines: 0,
@@ -135,10 +274,11 @@ async function untrackedFile(
     oversized: false,
     added: read.lines.length,
     deleted: 0,
-    hunks: read.lines.length === 0 ? [] : [hunk],
-    contentHash,
+    hunks: truncated ? [] : [hunk],
+    contentHash: includeContent && !truncated ? read.hash : null,
   };
-  if (includeContent) file.newLines = read.lines;
+  if (truncated) file.truncated = true;
+  if (includeContent && !truncated) file.newLines = read.lines;
   return file;
 }
 
@@ -147,6 +287,8 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
   const includeUntracked = options.includeUntracked ?? DEFAULTS.includeUntracked;
   const maxDiffBytes = options.maxDiffBytes ?? DEFAULTS.maxDiffBytes;
   const maxFileLines = options.maxFileLines ?? DEFAULTS.maxFileLines;
+  const maxContentBytes = options.maxContentBytes ?? DEFAULTS.maxContentBytes;
+  const maxTotalContentBytes = options.maxTotalContentBytes ?? DEFAULTS.maxTotalContentBytes;
   const maxFiles = options.maxFiles ?? DEFAULTS.maxFiles;
   const ignore = options.ignore ?? [];
 
@@ -157,6 +299,7 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
   });
 
   const warnings: string[] = [];
+  if (scope.worktreeDigestTruncated === true) warnings.push('worktree-digest-truncated');
   const diff = await runGit(scope.repoRoot, diffArgs(scope), {
     signal: options.signal,
     maxBytes: Math.max(maxDiffBytes * 8, 16 * 1024 * 1024),
@@ -166,10 +309,14 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
   if (diffTruncated) warnings.push('diff-truncated');
   const limited = truncateAtFileBoundary(diff.stdout, maxDiffBytes);
   if (limited.truncated && !diffTruncated) warnings.push('diff-truncated');
+  if (limited.synthetic !== undefined) {
+    warnings.push(`diff-file-truncated:${limited.synthetic.path}`);
+  }
 
-  const candidates = parseUnifiedDiff(limited.text)
-    .filter((entry) => !isIgnored(entry.path, ignore))
-    .sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
+  const candidates = [
+    ...(limited.synthetic === undefined ? [] : [limited.synthetic]),
+    ...parseUnifiedDiff(limited.text),
+  ].sort((left, right) => comparePaths(left.path, right.path));
 
   let truncated = diffTruncated || limited.truncated;
   let selected = candidates;
@@ -182,8 +329,51 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
   const modeListing = await headModes(scope.repoRoot, scope.headSha, options.signal);
   if (!modeListing.available) warnings.push('submodule-modes-unavailable');
 
+  const budget: ContentBudget = {
+    includeContent,
+    maxTotalBytes: maxTotalContentBytes,
+    usedBytes: 0,
+    exhausted: false,
+    warned: false,
+    warnings,
+  };
   const files: FileDiff[] = [];
   for (const entry of selected) {
+    if (entry.synthetic === true) {
+      const synthetic: FileDiff = {
+        path: entry.path,
+        status: entry.status,
+        binary: false,
+        oversized: true,
+        added: 0,
+        deleted: 0,
+        hunks: [],
+        contentHash: null,
+      };
+      if (entry.oldPath !== undefined) synthetic.oldPath = entry.oldPath;
+      if (isIgnored(entry.path, ignore)) {
+        synthetic.ignored = true;
+        synthetic.oversized = false;
+      }
+      files.push(synthetic);
+      continue;
+    }
+    if (isIgnored(entry.path, ignore)) {
+      const ignored: FileDiff = {
+        path: entry.path,
+        status: entry.status,
+        binary: entry.binary,
+        oversized: false,
+        ignored: true,
+        added: entry.added,
+        deleted: entry.deleted,
+        hunks: [],
+        contentHash: null,
+      };
+      if (entry.oldPath !== undefined) ignored.oldPath = entry.oldPath;
+      files.push(ignored);
+      continue;
+    }
     const oldPath = entry.oldPath ?? entry.path;
     const hasMode =
       entry.oldMode !== undefined || entry.newMode !== undefined || entry.indexMode !== undefined;
@@ -206,19 +396,46 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
       files.push(submodule);
       continue;
     }
+    const budgetSkipped = includeContent && budget.exhausted;
     const base =
-      entry.status === 'added' || !includeContent
+      entry.status === 'added' || !includeContent || budgetSkipped
         ? null
-        : await readBlob(scope.repoRoot, scope.baseSha, oldPath, maxFileLines);
+        : await readBlob(scope.repoRoot, scope.baseSha, oldPath, maxFileLines, maxContentBytes);
     const head =
-      entry.status === 'deleted' || !includeContent
+      entry.status === 'deleted' || !includeContent || budgetSkipped
         ? null
-        : await readBlob(scope.repoRoot, scope.headSha, entry.path, maxFileLines);
+        : await readBlob(scope.repoRoot, scope.headSha, entry.path, maxFileLines, maxContentBytes);
 
     const binary = entry.binary || base?.binary === true || head?.binary === true;
     const oversized = base?.oversized === true || head?.oversized === true;
+    const encoding =
+      base?.encoding === 'unknown' || head?.encoding === 'unknown' ? 'unknown' : undefined;
+    const reason =
+      base?.reason === 'unreadable' || head?.reason === 'unreadable' ? 'unreadable' : undefined;
+
+    let fileTruncated = false;
+    let oldLines: string[] | undefined;
+    let newLines: string[] | undefined;
+    if (reason !== undefined) {
+      warnUnreadable(warnings, entry.path);
+    } else if (includeContent && !binary && !oversized) {
+      if (budgetSkipped) {
+        fileTruncated = true;
+      } else {
+        const bytes =
+          (base?.lines === null || base === null ? 0 : base.bytes) +
+          (head?.lines === null || head === null ? 0 : head.bytes);
+        if (fitsContent(budget, bytes)) {
+          oldLines = base?.lines ?? undefined;
+          newLines = head?.lines ?? undefined;
+        } else {
+          fileTruncated = true;
+        }
+      }
+    }
+
     let contentHash: string | null = null;
-    if (includeContent && !oversized) {
+    if (includeContent && !oversized && reason === undefined && !fileTruncated) {
       if (head !== null && head.hash !== '') contentHash = head.hash;
       else if (base !== null && base.hash !== '') contentHash = base.hash;
     }
@@ -230,35 +447,42 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
       oversized,
       added: entry.added,
       deleted: entry.deleted,
-      hunks: entry.hunks,
+      hunks: binary || oversized ? [] : entry.hunks,
       contentHash,
     };
     if (entry.oldPath !== undefined) file.oldPath = entry.oldPath;
-    if (!binary && !oversized && base !== null && base.lines !== null) {
-      file.oldLines = base.lines;
-    }
-    if (!binary && !oversized && head !== null && head.lines !== null) {
-      file.newLines = head.lines;
-    }
+    if (encoding !== undefined) file.encoding = encoding;
+    if (reason !== undefined) file.reason = reason;
+    if (fileTruncated) file.truncated = true;
+    if (oldLines !== undefined) file.oldLines = oldLines;
+    if (newLines !== undefined) file.newLines = newLines;
     files.push(file);
   }
 
   if (scope.kind === 'worktree' && includeUntracked) {
     const untrackedPaths = await listUntracked(scope.repoRoot, options.signal);
     for (const path of untrackedPaths) {
-      if (isIgnored(path, ignore)) continue;
       const absolute = safeJoin(scope.repoRoot, path);
       const info = await lstat(absolute).catch(() => null);
       if (info?.isSymbolicLink() === true || (await hasSymlinkParent(scope.repoRoot, path))) {
         warnings.push(`symlink-not-followed:${path}`);
         continue;
       }
-      const file = await untrackedFile(scope.repoRoot, path, maxFileLines, includeContent);
+      const file = await untrackedFile(
+        scope.repoRoot,
+        path,
+        maxFileLines,
+        maxContentBytes,
+        includeContent,
+        isIgnored(path, ignore),
+        budget,
+        warnings,
+      );
       if (file !== null) files.push(file);
     }
   }
 
-  files.sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
+  files.sort((left, right) => comparePaths(left.path, right.path));
 
   if (files.length > maxFiles) {
     files.splice(maxFiles);

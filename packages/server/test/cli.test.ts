@@ -243,11 +243,18 @@ describe('review diff', () => {
     expect(parseSnapshot(filtered.out).files.some((file) => file.path === 'notes.txt')).toBe(false);
   });
 
-  it('empties the snapshot with --ignore', async () => {
+  it('keeps ignored files visible and marks them with I', async () => {
     const repo = await featureRepo();
     const { io, out } = capture();
 
     const code = await runCli(
+      ['diff', '--repo', repo.root, '--base', 'main', '--head', 'feature', '--ignore', 'src/**'],
+      io,
+    );
+
+    expect(code).toBe(0);
+    expect(out.join('')).toContain('IM src/a.ts');
+    const snapshotCode = await runCli(
       [
         'diff',
         '--repo',
@@ -262,11 +269,50 @@ describe('review diff', () => {
       ],
       io,
     );
+    const text = out.join('');
+    const jsonStart = text.indexOf('{');
+    expect(snapshotCode).toBe(0);
+    expect(JSON.parse(text.slice(jsonStart))).toMatchObject({
+      totals: { files: 1 },
+      files: [{ path: 'src/a.ts', ignored: true, contentHash: null, hunks: [] }],
+    });
+  });
+
+  it('marks binary and oversized files in human output', async () => {
+    const repo = await makeRepo();
+    cleanups.push(repo.cleanup);
+    await repo.write('img.bin', String.fromCharCode(0, 1));
+    await repo.write('big.txt', 'one\n');
+    await repo.write('ignored.txt', 'old\n');
+    await repo.commit('base');
+    await repo.git('checkout', '-b', 'feature');
+    await repo.write('img.bin', String.fromCharCode(0, 2));
+    await repo.write('big.txt', 'one\ntwo\nthree\n');
+    await repo.write('ignored.txt', 'new\n');
+    await repo.commit('feature');
+
+    const { io, out } = capture();
+    const code = await runCli(
+      [
+        'diff',
+        '--repo',
+        repo.root,
+        '--base',
+        'main',
+        '--head',
+        'feature',
+        '--max-lines',
+        '2',
+        '--ignore',
+        'ignored.txt',
+      ],
+      io,
+    );
 
     expect(code).toBe(0);
-    const snapshot = parseSnapshot(out);
-    expect(snapshot.files).toEqual([]);
-    expect(snapshot.totals.files).toBe(0);
+    expect(out.join('')).toContain('BM img.bin');
+    expect(out.join('')).toContain('LM big.txt');
+    expect(out.join('')).toContain('IM ignored.txt');
   });
 
   it('truncates with --max-files', async () => {
@@ -377,6 +423,27 @@ describe('review diff', () => {
       expect(err.join('')).toContain(conflict.flags[1]);
     });
   }
+
+  it('returns 5 with a specific error for an unsupported diff', async () => {
+    const repo = await makeRepo();
+    cleanups.push(repo.cleanup);
+    await repo.write('a.txt', 'a\n');
+    await repo.commit('base');
+    await repo.git('checkout', '-b', 'feature');
+    await repo.write('dir b/file.ts', 'x\n');
+    await repo.commit('ambiguous path');
+
+    const { io, err } = capture();
+    const code = await runCli(
+      ['diff', '--repo', repo.root, '--base', 'main', '--head', 'feature'],
+      io,
+    );
+
+    expect(code).toBe(5);
+    expect(err.join('')).toContain('error: unsupported diff:');
+    expect(err.join('')).not.toContain('internal failure');
+    expect(err.join('')).not.toContain('at parse');
+  });
 
   it('returns 1 for unexpected errors and hides details unless debug is set', async () => {
     const normal = capture();

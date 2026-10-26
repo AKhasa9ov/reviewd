@@ -44,19 +44,43 @@ export async function runGit(
     throw new GitError('git-failed', 'git command aborted');
   }
 
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  delete env.GIT_DIR;
+  delete env.GIT_WORK_TREE;
+  delete env.GIT_INDEX_FILE;
+  Object.assign(env, {
+    GIT_CONFIG_NOSYSTEM: '1',
+    GIT_EXTERNAL_DIFF: '',
+    GIT_TERMINAL_PROMPT: '0',
+    GIT_OPTIONAL_LOCKS: '0',
+    LC_ALL: 'C',
+    ...options.env,
+  });
+
+  const gitArgs = [
+    '--no-pager',
+    '-c',
+    'core.quotePath=false',
+    '-c',
+    'core.pager=cat',
+    '-c',
+    'diff.external=',
+    '-c',
+    'diff.noprefix=false',
+    '-c',
+    'diff.mnemonicPrefix=false',
+    '-c',
+    'diff.submodule=short',
+    ...args,
+  ];
+
   return await new Promise<GitResult>((resolve, reject) => {
-    const child = spawn('git', ['-c', 'core.quotePath=false', ...args], {
+    const child = spawn('git', gitArgs, {
       cwd,
       shell: false,
       stdio: ['ignore', 'pipe', 'pipe'],
       signal: options.signal,
-      env: {
-        ...process.env,
-        GIT_TERMINAL_PROMPT: '0',
-        GIT_OPTIONAL_LOCKS: '0',
-        LC_ALL: 'C',
-        ...options.env,
-      },
+      env,
     });
 
     const stdout: Buffer[] = [];

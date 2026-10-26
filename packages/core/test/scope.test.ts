@@ -1,5 +1,18 @@
+import { execFile } from 'node:child_process';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { promisify } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
-import { EMPTY_TREE_SHA, resolveDefaultBase, resolveScope, worktreeDigest } from '../src/index.js';
+import {
+  EMPTY_TREE_SHA,
+  GitError,
+  resolveDefaultBase,
+  resolveScope,
+  worktreeDigest,
+} from '../src/index.js';
+
+const execFileAsync = promisify(execFile);
 import { makeRepo } from './helpers/repo.js';
 
 const cleanups: Array<() => Promise<void>> = [];
@@ -60,6 +73,34 @@ describe('resolveScope', () => {
       scope: { kind: 'commit', sha: rootSha },
     });
     expect(scope.baseSha).toBe(EMPTY_TREE_SHA);
+  });
+
+  it('rejects a commit whose parent is missing in a shallow clone', async () => {
+    const origin = await makeRepo();
+    cleanups.push(origin.cleanup);
+    await origin.write('a.txt', 'a\n');
+    await origin.commit('one');
+    await origin.write('b.txt', 'b\n');
+    await origin.commit('two');
+    await origin.write('c.txt', 'c\n');
+    await origin.commit('three');
+
+    const parent = await mkdtemp(join(tmpdir(), 'cr-shallow-'));
+    cleanups.push(async () => rm(parent, { recursive: true, force: true }));
+    const cloneRoot = join(parent, 'clone');
+    await execFileAsync('git', ['clone', '--depth', '1', `file://${origin.root}`, cloneRoot]);
+    const { stdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: cloneRoot });
+
+    const error: unknown = await resolveScope({
+      repoRoot: cloneRoot,
+      scope: { kind: 'commit', sha: stdout.trim() },
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(GitError);
+    expect(error).toMatchObject({
+      code: 'git-failed',
+      message: expect.stringContaining('parent that is not available'),
+    });
   });
 
   it('resolves a worktree base without a head commit', async () => {

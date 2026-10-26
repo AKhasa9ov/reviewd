@@ -16,8 +16,7 @@ export interface DiffHunk {
   lines: DiffLine[];
 }
 
-export type FileStatus =
-  'added' | 'modified' | 'deleted' | 'renamed' | 'binary' | 'oversized' | 'submodule' | 'untracked';
+export type FileStatus = 'added' | 'modified' | 'deleted' | 'renamed' | 'submodule' | 'untracked';
 
 export interface ParsedFile {
   path: string;
@@ -30,6 +29,8 @@ export interface ParsedFile {
   oldMode?: string;
   newMode?: string;
   indexMode?: string;
+  /** Present when the diff was cut inside this file before a hunk was complete. */
+  synthetic?: true;
 }
 
 export type DiffScope =
@@ -46,6 +47,7 @@ export interface ResolvedScope {
   headSha: string | null;
   label: string;
   worktreeDigest: string;
+  worktreeDigestTruncated?: boolean;
 }
 
 export interface FileDiff {
@@ -54,6 +56,14 @@ export interface FileDiff {
   status: FileStatus;
   binary: boolean;
   oversized: boolean;
+  /** Ignored entries stay visible but carry no content. */
+  ignored?: boolean;
+  /** Content was omitted because the snapshot-wide content budget was exhausted. */
+  truncated?: boolean;
+  /** Set when the raw bytes are not valid UTF-8. */
+  encoding?: 'unknown';
+  /** Set when a per-file read failed (for example EACCES or an ENOENT race). */
+  reason?: 'unreadable';
   added: number;
   deleted: number;
   hunks: DiffHunk[];
@@ -77,6 +87,8 @@ export interface SnapshotOptions {
   includeContent?: boolean;
   maxDiffBytes?: number;
   maxFileLines?: number;
+  maxContentBytes?: number;
+  maxTotalContentBytes?: number;
   maxFiles?: number;
   ignore?: readonly string[];
   signal?: AbortSignal;

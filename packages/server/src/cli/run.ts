@@ -1,11 +1,12 @@
 import {
   CORE_VERSION,
+  DiffParseError,
   GitError,
   buildSnapshot,
   resolveDefaultBase,
   resolveRepoRoot,
 } from '@dsh-code-review/core';
-import type { DiffScope, FileStatus, Snapshot } from '@dsh-code-review/core';
+import type { DiffScope, FileDiff, FileStatus, Snapshot } from '@dsh-code-review/core';
 
 export interface CliIO {
   stdout: { write: (text: string) => unknown };
@@ -151,18 +152,17 @@ function scope(options: DiffOptions, baseRef: string): DiffScope {
   };
 }
 
-function statusLetter(status: FileStatus): string {
+function statusLetter(file: FileDiff): string {
   const letters: Record<FileStatus, string> = {
     added: 'A',
     deleted: 'D',
     renamed: 'R',
-    binary: 'B',
-    oversized: 'L',
     submodule: 'S',
     untracked: '?',
     modified: 'M',
   };
-  return letters[status];
+  const prefix = file.ignored === true ? 'I' : file.binary ? 'B' : file.oversized ? 'L' : '';
+  return `${prefix}${letters[file.status]}`;
 }
 
 function format(snapshot: Snapshot): string {
@@ -170,7 +170,7 @@ function format(snapshot: Snapshot): string {
     `${snapshot.scope.label}  ${snapshot.totals.files} files  +${snapshot.totals.added} -${snapshot.totals.deleted}`,
   ];
   for (const file of snapshot.files) {
-    lines.push(`${statusLetter(file.status)} ${file.path} +${file.added} -${file.deleted}`);
+    lines.push(`${statusLetter(file)} ${file.path} +${file.added} -${file.deleted}`);
   }
   for (const warning of snapshot.warnings) lines.push(`warning: ${warning}`);
   return `${lines.join('\n')}\n`;
@@ -194,7 +194,7 @@ function help(): string {
     '  --no-content        omit full file content',
     '  --max-files <n>     cap the number of files',
     '  --max-lines <n>     cap lines per file',
-    '  --ignore <glob>     exclude a path pattern (repeatable)',
+    '  --ignore <glob>     mark a path pattern ignored (repeatable)',
     '',
     'flags take a separate value (--base main); --flag=value and -- are not supported.',
     'exit codes: 0 success, 1 internal failure, 5 usage or git validation',
@@ -246,6 +246,10 @@ export async function runCli(
     }
     return 0;
   } catch (error) {
+    if (error instanceof DiffParseError) {
+      io.stderr.write(`error: unsupported diff: ${error.message}\n`);
+      return 5;
+    }
     if (error instanceof UsageError || error instanceof GitError) {
       io.stderr.write(`error: ${error.message}\n`);
       return 5;

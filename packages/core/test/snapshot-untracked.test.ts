@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { chmod } from 'node:fs/promises';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildSnapshot } from '../src/index.js';
 import { makeRepo } from './helpers/repo.js';
@@ -36,6 +37,33 @@ describe('untracked files', () => {
     expect(notes?.hunks[0]?.lines.every((line) => line.kind === 'add')).toBe(true);
   });
 
+  it.skipIf(process.getuid?.() === 0)(
+    'reports an unreadable untracked file and continues with other files',
+    async () => {
+      const repo = await repoAtMain();
+      await repo.write('secret.txt', 'hidden\n');
+      await repo.write('notes.md', 'visible\n');
+      const secret = `${repo.root}/secret.txt`;
+      await chmod(secret, 0o000);
+      try {
+        const result = await buildSnapshot({
+          repoRoot: repo.root,
+          scope: { kind: 'worktree', baseRef: 'main' },
+        });
+        const unreadable = result.files.find((file) => file.path === 'secret.txt');
+
+        expect(unreadable?.status).toBe('untracked');
+        expect(unreadable?.reason).toBe('unreadable');
+        expect(unreadable?.newLines).toBeUndefined();
+        expect(unreadable?.contentHash).toBeNull();
+        expect(result.warnings).toContain('unreadable:secret.txt');
+        expect(result.files.some((file) => file.path === 'notes.md')).toBe(true);
+      } finally {
+        await chmod(secret, 0o644);
+      }
+    },
+  );
+
   it('can exclude untracked files', async () => {
     const repo = await repoAtMain();
     await repo.write('notes.md', 'one\n');
@@ -50,7 +78,7 @@ describe('untracked files', () => {
 });
 
 describe('ignores, binary and limits', () => {
-  it('applies ignore patterns to tracked and untracked files', async () => {
+  it('keeps ignored tracked and untracked files visible without content', async () => {
     const repo = await repoAtMain();
     await repo.write('src/a.ts', 'a\nchanged\n');
     await repo.write('dist/bundle.js', 'built\n');
@@ -61,7 +89,29 @@ describe('ignores, binary and limits', () => {
       scope: { kind: 'worktree', baseRef: 'main' },
       ignore: ['src/**', 'dist/**', '*.md'],
     });
-    expect(result.files).toEqual([]);
+
+    expect(result.files.map((file) => file.path)).toEqual([
+      'dist/bundle.js',
+      'notes.md',
+      'src/a.ts',
+    ]);
+    for (const file of result.files) {
+      expect(file.ignored).toBe(true);
+      expect(file.hunks).toEqual([]);
+      expect(file.oldLines).toBeUndefined();
+      expect(file.newLines).toBeUndefined();
+      expect(file.contentHash).toBeNull();
+    }
+    expect(result.files.find((file) => file.path === 'src/a.ts')).toMatchObject({
+      status: 'modified',
+      added: 1,
+      deleted: 0,
+    });
+    expect(result.files.find((file) => file.path === 'dist/bundle.js')).toMatchObject({
+      status: 'untracked',
+      added: 1,
+    });
+    expect(result.totals.files).toBe(3);
   });
 
   it('marks an untracked binary file without content but with its raw hash', async () => {
@@ -74,6 +124,7 @@ describe('ignores, binary and limits', () => {
     });
     const image = result.files.find((file) => file.path === 'image.bin');
 
+    expect(image?.status).toBe('untracked');
     expect(image?.binary).toBe(true);
     expect(image?.newLines).toBeUndefined();
     expect(image?.contentHash).toBe(
@@ -95,6 +146,7 @@ describe('ignores, binary and limits', () => {
     });
     const big = result.files.find((file) => file.path === 'big.txt');
 
+    expect(big?.status).toBe('untracked');
     expect(big?.oversized).toBe(true);
     expect(big?.newLines).toBeUndefined();
     expect(big?.contentHash).toBeNull();
