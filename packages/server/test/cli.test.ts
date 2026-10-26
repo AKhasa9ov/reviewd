@@ -278,6 +278,40 @@ describe('review diff', () => {
     });
   });
 
+  it('does not let ignored files consume --max-files', async () => {
+    const repo = await makeRepo();
+    cleanups.push(repo.cleanup);
+    await repo.write('src/a.ts', 'a\n');
+    await repo.commit('base');
+    await repo.write('src/a.ts', 'changed\n');
+    await repo.write('dist/000.txt', 'built\n');
+
+    const { io, out } = capture();
+    const code = await runCli(
+      [
+        'diff',
+        '--repo',
+        repo.root,
+        '--worktree',
+        '--base',
+        'main',
+        '--max-files',
+        '1',
+        '--ignore',
+        'dist/**',
+        '--json',
+      ],
+      io,
+    );
+
+    expect(code).toBe(0);
+    const snapshot = parseSnapshot(out);
+    expect(snapshot.files.map((file) => file.path)).toEqual(['dist/000.txt', 'src/a.ts']);
+    expect(snapshot.files.find((file) => file.path === 'dist/000.txt')?.ignored).toBe(true);
+    expect(snapshot.totals.truncated).toBe(false);
+    expect(snapshot.warnings).not.toContain('files-truncated');
+  });
+
   it('marks binary and oversized files in human output', async () => {
     const repo = await makeRepo();
     cleanups.push(repo.cleanup);

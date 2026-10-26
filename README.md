@@ -69,11 +69,13 @@ untracked files; `--no-untracked` excludes untracked files). `--commit <sha>` di
 against its first parent; a root commit uses the empty tree, while a commit whose parent is
 missing (for example a shallow boundary) fails with a fetch/unshallow error instead of
 silently pretending every file was added. `--two-dot`, `--max-files`, `--max-lines` and
-`--ignore <glob>` are available for large repositories.
+`--ignore <glob>` are available for large repositories. `--max-files` caps reviewable files;
+ignored entries remain visible and never consume that cap.
 
 Limits: 2 MiB of diff text, 500 files, 20 000 lines per file, 1 MiB of content per file and
-64 MiB of content per snapshot. A single file cut by the diff cap is still reported with its
-path and kind as an `oversized` entry. Reports include `diff-truncated`,
+64 MiB of content per snapshot. `totals.truncated` is true for diff, file-count or
+content-budget truncation. A file cut by the diff cap is still reported with its path and
+kind as an `oversized` entry. Reports include `diff-truncated`,
 `diff-file-truncated:<path>`, `files-truncated`, `content-budget-truncated`,
 `worktree-digest-truncated`, `symlink-not-followed:<path>` and `unreadable:<path>` where
 relevant. `scope.worktreeDigestTruncated` is present when the digest itself had to be

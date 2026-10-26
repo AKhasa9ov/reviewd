@@ -77,7 +77,14 @@ function truncateAtFileBoundary(text: string, maxBytes: number): DiffText {
   }
   const cut = Buffer.from(text, 'utf8').subarray(0, maxBytes).toString('utf8');
   const boundary = cut.lastIndexOf('\ndiff --git ');
-  if (boundary > 0) return { text: cut.slice(0, boundary + 1), truncated: true };
+  if (boundary > 0) {
+    const synthetic = syntheticFileFromCut(cut.slice(boundary + 1));
+    return {
+      text: cut.slice(0, boundary + 1),
+      truncated: true,
+      ...(synthetic === undefined ? {} : { synthetic }),
+    };
+  }
   if (cut.startsWith('diff --git ')) {
     const synthetic = syntheticFileFromCut(cut);
     return { text: '', truncated: true, ...(synthetic === undefined ? {} : { synthetic }) };
@@ -274,7 +281,7 @@ async function untrackedFile(
     oversized: false,
     added: read.lines.length,
     deleted: 0,
-    hunks: truncated ? [] : [hunk],
+    hunks: truncated || read.lines.length === 0 ? [] : [hunk],
     contentHash: includeContent && !truncated ? read.hash : null,
   };
   if (truncated) file.truncated = true;
@@ -320,8 +327,10 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
 
   let truncated = diffTruncated || limited.truncated;
   let selected = candidates;
-  if (candidates.length > maxFiles) {
-    selected = candidates.slice(0, maxFiles);
+  const reviewableCandidates = candidates.filter((entry) => !isIgnored(entry.path, ignore));
+  if (reviewableCandidates.length > maxFiles) {
+    const kept = new Set(reviewableCandidates.slice(0, maxFiles));
+    selected = candidates.filter((entry) => isIgnored(entry.path, ignore) || kept.has(entry));
     truncated = true;
     warnings.push('files-truncated');
   }
@@ -484,20 +493,27 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
 
   files.sort((left, right) => comparePaths(left.path, right.path));
 
-  if (files.length > maxFiles) {
-    files.splice(maxFiles);
+  const reviewableFiles = files.filter((file) => file.ignored !== true);
+  if (reviewableFiles.length > maxFiles) {
+    const kept = new Set(reviewableFiles.slice(0, maxFiles));
+    files.splice(
+      0,
+      files.length,
+      ...files.filter((file) => file.ignored === true || kept.has(file)),
+    );
     truncated = true;
     if (!warnings.includes('files-truncated')) warnings.push('files-truncated');
   }
 
+  const totalsTruncated = truncated || budget.exhausted;
   const totals = files.reduce(
     (accumulator, file) => ({
       files: accumulator.files + 1,
       added: accumulator.added + file.added,
       deleted: accumulator.deleted + file.deleted,
-      truncated,
+      truncated: totalsTruncated,
     }),
-    { files: 0, added: 0, deleted: 0, truncated },
+    { files: 0, added: 0, deleted: 0, truncated: totalsTruncated },
   );
 
   return {

@@ -259,6 +259,35 @@ describe('buildSnapshot', () => {
     expect(
       result.warnings.filter((warning) => warning === 'content-budget-truncated'),
     ).toHaveLength(1);
+    expect(result.totals.truncated).toBe(true);
+  });
+
+  it('keeps a later file that is cut by the diff cap', async () => {
+    const repo = await makeRepo();
+    cleanups.push(repo.cleanup);
+    await repo.write('base.txt', 'base\n');
+    await repo.commit('base');
+    await repo.git('checkout', '-b', 'feature');
+    await repo.write('a.txt', 'small\n');
+    await repo.write('z.txt', `${'x'.repeat(3 * 1024 * 1024)}\n`);
+    await repo.commit('small and large');
+
+    const result = await snapshot(repo.root);
+    const first = result.files.find((file) => file.path === 'a.txt');
+    const last = result.files.find((file) => file.path === 'z.txt');
+
+    expect(result.files.map((file) => file.path)).toEqual(['a.txt', 'z.txt']);
+    expect(first?.status).toBe('added');
+    expect(first?.oversized).toBe(false);
+    expect(last?.status).toBe('added');
+    expect(last?.oversized).toBe(true);
+    expect(last?.added).toBe(0);
+    expect(last?.deleted).toBe(0);
+    expect(last?.hunks).toEqual([]);
+    expect(last?.contentHash).toBeNull();
+    expect(result.totals.truncated).toBe(true);
+    expect(result.warnings).toContain('diff-truncated');
+    expect(result.warnings).toContain('diff-file-truncated:z.txt');
   });
 
   it('sorts paths by UTF-8 bytes rather than UTF-16 code units', async () => {

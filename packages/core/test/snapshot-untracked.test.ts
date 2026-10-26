@@ -64,6 +64,22 @@ describe('untracked files', () => {
     },
   );
 
+  it('does not emit a hunk for an empty untracked file', async () => {
+    const repo = await repoAtMain();
+    await repo.write('empty.txt', '');
+
+    const result = await buildSnapshot({
+      repoRoot: repo.root,
+      scope: { kind: 'worktree', baseRef: 'main' },
+    });
+    const empty = result.files.find((file) => file.path === 'empty.txt');
+
+    expect(empty?.status).toBe('untracked');
+    expect(empty?.added).toBe(0);
+    expect(empty?.hunks).toEqual([]);
+    expect(empty?.newLines).toEqual([]);
+  });
+
   it('can exclude untracked files', async () => {
     const repo = await repoAtMain();
     await repo.write('notes.md', 'one\n');
@@ -150,6 +166,48 @@ describe('ignores, binary and limits', () => {
     expect(big?.oversized).toBe(true);
     expect(big?.newLines).toBeUndefined();
     expect(big?.contentHash).toBeNull();
+  });
+
+  it('does not let ignored files consume maxFiles', async () => {
+    const repo = await repoAtMain();
+    await repo.write('src/a.ts', 'a\nchanged\n');
+    await repo.write('dist/000.txt', 'built\n');
+
+    const result = await buildSnapshot({
+      repoRoot: repo.root,
+      scope: { kind: 'worktree', baseRef: 'main' },
+      maxFiles: 1,
+      ignore: ['dist/**'],
+    });
+
+    expect(result.files.map((file) => file.path)).toEqual(['dist/000.txt', 'src/a.ts']);
+    expect(result.files.find((file) => file.path === 'dist/000.txt')?.ignored).toBe(true);
+    expect(result.warnings).not.toContain('files-truncated');
+    expect(result.totals.truncated).toBe(false);
+  });
+
+  it('caps reviewable files while retaining every ignored file', async () => {
+    const repo = await repoAtMain();
+    await repo.write('src/a.ts', 'a\nchanged\n');
+    await repo.write('src/b.ts', 'new b\n');
+    await repo.write('dist/000.txt', 'built\n');
+    await repo.write('dist/001.txt', 'built too\n');
+
+    const result = await buildSnapshot({
+      repoRoot: repo.root,
+      scope: { kind: 'worktree', baseRef: 'main' },
+      maxFiles: 1,
+      ignore: ['dist/**'],
+    });
+
+    expect(result.files.map((file) => file.path)).toEqual([
+      'dist/000.txt',
+      'dist/001.txt',
+      'src/a.ts',
+    ]);
+    expect(result.files.filter((file) => file.ignored === true)).toHaveLength(2);
+    expect(result.warnings.filter((warning) => warning === 'files-truncated')).toHaveLength(1);
+    expect(result.totals.truncated).toBe(true);
   });
 
   it('re-sorts and slices after appending untracked entries', async () => {
