@@ -50,7 +50,7 @@ describe('same-origin proxy', () => {
     expect(response.status).toBe(201);
     expect(await response.text()).toBe('{"ok":true}');
     expect(seenAuth).toBe(`Bearer ${'x'.repeat(32)}`);
-    expect(seenPath).toBe('/reviews?limit=2');
+    expect(seenPath).toBe('/api/reviews?limit=2');
     expect(seenBody).toBe('{"title":"x"}');
   });
 

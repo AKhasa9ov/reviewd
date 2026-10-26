@@ -76,7 +76,8 @@ export function createProxyHandler(deps: ProxyDeps) {
       }
       const controller = new AbortController();
       res.on('close', () => controller.abort());
-      const response = await fetchImpl(`${deps.config.daemonUrl}${path}`, {
+      const daemonPath = path === '/' ? '/api' : `/api${path}`;
+      const response = await fetchImpl(`${deps.config.daemonUrl}${daemonPath}`, {
         method: req.method ?? 'GET',
         headers,
         ...(body === undefined ? {} : { body: body as unknown as BodyInit }),
