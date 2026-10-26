@@ -1,4 +1,6 @@
-import type { FileDiff, Snapshot, SnapshotOptions } from '../types.js';
+import { lstat } from 'node:fs/promises';
+import type { DiffHunk, FileDiff, Snapshot, SnapshotOptions } from '../types.js';
+import { safeJoin } from '../paths.js';
 import { readBlob } from '../git/content.js';
 import { resolveScope } from '../git/scope.js';
 import { runGit } from '../git/run.js';
@@ -41,8 +43,72 @@ function truncateAtFileBoundary(text: string, maxBytes: number): DiffText {
   return { text: cut.slice(0, boundary + 1), truncated: true };
 }
 
+async function listUntracked(repoRoot: string, signal?: AbortSignal): Promise<string[]> {
+  const result = await runGit(repoRoot, ['ls-files', '--others', '--exclude-standard', '-z'], {
+    signal,
+    maxBytes: 8 * 1024 * 1024,
+  });
+  return result.stdout.split('\0').filter((path) => path.length > 0);
+}
+
+async function untrackedFile(
+  repoRoot: string,
+  path: string,
+  maxFileLines: number,
+  includeContent: boolean,
+): Promise<FileDiff | null> {
+  const absolute = safeJoin(repoRoot, path);
+  const info = await lstat(absolute).catch(() => null);
+  if (info === null || info.isSymbolicLink() || !info.isFile()) return null;
+
+  const read = await readBlob(repoRoot, null, path, maxFileLines);
+  const contentHash = includeContent && read.hash !== '' ? read.hash : null;
+
+  if (read.lines === null) {
+    if (!read.binary && !read.oversized) return null;
+    return {
+      path,
+      status: 'untracked',
+      binary: read.binary,
+      oversized: read.oversized,
+      added: 0,
+      deleted: 0,
+      hunks: [],
+      contentHash,
+    };
+  }
+
+  const hunk: DiffHunk = {
+    oldStart: 0,
+    oldLines: 0,
+    newStart: 1,
+    newLines: read.lines.length,
+    header: '',
+    lines: read.lines.map((text, index) => ({
+      kind: 'add' as const,
+      oldNo: null,
+      newNo: index + 1,
+      text,
+    })),
+  };
+
+  const file: FileDiff = {
+    path,
+    status: 'untracked',
+    binary: false,
+    oversized: false,
+    added: read.lines.length,
+    deleted: 0,
+    hunks: read.lines.length === 0 ? [] : [hunk],
+    contentHash,
+  };
+  if (includeContent) file.newLines = read.lines;
+  return file;
+}
+
 export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot> {
   const includeContent = options.includeContent ?? DEFAULTS.includeContent;
+  const includeUntracked = options.includeUntracked ?? DEFAULTS.includeUntracked;
   const maxDiffBytes = options.maxDiffBytes ?? DEFAULTS.maxDiffBytes;
   const maxFileLines = options.maxFileLines ?? DEFAULTS.maxFileLines;
   const maxFiles = options.maxFiles ?? DEFAULTS.maxFiles;
@@ -115,6 +181,23 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
       file.newLines = head.lines;
     }
     files.push(file);
+  }
+
+  if (scope.kind === 'worktree' && includeUntracked) {
+    const untrackedPaths = await listUntracked(scope.repoRoot, options.signal);
+    for (const path of untrackedPaths) {
+      if (isIgnored(path, ignore)) continue;
+      const file = await untrackedFile(scope.repoRoot, path, maxFileLines, includeContent);
+      if (file !== null) files.push(file);
+    }
+  }
+
+  files.sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
+
+  if (files.length > maxFiles) {
+    files.splice(maxFiles);
+    truncated = true;
+    if (!warnings.includes('files-truncated')) warnings.push('files-truncated');
   }
 
   const totals = files.reduce(
