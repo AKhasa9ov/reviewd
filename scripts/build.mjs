@@ -47,3 +47,13 @@ await build({
 });
 
 await chmod('packages/server/dist/reviewd.js', 0o755);
+await build({
+  entryPoints: ['packages/dsh/src/index.ts'],
+  outfile: 'packages/dsh/index.js',
+  bundle: true,
+  platform: 'node',
+  format: 'esm',
+  target: 'node22',
+  sourcemap: false,
+  logLevel: 'info',
+});

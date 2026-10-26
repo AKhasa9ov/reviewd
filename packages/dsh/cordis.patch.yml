@@ -1,0 +1,9 @@
+# DSH half of dsh-code-review. The profile may override this row's config.
+- insert:
+    - id: code-review
+      name: '@dsh-code-review/dsh'
+      config:
+        daemonUrl: http://127.0.0.1:3100
+        token: ''
+        worker: false
+        reviewerBackend: worker

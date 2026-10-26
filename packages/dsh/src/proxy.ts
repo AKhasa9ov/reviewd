@@ -1,0 +1,115 @@
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { ReviewConfig } from './config.js';
+
+const PREFIX = '/api/code-review';
+const MAX_BODY = 2 * 1024 * 1024;
+
+export interface ProxyDeps {
+  config: ReviewConfig;
+  fetch?: typeof fetch;
+}
+
+function json(res: ServerResponse, status: number, code: string, message: string): void {
+  const body = JSON.stringify({ error: { code, message } });
+  res.writeHead(status, {
+    'content-type': 'application/json; charset=utf-8',
+    'content-length': String(Buffer.byteLength(body)),
+    'cache-control': 'no-store',
+  });
+  res.end(body);
+}
+
+async function bodyOf(req: IncomingMessage): Promise<Buffer | undefined> {
+  if (req.method === 'GET' || req.method === 'HEAD') return undefined;
+  const chunks: Buffer[] = [];
+  let total = 0;
+  for await (const chunk of req) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string);
+    total += buffer.length;
+    if (total > MAX_BODY) throw new Error('request body too large');
+    chunks.push(buffer);
+  }
+  return chunks.length === 0 ? undefined : Buffer.concat(chunks);
+}
+
+/**
+ * Build a prefix route handler for `/api/code-review/*`.
+ * The browser never sees the daemon token: the Host adds the bearer header,
+ * strips any client Authorization header, and never copies the token to a response.
+ */
+export function createProxyHandler(deps: ProxyDeps) {
+  const fetchImpl = deps.fetch ?? fetch;
+  return async function proxy(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    try {
+      const url = req.url ?? '/';
+      const path = url.startsWith(PREFIX) ? url.slice(PREFIX.length) || '/' : '/';
+      if (!path.startsWith('/')) {
+        json(res, 400, 'bad-path', 'invalid proxy path');
+        return;
+      }
+      if (deps.config.token === '') {
+        json(res, 503, 'not-configured', 'review daemon token is not configured');
+        return;
+      }
+      const body = await bodyOf(req);
+      const headers: Record<string, string> = {
+        authorization: `Bearer ${deps.config.token}`,
+        accept: typeof req.headers.accept === 'string' ? req.headers.accept : 'application/json',
+      };
+      if (req.headers['content-type'] !== undefined) {
+        const contentType = req.headers['content-type'];
+        if (typeof contentType === 'string') headers['content-type'] = contentType;
+      }
+      if (req.headers['last-event-id'] !== undefined) {
+        const lastEventId = req.headers['last-event-id'];
+        if (typeof lastEventId === 'string') headers['last-event-id'] = lastEventId;
+      }
+      const controller = new AbortController();
+      res.on('close', () => controller.abort());
+      const response = await fetchImpl(`${deps.config.daemonUrl}${path}`, {
+        method: req.method ?? 'GET',
+        headers,
+        ...(body === undefined ? {} : { body: body as unknown as BodyInit }),
+        signal: controller.signal,
+        redirect: 'manual',
+      });
+      const contentType = response.headers.get('content-type') ?? 'application/json';
+      if (contentType.includes('text/event-stream') && response.body !== null) {
+        res.writeHead(response.status, {
+          'content-type': contentType,
+          'cache-control': 'no-cache',
+          connection: 'keep-alive',
+        });
+        for await (const chunk of response.body as unknown as AsyncIterable<Uint8Array>) {
+          if (res.writableEnded) break;
+          res.write(chunk);
+        }
+        res.end();
+        return;
+      }
+      const text = await response.text();
+      const outgoing: Record<string, string> = {
+        'content-type': contentType,
+        'content-length': String(Buffer.byteLength(text)),
+        'cache-control': response.headers.get('cache-control') ?? 'no-store',
+      };
+      const requestId = response.headers.get('x-request-id');
+      if (requestId !== null) outgoing['x-request-id'] = requestId;
+      const retryAfter = response.headers.get('retry-after');
+      if (retryAfter !== null) outgoing['retry-after'] = retryAfter;
+      res.writeHead(response.status, outgoing);
+      res.end(text);
+    } catch (error) {
+      if (res.headersSent) {
+        res.end();
+        return;
+      }
+      const message = error instanceof Error ? error.message : 'proxy failed';
+      if (message === 'request body too large') {
+        json(res, 413, 'body-too-large', 'request body exceeds 2 MiB');
+        return;
+      }
+      json(res, 502, 'daemon-unavailable', `cannot reach review daemon: ${message}`);
+    }
+  };
+}

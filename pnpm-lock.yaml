@@ -44,6 +44,8 @@ importers:
 
   packages/core: {}
 
+  packages/dsh: {}
+
   packages/server:
     dependencies:
       '@dsh-code-review/core':

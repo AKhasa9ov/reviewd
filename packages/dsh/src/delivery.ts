@@ -1,0 +1,135 @@
+import type { ReviewApi } from './api.js';
+import type { ReviewConfig } from './config.js';
+
+export interface DeliveryInitiator {
+  harness: string;
+  sessionId: string;
+  cwd?: string;
+  agentPreset?: string;
+}
+
+export interface DeliveryRecord {
+  id: string;
+  deliveryKey: string;
+  reviewId: string;
+  round: number;
+  submissionId: string;
+  harness: string;
+  initiator?: DeliveryInitiator;
+  feedback: { markdown: string };
+}
+
+export interface SessionControllerLike {
+  resolveAgent?(
+    sessionId: string,
+  ): Promise<{ agent?: unknown; error?: { code?: string; message?: string } }>;
+  prompt(request: {
+    sessionId: string;
+    mode: 'queue' | 'steer';
+    content: Array<{ type: 'text'; text: string }>;
+    requestId: string;
+  }): Promise<unknown>;
+}
+
+export interface DeliveryDeps {
+  config: ReviewConfig;
+  api: ReviewApi;
+  sessionController?: SessionControllerLike;
+  logger?: { warn?(message: string): void; info?(message: string): void };
+  sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
+}
+
+const MAX_FEEDBACK_CHARS = 100_000;
+function wait(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal.aborted) {
+      resolve();
+      return;
+    }
+    const timer = setTimeout(resolve, ms);
+    signal.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      { once: true },
+    );
+  });
+}
+
+function contentFor(record: DeliveryRecord): string {
+  const header = `Code review feedback — ${record.reviewId} round ${String(record.round)}\n\n`;
+  const markdown = record.feedback.markdown ?? '';
+  return `${header}${markdown}`.slice(0, MAX_FEEDBACK_CHARS);
+}
+
+async function deliverOne(
+  deps: DeliveryDeps,
+  record: DeliveryRecord,
+  signal: AbortSignal,
+): Promise<void> {
+  const initiator = record.initiator;
+  if (initiator?.sessionId === undefined || initiator.sessionId === '') {
+    // A legacy/CLI delivery has no session to target. Leave it pending for a human/CLI.
+    return;
+  }
+  if (deps.sessionController === undefined) {
+    deps.logger?.warn?.('code-review: delivery pending but sessionController is unavailable');
+    return;
+  }
+  if (deps.sessionController.resolveAgent !== undefined) {
+    const resolved = await deps.sessionController.resolveAgent(initiator.sessionId);
+    if (resolved.agent === undefined && resolved.error !== undefined) {
+      throw new Error(`cannot resume session: ${resolved.error.code ?? 'unknown'}`);
+    }
+  }
+  await deps.sessionController.prompt({
+    sessionId: initiator.sessionId,
+    mode: 'queue',
+    content: [{ type: 'text', text: contentFor(record) }],
+    requestId: `cr:${record.deliveryKey}`,
+  });
+  await deps.api.post(
+    `/api/deliveries/${encodeURIComponent(record.id)}/ack`,
+    { by: 'dsh' },
+    signal,
+  );
+}
+
+/** Poll pending dsh deliveries, prompt the initiating session, then ack. */
+export async function runDeliveryLoop(deps: DeliveryDeps, signal: AbortSignal): Promise<void> {
+  const sleep = deps.sleep ?? wait;
+  let backoff = 1_000;
+  while (!signal.aborted) {
+    try {
+      const pending = await deps.api.get<{ deliveries: DeliveryRecord[] }>(
+        '/api/deliveries/pending?harness=dsh',
+        signal,
+      );
+      for (const record of pending.deliveries ?? []) {
+        if (signal.aborted) return;
+        try {
+          await deliverOne(deps, record, signal);
+          backoff = 1_000;
+        } catch (error) {
+          deps.logger?.warn?.(
+            `code-review: delivery ${record.id} failed: ${error instanceof Error ? error.message : 'unknown'}`,
+          );
+          // Keep it pending and retry with backoff; no partial prompt was acknowledged.
+          await sleep(backoff, signal);
+          backoff = Math.min(backoff * 2, 30_000);
+        }
+      }
+    } catch (error) {
+      if (signal.aborted) return;
+      deps.logger?.warn?.(
+        `code-review: delivery poll failed: ${error instanceof Error ? error.message : 'unknown'}`,
+      );
+      await sleep(backoff, signal);
+      backoff = Math.min(backoff * 2, 30_000);
+      continue;
+    }
+    await sleep(deps.config.deliveryPollMs, signal);
+  }
+}

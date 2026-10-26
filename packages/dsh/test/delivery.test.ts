@@ -1,0 +1,122 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { describe, expect, it } from 'vitest';
+import { runDeliveryLoop } from '../src/delivery.js';
+import type { DeliveryRecord } from '../src/delivery.js';
+
+const config = {
+  daemonUrl: 'http://d',
+  token: 't'.repeat(32),
+  worker: false,
+  reviewerBackend: 'worker' as const,
+  pollMs: 1,
+  deliveryPollMs: 1,
+  heartbeatMs: 1,
+  requestTimeoutMs: 1000,
+};
+function record(overrides: Partial<DeliveryRecord> = {}): DeliveryRecord {
+  return {
+    id: 'dlv_1',
+    deliveryKey: 'review:1:sub',
+    reviewId: 'rev_1',
+    round: 1,
+    submissionId: 'sub',
+    harness: 'dsh',
+    initiator: { harness: 'dsh', sessionId: 'session-1', cwd: '/repo' },
+    feedback: { markdown: '# Feedback\n\nFix it.' },
+    ...overrides,
+  };
+}
+
+describe('delivery bridge', () => {
+  it('prompts the initiating session with a stable request id and acks', async () => {
+    const prompts: any[] = [];
+    const acks: string[] = [];
+    const controller = new AbortController();
+    const api = {
+      get: async () => ({ deliveries: [record()] }),
+      post: async (path: string) => {
+        acks.push(path);
+        controller.abort();
+        return {};
+      },
+    } as any;
+    await runDeliveryLoop(
+      {
+        config,
+        api,
+        sessionController: {
+          resolveAgent: async () => ({ agent: {} }),
+          prompt: async (request) => {
+            prompts.push(request);
+          },
+        },
+        sleep: async () => undefined,
+      },
+      controller.signal,
+    );
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toMatchObject({
+      sessionId: 'session-1',
+      mode: 'queue',
+      requestId: 'cr:review:1:sub',
+    });
+    expect(prompts[0].content[0].text).toContain('Feedback');
+    expect(acks[0]).toBe('/api/deliveries/dlv_1/ack');
+  });
+
+  it('leaves a delivery without an initiator pending and does not prompt', async () => {
+    const prompts: any[] = [];
+    const controller = new AbortController();
+    const api = {
+      get: async () => {
+        controller.abort();
+        return { deliveries: [record({ initiator: undefined })] };
+      },
+      post: async () => ({}),
+    } as any;
+    await runDeliveryLoop(
+      {
+        config,
+        api,
+        sessionController: {
+          prompt: async (request) => {
+            prompts.push(request);
+          },
+        },
+        sleep: async () => undefined,
+      },
+      controller.signal,
+    );
+    expect(prompts).toEqual([]);
+  });
+
+  it('retries a failed session prompt without acknowledging', async () => {
+    let attempts = 0;
+    const acks: string[] = [];
+    const controller = new AbortController();
+    const api = {
+      get: async () => ({ deliveries: [record()] }),
+      post: async (path: string) => {
+        acks.push(path);
+        controller.abort();
+        return {};
+      },
+    } as any;
+    await runDeliveryLoop(
+      {
+        config,
+        api,
+        sessionController: {
+          prompt: async () => {
+            attempts += 1;
+            if (attempts === 1) throw new Error('closed');
+          },
+        },
+        sleep: async () => undefined,
+      },
+      controller.signal,
+    );
+    expect(attempts).toBe(2);
+    expect(acks).toEqual(['/api/deliveries/dlv_1/ack']);
+  });
+});

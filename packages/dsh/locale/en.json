@@ -1,0 +1,21 @@
+{
+  "meta": {
+    "title": "Code Review",
+    "description": "Review changes, comment on lines, and deliver feedback back to the initiating session."
+  },
+  "panel": {
+    "title": "Code Review",
+    "empty": "No reviews yet.",
+    "create": "New review",
+    "open": "Open in review UI",
+    "loading": "Loading reviews…",
+    "error": "Could not load reviews.",
+    "auth": "The review daemon is not configured or rejected the token.",
+    "retry": "Retry",
+    "titlePlaceholder": "Review title",
+    "repoPlaceholder": "Repository path",
+    "submit": "Start review",
+    "cancel": "Cancel",
+    "close": "Close"
+  }
+}
