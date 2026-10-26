@@ -395,3 +395,51 @@ describe('reanchor', () => {
     expect(next.previous?.round).not.toBe(1);
   });
 });
+
+describe('reanchor suggestion fallback', () => {
+  it('anchors an applied suggestion when the previous quote disappeared', () => {
+    const previous = captureAnchor(
+      snapshot([file('src/a.ts', { newLines: ['header', 'const x = 1;', 'footer'] })]),
+      { path: 'src/a.ts', side: 'new', lineStart: 2, round: 1, id: 'anc_old' },
+    );
+
+    const next = reanchor(
+      previous,
+      snapshot([
+        file('src/a.ts', { newLines: ['header', '// inserted', 'const x = 2;', 'footer'] }),
+      ]),
+      {
+        round: 2,
+        id: 'anc_new',
+        fallbackQuote: 'const x = 2;',
+      },
+    );
+
+    expect(next).toMatchObject({
+      round: 2,
+      path: 'src/a.ts',
+      lineStart: 3,
+      lineEnd: 3,
+      quote: 'const x = 2;',
+      state: 'active',
+      previous: { round: 1, path: 'src/a.ts', lineStart: 2, lineEnd: 2 },
+    });
+    expect(next.contentHash).toBe(hash('const x = 2;'));
+  });
+
+  it('stays outdated when neither the quote nor the fallback exists', () => {
+    const previous = captureAnchor(
+      snapshot([file('src/a.ts', { newLines: ['header', 'const x = 1;', 'footer'] })]),
+      { path: 'src/a.ts', side: 'new', lineStart: 2, round: 1, id: 'anc_old' },
+    );
+
+    const next = reanchor(
+      previous,
+      snapshot([file('src/a.ts', { newLines: ['header', 'const x = 3;', 'footer'] })]),
+      { round: 2, id: 'anc_new', fallbackQuote: 'const x = 2;' },
+    );
+
+    expect(next.state).toBe('outdated');
+    expect(next.quote).toBe('const x = 1;');
+  });
+});

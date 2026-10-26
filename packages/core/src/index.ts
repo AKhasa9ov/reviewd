@@ -76,10 +76,11 @@ export type { AnchorErrorCode, CaptureAnchorInput, ReanchorOptions } from './rev
 export { deriveOutcome } from './review/outcomes.js';
 export { fold, ReviewFoldError } from './review/fold.js';
 export { ReviewLifecycle, ReviewLifecycleError } from './review/lifecycle.js';
-export type { ReviewLifecycleErrorCode } from './review/lifecycle.js';
+export type { RefreshResult, ReviewLifecycleErrorCode } from './review/lifecycle.js';
 export {
   ReviewNotFoundError,
   ReviewStore,
   ReviewStoreCorruptionError,
   ReviewStoreLockedError,
 } from './review/store.js';
+export type { ReviewStoreOptions } from './review/store.js';

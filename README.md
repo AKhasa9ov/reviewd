@@ -6,8 +6,36 @@ agent session. See `docs/design.md`.
 
 ## Status
 
-Plan 1 of 6: the git diff/snapshot foundation. Reviews, reviewer jobs, UI and the DSH
-bundle are implemented in later plans.
+Plans 1–2 of 6: the git diff/snapshot foundation and the C3 review-state library
+(event store, rounds, anchors, outcomes). HTTP, reviewer jobs, UI and the DSH bundle
+are implemented in later plans.
+
+## Review state (C3)
+
+The review state is a library in `@dsh-code-review/core`; it has no daemon, network, UI
+or DSH imports. A store root contains:
+
+```text
+lock                              single-writer lock (pid + createdAt)
+reviews/<reviewId>/events.jsonl   append-only, versioned event log (source of truth)
+reviews/<reviewId>/snapshot.json  atomically replaced replay cache
+snapshots/<snapshotId>.json       immutable round snapshots
+```
+
+`ReviewStore.open(root)` takes the lock and rejects a live owner; a stale lock must be
+removed manually. Every mutation appends one JSON event, fsyncs it, folds it into the
+aggregate and then replaces the cache. Replay is authoritative: a torn final JSONL
+line is truncated on the next append and reported as `torn-tail`; corruption before the
+last line fails with the review id and line number. `ReviewLifecycle` owns review/round/
+comment mutations, replies, soft states and refresh.
+
+Rounds are immutable and snapshots are stored by id. `refresh` writes the next snapshot,
+re-anchors every comment (following renames, hunk-mapped old lines and a ±40-line quoted
+search, with suggestion replacement as a fallback), records an anchor plus a
+deterministic outcome (`applied`, `addressed`, `unchanged`, `outdated`, `moved`) with
+confidence, and preserves comment ids, bodies, replies and anchor history. Comments are
+never physically deleted; `resolved`/`dismissed` are states. C3 is intentionally not the
+reviewer/HTTP layer.
 
 ## Development
 

@@ -28,6 +28,8 @@ export interface ReanchorOptions {
   round: number;
   id?: string;
   window?: number;
+  /** When the old quote is gone, look for an applied suggestion replacement. */
+  fallbackQuote?: string;
 }
 
 const DEFAULT_WINDOW = 40;
@@ -186,6 +188,55 @@ function contextMatches(
   return true;
 }
 
+interface FoundCandidate extends Candidate {
+  tied: boolean;
+}
+
+function findCandidate(
+  lines: string[],
+  quoteLines: string[],
+  expected: number,
+  window: number,
+  previous: Anchor,
+): FoundCandidate | undefined {
+  const maxStart = lines.length - quoteLines.length + 1;
+  const from = Math.max(1, expected - window);
+  const to = Math.min(maxStart, expected + window);
+  let best: Candidate | undefined;
+  let tied = false;
+
+  for (let start = from; start <= to; start += 1) {
+    let matches = true;
+    for (let offset = 0; offset < quoteLines.length; offset += 1) {
+      const line = lines[start - 1 + offset];
+      if (line === undefined || normalizeLine(line) !== quoteLines[offset]) {
+        matches = false;
+        break;
+      }
+    }
+    if (!matches) continue;
+
+    const distance = Math.abs(start - expected);
+    const score =
+      3 +
+      (contextMatches(lines, previous.contextBefore, start, quoteLines.length, 'before') ? 1 : 0) +
+      (contextMatches(lines, previous.contextAfter, start, quoteLines.length, 'after') ? 1 : 0) +
+      Math.max(0, 1 - distance / (window + 1));
+    if (
+      best === undefined ||
+      score > best.score ||
+      (score === best.score && distance < best.distance)
+    ) {
+      best = { start, score, distance };
+      tied = false;
+    } else if (score === best.score && distance === best.distance) {
+      tied = true;
+    }
+  }
+
+  return best === undefined ? undefined : { ...best, tied };
+}
+
 function outdated(previous: Anchor, file: FileDiff | undefined, options: ReanchorOptions): Anchor {
   return {
     id: options.id ?? createId('anc'),
@@ -229,45 +280,22 @@ export function reanchor(previous: Anchor, next: Snapshot, options: ReanchorOpti
   const window = Number.isFinite(options.window)
     ? Math.max(0, Math.trunc(options.window as number))
     : DEFAULT_WINDOW;
-  const maxStart = lines.length - quoteLines.length + 1;
-  const from = Math.max(1, expected - window);
-  const to = Math.min(maxStart, expected + window);
 
-  let best: Candidate | undefined;
-  let tied = false;
-  for (let start = from; start <= to; start += 1) {
-    let matches = true;
-    for (let offset = 0; offset < quoteLines.length; offset += 1) {
-      const line = lines[start - 1 + offset];
-      if (line === undefined || normalizeLine(line) !== quoteLines[offset]) {
-        matches = false;
-        break;
-      }
-    }
-    if (!matches) continue;
-
-    const distance = Math.abs(start - expected);
-    const score =
-      3 +
-      (contextMatches(lines, previous.contextBefore, start, quoteLines.length, 'before') ? 1 : 0) +
-      (contextMatches(lines, previous.contextAfter, start, quoteLines.length, 'after') ? 1 : 0) +
-      Math.max(0, 1 - distance / (window + 1));
-    if (
-      best === undefined ||
-      score > best.score ||
-      (score === best.score && distance < best.distance)
-    ) {
-      best = { start, score, distance };
-      tied = false;
-    } else if (score === best.score && distance === best.distance) {
-      tied = true;
+  let quote = previous.quote;
+  let best = findCandidate(lines, quoteLines, expected, window, previous);
+  if (best === undefined && options.fallbackQuote !== undefined) {
+    const fallbackLines = normalizeQuoteLines(options.fallbackQuote);
+    if (fallbackLines.length > 0 && lines.length >= fallbackLines.length) {
+      best = findCandidate(lines, fallbackLines, expected, window, previous);
+      if (best !== undefined) quote = options.fallbackQuote;
     }
   }
 
   if (best === undefined) return outdated(previous, file, options);
 
+  const quoteLinesForAnchor = normalizeQuoteLines(quote);
   const lineStart = best.start;
-  const lineEnd = lineStart + quoteLines.length - 1;
+  const lineEnd = lineStart + quoteLinesForAnchor.length - 1;
   return {
     id: options.id ?? createId('anc'),
     round: options.round,
@@ -275,12 +303,12 @@ export function reanchor(previous: Anchor, next: Snapshot, options: ReanchorOpti
     side: previous.side,
     lineStart,
     lineEnd,
-    quote: previous.quote,
+    quote,
     contextBefore: contextBefore(lines, lineStart),
     contextAfter: contextAfter(lines, lineEnd),
     hunkHeader: hunkHeaderFor(file.hunks, lineStart, 'new'),
-    contentHash: hashQuote(previous.quote),
-    state: tied ? 'ambiguous' : 'active',
+    contentHash: hashQuote(quote),
+    state: best.tied ? 'ambiguous' : 'active',
     previous: position(previous),
   };
 }

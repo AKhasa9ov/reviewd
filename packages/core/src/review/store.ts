@@ -7,7 +7,7 @@ import { fold } from './fold.js';
 import type { Snapshot } from '../types.js';
 import type { Comment, ReviewId, ReviewState, ReviewStatus, ReviewSummary } from './types.js';
 
-interface StoreOptions {
+export interface ReviewStoreOptions {
   now?: () => Date;
   newId?: (prefix: string) => string;
 }
@@ -282,7 +282,7 @@ export class ReviewStore {
     this.lockCreatedAt = lockCreatedAt;
   }
 
-  static async open(root: string, options: StoreOptions = {}): Promise<ReviewStore> {
+  static async open(root: string, options: ReviewStoreOptions = {}): Promise<ReviewStore> {
     const absolute = resolve(root);
     await mkdir(absolute, { recursive: true });
     const lockPath = join(absolute, 'lock');

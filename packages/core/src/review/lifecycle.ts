@@ -25,7 +25,8 @@ export type ReviewLifecycleErrorCode =
   | 'duplicate-round'
   | 'round-order'
   | 'comment-not-found'
-  | 'snapshot-mismatch';
+  | 'snapshot-mismatch'
+  | 'invalid-input';
 
 export class ReviewLifecycleError extends Error {
   readonly code: ReviewLifecycleErrorCode;
@@ -54,6 +55,11 @@ function findComment(state: ReviewState, commentId: string): Comment {
     });
   }
   return comment;
+}
+
+export interface RefreshResult {
+  round: Round;
+  comments: Comment[];
 }
 
 /**
@@ -235,7 +241,7 @@ export class ReviewLifecycle {
     const state = await this.requireOpen(reviewId);
     findComment(state, commentId);
     if (body.trim() === '') {
-      throw new Error('reply body must be non-empty');
+      throw new ReviewLifecycleError('invalid-input', 'reply body must be non-empty', { reviewId });
     }
 
     const reply = {
@@ -302,11 +308,7 @@ export class ReviewLifecycle {
     return this.get(reviewId);
   }
 
-  async refresh(
-    reviewId: ReviewId,
-    snapshot: Snapshot,
-    actor: Actor,
-  ): Promise<{ round: Round; comments: Comment[] }> {
+  async refresh(reviewId: ReviewId, snapshot: Snapshot, actor: Actor): Promise<RefreshResult> {
     const state = await this.requireOpen(reviewId);
     const round = await this.addRound(reviewId, snapshot, actor);
     const comments = structuredClone(state.comments);
@@ -317,6 +319,9 @@ export class ReviewLifecycle {
       const anchor = reanchor(previous, snapshot, {
         round: round.no,
         id: createId('anc', this.now),
+        ...(comment.suggestion === undefined
+          ? {}
+          : { fallbackQuote: comment.suggestion.replacement }),
       });
       const outcome = deriveOutcome(previous, anchor, snapshot, comment.suggestion);
       await this.store.append(
