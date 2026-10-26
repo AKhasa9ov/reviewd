@@ -1,6 +1,6 @@
 import { createHash, type Hash } from 'node:crypto';
-import { createReadStream } from 'node:fs';
-import { lstat, readlink } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { lstat, open, readlink } from 'node:fs/promises';
 import type { DiffScope, ResolvedScope } from '../types.js';
 import { hasSymlinkParent, safeJoin } from '../paths.js';
 import { resolveRepoRoot } from './repo.js';
@@ -146,46 +146,115 @@ function isAborted(signal?: AbortSignal): boolean {
   return signal?.aborted === true;
 }
 
-async function hashUntrackedFile(
-  hash: Hash,
+const DIGEST_DOMAIN = Buffer.from('dsh-worktree-digest-v2\0', 'utf8');
+const RECORD_DOMAIN = Buffer.from('dsh-untracked-record-v2\0', 'utf8');
+const TAG_STATUS = 1;
+const TAG_DIFF = 2;
+const TAG_UNTRACKED = 3;
+const FIELD_TYPE = 1;
+const FIELD_PATH = 2;
+const FIELD_CONTENT = 3;
+const TYPE_FILE = 1;
+const TYPE_SYMLINK = 2;
+const TYPE_UNREADABLE = 3;
+const UNREADABLE = Buffer.from('unreadable', 'utf8');
+
+function updateFramedHeader(hash: Hash, tag: number, length: number): void {
+  const header = Buffer.alloc(9);
+  header.writeUInt8(tag, 0);
+  header.writeBigUInt64BE(BigInt(length), 1);
+  hash.update(header);
+}
+
+function updateFramed(hash: Hash, tag: number, data: Buffer): void {
+  updateFramedHeader(hash, tag, data.length);
+  hash.update(data);
+}
+
+function newRecord(): Hash {
+  return createHash('sha256').update(RECORD_DOMAIN);
+}
+
+function recordPrefix(type: number, pathBytes: Buffer): Hash {
+  const record = newRecord();
+  updateFramed(record, FIELD_TYPE, Buffer.from([type]));
+  updateFramed(record, FIELD_PATH, pathBytes);
+  return record;
+}
+
+function unreadableRecord(pathBytes: Buffer): Buffer {
+  const record = recordPrefix(TYPE_UNREADABLE, pathBytes);
+  updateFramed(record, FIELD_CONTENT, UNREADABLE);
+  return record.digest();
+}
+
+function symlinkRecord(pathBytes: Buffer, target: Buffer): Buffer {
+  const record = recordPrefix(TYPE_SYMLINK, pathBytes);
+  updateFramed(record, FIELD_CONTENT, target);
+  return record.digest();
+}
+
+function fileRecord(pathBytes: Buffer, size: number): Hash {
+  const record = recordPrefix(TYPE_FILE, pathBytes);
+  updateFramedHeader(record, FIELD_CONTENT, size);
+  return record;
+}
+
+async function untrackedRecord(
   repoRoot: string,
   path: string,
   signal?: AbortSignal,
-): Promise<void> {
+): Promise<Buffer> {
   if (isAborted(signal)) throw abortedError();
   const absolute = safeJoin(repoRoot, path);
-  if (await hasSymlinkParent(repoRoot, path)) {
-    hash.update('unreadable');
-    return;
-  }
+  const pathBytes = Buffer.from(path, 'utf8');
+  if (await hasSymlinkParent(repoRoot, path)) return unreadableRecord(pathBytes);
 
   let info;
   try {
     info = await lstat(absolute);
   } catch {
-    hash.update('unreadable');
-    return;
+    return unreadableRecord(pathBytes);
   }
   if (isAborted(signal)) throw abortedError();
 
-  try {
-    if (info.isSymbolicLink()) {
+  if (info.isSymbolicLink()) {
+    try {
       const target = await readlink(absolute, { encoding: 'buffer' });
       if (isAborted(signal)) throw abortedError();
-      hash.update(target);
-      hash.update('\n');
-      return;
+      return symlinkRecord(pathBytes, target);
+    } catch {
+      if (isAborted(signal)) throw abortedError();
+      return unreadableRecord(pathBytes);
     }
-    if (!info.isFile()) {
-      hash.update('unreadable');
-      return;
+  }
+
+  let handle;
+  try {
+    handle = await open(absolute, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    const stat = await handle.stat();
+    if (!stat.isFile()) return unreadableRecord(pathBytes);
+    const record = fileRecord(pathBytes, stat.size);
+    if (stat.size > 0) {
+      let read = 0;
+      const stream = handle.createReadStream({
+        start: 0,
+        end: stat.size - 1,
+        autoClose: false,
+        signal,
+      });
+      for await (const chunk of stream) {
+        record.update(chunk);
+        read += chunk.length;
+      }
+      if (read !== stat.size) return unreadableRecord(pathBytes);
     }
-    for await (const chunk of createReadStream(absolute, { signal })) {
-      hash.update(chunk);
-    }
+    return record.digest();
   } catch {
     if (isAborted(signal)) throw abortedError();
-    hash.update('unreadable');
+    return unreadableRecord(pathBytes);
+  } finally {
+    if (handle !== undefined) await handle.close().catch(() => undefined);
   }
 }
 
@@ -217,21 +286,21 @@ async function worktreeDigestState(
   const untracked = await runGit(repoRoot, ['ls-files', '--others', '--exclude-standard', '-z'], {
     signal,
     maxBytes: 8 * 1024 * 1024,
+    truncateOnOverflow: true,
   });
-  const hash = createHash('sha256').update(status.stdout).update('\0').update(diff.stdout);
+  const hash = createHash('sha256').update(DIGEST_DOMAIN);
+  updateFramed(hash, TAG_STATUS, status.stdoutBytes);
+  updateFramed(hash, TAG_DIFF, diff.stdoutBytes);
   const paths = untracked.stdout
     .split('\0')
     .filter((path) => path.length > 0)
     .sort(compareBytePaths);
   for (const path of paths) {
-    hash.update('\0');
-    hash.update(path);
-    hash.update('\0');
-    await hashUntrackedFile(hash, repoRoot, path, signal);
+    updateFramed(hash, TAG_UNTRACKED, await untrackedRecord(repoRoot, path, signal));
   }
   return {
     hash: hash.digest('hex'),
-    truncated: status.truncated === true || diff.truncated === true,
+    truncated: status.truncated === true || diff.truncated === true || untracked.truncated === true,
   };
 }
 

@@ -79,17 +79,22 @@ Limits: 2 MiB of diff text, 500 files, 20 000 lines per file, 1 MiB of content p
 64 MiB of content per snapshot. `totals.truncated` is true for diff, file-count or
 content-budget truncation. A file cut by the diff cap remains visible as an `oversized`
 synthetic entry; every changed path wholly beyond the cap is recovered from one `--raw -z`
-metadata call as a `truncated`/`diff-truncated` entry with no content or hash. Reports include
+metadata call as a `truncated`/`diff-truncated` entry with no content or hash. Backfilled
+entries report `binary:false` because their content was not read; treat `truncated` and
+`reason:"diff-truncated"` as authoritative. Reports include
 `diff-truncated`, `diff-file-truncated:<path>`, `diff-file-skipped:<path>`,
 `files-truncated`, `content-budget-truncated`, `worktree-digest-truncated`,
 `symlink-not-followed:<path>` and `unreadable:<path>` where relevant.
 `scope.worktreeDigestTruncated` is present when the digest itself had to be computed from
-truncated status/diff output.
+truncated status/diff output or an overflowing untracked path listing.
 
-For a worktree, `worktreeDigest` also hashes untracked file contents. Paths are sorted by
-UTF-8 bytes, regular files are streamed, symlinks hash their link target rather than the
-target contents, and unreadable or raced paths hash a stable marker. Untracked content is not
-subject to the snapshot content caps.
+For a worktree, `worktreeDigest` also hashes untracked file contents. The digest is versioned
+and length-framed: status/diff byte fields and per-file records carry explicit tags and byte
+lengths, and per-file records distinguish regular files, symlinks and unreadable paths. Paths
+are sorted by UTF-8 bytes; regular files are opened with `O_NOFOLLOW` and streamed from the
+handle; symlinks hash their link target rather than the target contents; unreadable or raced
+paths hash a stable marker. The untracked path list is capped at 8 MiB (overflow sets
+`worktreeDigestTruncated`), while untracked content itself is not capped.
 
 The human output prefixes the change letter with `I` (ignored), `B` (binary) or `L`
 (oversized), for example `IM src/a.ts` or `B? image.bin`.

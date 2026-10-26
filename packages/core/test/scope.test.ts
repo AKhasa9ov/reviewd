@@ -166,6 +166,59 @@ describe('resolveScope', () => {
     expect(second).toBe(first);
   });
 
+  it('does not collide untracked path and content boundaries', async () => {
+    const repo = await makeRepo();
+    cleanups.push(repo.cleanup);
+    await repo.write('base.txt', 'base\n');
+    const baseSha = await repo.commit('base');
+
+    await repo.writeBytes('p1.txt', Buffer.from('x\0p2.txt\0y', 'utf8'));
+    await repo.write('p2.txt', 'z');
+    const first = await worktreeDigest(repo.root, baseSha);
+
+    await repo.write('p1.txt', 'x');
+    await repo.writeBytes('p2.txt', Buffer.from('y\0p2.txt\0z', 'utf8'));
+    const second = await worktreeDigest(repo.root, baseSha);
+
+    expect(second).not.toBe(first);
+  });
+
+  it('distinguishes a symlink from a regular file with its target bytes', async () => {
+    const repo = await makeRepo();
+    cleanups.push(repo.cleanup);
+    await repo.write('base.txt', 'base\n');
+    const baseSha = await repo.commit('base');
+    const path = join(repo.root, 'p.txt');
+
+    await symlink('x', path);
+    const symlinkDigest = await worktreeDigest(repo.root, baseSha);
+    await rm(path);
+    await repo.write('p.txt', 'x\n');
+    const fileDigest = await worktreeDigest(repo.root, baseSha);
+
+    expect(fileDigest).not.toBe(symlinkDigest);
+  });
+
+  it('distinguishes the unreadable marker from literal content', async () => {
+    if (process.getuid?.() === 0) return;
+    const repo = await makeRepo();
+    cleanups.push(repo.cleanup);
+    await repo.write('base.txt', 'base\n');
+    const baseSha = await repo.commit('base');
+    const path = join(repo.root, 'p.txt');
+    await repo.write('p.txt', 'unreadable');
+    await chmod(path, 0o000);
+    let unreadableDigest: string;
+    try {
+      unreadableDigest = await worktreeDigest(repo.root, baseSha);
+    } finally {
+      await chmod(path, 0o600);
+    }
+    const literalDigest = await worktreeDigest(repo.root, baseSha);
+
+    expect(literalDigest).not.toBe(unreadableDigest);
+  });
+
   it('hashes symlink targets without reading them', async () => {
     const repo = await makeRepo();
     cleanups.push(repo.cleanup);

@@ -305,6 +305,7 @@ describe('buildSnapshot', () => {
 
     expect(result.files.map((file) => file.path)).toEqual(['a.txt', 'z.txt']);
     expect(last?.status).toBe('added');
+    expect(last?.binary).toBe(false);
     expect(last?.truncated).toBe(true);
     expect(last?.reason).toBe('diff-truncated');
     expect(last?.hunks).toEqual([]);
