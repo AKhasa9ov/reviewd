@@ -543,6 +543,57 @@ describe('ReviewServiceImpl', () => {
     expect(calls).toBe(2);
   });
 
+  it('rejects a refresh while the reviewer is active', async () => {
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const backend: ReviewerBackend = {
+      kind: 'fake',
+      async run() {
+        await gate;
+        return report([]);
+      },
+    };
+    const h = await harness({ backend });
+    const view = await h.service.create(
+      {
+        repoRoot: '/tmp/repo',
+        title: 'Busy refresh',
+        scope: h.scope,
+        reviewer: { backend: 'fake' },
+      },
+      { actor },
+    );
+    const first = h.service.runReviewer(view.review.id, { actor });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    await expectError(h.service.refresh(view.review.id, {}, { actor }), 'agent-busy');
+    release?.();
+    await first;
+  });
+
+  it('rejects fix claims for a closed review', async () => {
+    const h = await harness();
+    const view = await h.service.create(
+      { repoRoot: '/tmp/repo', title: 'Closed claims', scope: h.scope },
+      { actor },
+    );
+    const comment = await h.service.addComment(
+      view.review.id,
+      { body: 'Fix me', path: 'src/a.ts', side: 'new', lineStart: 2 },
+      { actor },
+    );
+    await h.service.close(view.review.id, 'closed', { actor });
+    await expectError(
+      h.service.claimFixStatus(
+        view.review.id,
+        { items: [{ commentId: comment.comment.id, status: 'fixed' }] },
+        { actor },
+      ),
+      'conflict',
+    );
+  });
+
   it('rejects a reviewer while another run is active', async () => {
     let release: (() => void) | undefined;
     const gate = new Promise<void>((resolve) => {

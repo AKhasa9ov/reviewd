@@ -55,6 +55,10 @@ function clone<T>(value: T): T {
   return structuredClone(value);
 }
 
+function agentIsActive(review: ReviewState): boolean {
+  return review.agent?.status === 'queued' || review.agent?.status === 'running';
+}
+
 function scopeFromSnapshot(snapshot: Snapshot): DiffScope {
   const scope = snapshot.scope;
   if (scope.kind === 'worktree') return { kind: 'worktree', baseRef: scope.baseRef ?? 'HEAD' };
@@ -398,6 +402,9 @@ export class ReviewServiceImpl implements ReviewService {
       if (review.status === 'closed') {
         throw new ReviewError('conflict', `review is closed: ${id}`, { id });
       }
+      if (this.running.has(id) || agentIsActive(review)) {
+        throw new ReviewError('agent-busy', `a reviewer is active for ${id}`, { id });
+      }
       const latest = await this.latestSnapshotOrThrow(review);
       const scope = input.scope ?? scopeFromSnapshot(latest);
       let snapshot: Snapshot;
@@ -437,6 +444,9 @@ export class ReviewServiceImpl implements ReviewService {
         throw new ReviewError('validation', 'items must be a non-empty array');
       }
       const review = await this.requireReview(id);
+      if (review.status === 'closed') {
+        throw new ReviewError('conflict', `review is closed: ${id}`, { id });
+      }
       const known = new Set(review.comments.map((comment) => comment.id));
       const claims = input.items.map((item) => {
         if (!['fixed', 'not-fixed', 'unclear'].includes(item.status)) {
@@ -592,7 +602,7 @@ export class ReviewServiceImpl implements ReviewService {
     const active = this.active.get(id);
     if (active === undefined) {
       const review = await this.requireReview(id);
-      if (review.agent?.status === 'running') {
+      if (agentIsActive(review)) {
         throw new ReviewError('conflict', `reviewer is not owned by this service instance`, {
           id,
         });
@@ -608,7 +618,7 @@ export class ReviewServiceImpl implements ReviewService {
     if (review.status === 'closed') {
       throw new ReviewError('stale-review', `review is closed: ${id}`, { id });
     }
-    if (review.agent?.status === 'running') {
+    if (agentIsActive(review)) {
       throw new ReviewError('agent-busy', `a reviewer is already running for ${id}`, { id });
     }
     const round = review.rounds.at(-1);

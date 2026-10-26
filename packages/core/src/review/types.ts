@@ -101,7 +101,7 @@ export interface SubmissionRecord {
   createdAt: string;
 }
 
-export type AgentStatus = 'running' | 'done' | 'failed' | 'skipped';
+export type AgentStatus = 'queued' | 'running' | 'done' | 'failed' | 'skipped';
 
 export interface AgentState {
   status: AgentStatus;
