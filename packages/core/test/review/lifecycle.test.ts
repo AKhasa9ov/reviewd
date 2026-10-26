@@ -408,6 +408,32 @@ describe('ReviewLifecycle', () => {
     });
   });
 
+  it('stores deterministic outcomes for re-anchored comments', async () => {
+    const store = await openStore();
+    const lifecycle = new ReviewLifecycle(store);
+    const review = await lifecycle.create({ title: 'Outcomes', repoRoot: '/tmp/repo', actor });
+    await lifecycle.addRound(review.id, snapshot(six), reviewer);
+    const comment = await lifecycle.addComment(
+      review.id,
+      { body: 'Line three', path: 'src/a.ts', side: 'new', lineStart: 3 },
+      actor,
+    );
+
+    const result = await lifecycle.refresh(
+      review.id,
+      snapshot(shifted, { baseSha: 'c'.repeat(40), headSha: 'd'.repeat(40) }),
+      reviewer,
+    );
+
+    expect(result.comments[0]?.outcomes).toEqual([
+      { round: 2, status: 'moved', confidence: 'high' },
+    ]);
+    const stored = await lifecycle.get(review.id);
+    expect(stored.comments[0]?.id).toBe(comment.id);
+    expect(stored.comments[0]?.outcomes).toEqual(result.comments[0]?.outcomes);
+    expect(stored.comments[0]?.anchors).toHaveLength(2);
+  });
+
   it('reads snapshots and reports missing or corrupt files as not found', async () => {
     const store = await openStore();
     await expect(store.readSnapshot('snap_missing')).rejects.toBeInstanceOf(ReviewNotFoundError);

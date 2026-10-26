@@ -43,8 +43,16 @@ function normalizeLine(line: string): string {
   return line.replace(/\r$/, '').replace(/[ \t]+$/, '');
 }
 
-function normalizeQuote(quote: string): string[] {
-  return quote.split('\n').map(normalizeLine);
+/**
+ * Normalizes a quoted block for comparisons: LF line endings and no trailing
+ * horizontal whitespace per line. Internal spacing and indentation are kept.
+ */
+export function normalizeQuote(quote: string): string {
+  return quote.split('\n').map(normalizeLine).join('\n');
+}
+
+function normalizeQuoteLines(quote: string): string[] {
+  return normalizeQuote(quote).split('\n');
 }
 
 function hashQuote(quote: string): string {
@@ -210,7 +218,7 @@ export function reanchor(previous: Anchor, next: Snapshot, options: ReanchorOpti
   const lines = file.newLines;
   if (lines === undefined || lines.length === 0) return outdated(previous, file, options);
 
-  const quoteLines = normalizeQuote(previous.quote);
+  const quoteLines = normalizeQuoteLines(previous.quote);
   if (quoteLines.length === 0 || lines.length < quoteLines.length) {
     return outdated(previous, file, options);
   }

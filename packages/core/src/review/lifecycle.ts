@@ -1,6 +1,7 @@
 import { captureAnchor, AnchorError, reanchor } from './anchors.js';
 import { createEvent } from './events.js';
 import { createId } from './ids.js';
+import { deriveOutcome } from './outcomes.js';
 import { ReviewNotFoundError } from './store.js';
 import type { ReviewStore } from './store.js';
 import type {
@@ -317,19 +318,21 @@ export class ReviewLifecycle {
         round: round.no,
         id: createId('anc', this.now),
       });
+      const outcome = deriveOutcome(previous, anchor, snapshot, comment.suggestion);
       await this.store.append(
         reviewId,
         createEvent({
           reviewId,
           type: 'comment/anchor',
           actor,
-          data: { commentId: comment.id, anchor },
+          data: { commentId: comment.id, anchor, outcome },
           now: this.now,
         }),
       );
       const index = comment.anchors.findIndex((candidate) => candidate.round === anchor.round);
       if (index < 0) comment.anchors.push(anchor);
       else comment.anchors[index] = anchor;
+      comment.outcomes.push(outcome);
     }
 
     return { round, comments };
