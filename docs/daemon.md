@@ -28,7 +28,8 @@ server from the CLI. It prints `reviewd listening on <url>` and shuts down on SI
 
 Machine clients send `Authorization: Bearer <token>`. Browsers obtain an HttpOnly
 `cr_session` cookie (HMAC-SHA256, SameSite=Strict, 30 days, `Secure` when the public URL is
-HTTPS) from `POST /api/auth { "token": "..." }` and clear it with
+HTTPS) from `POST /api/auth` with either `{ "token": "..." }` or a browser
+`application/x-www-form-urlencoded` form (`token=...`), and clear it with
 `POST /api/auth/logout`. `GET /api/health` and `GET /api/version` need no token.
 Mutations are rejected when `Origin`/`Sec-Fetch-Site` is cross-origin. There is no CORS.
 
@@ -44,39 +45,39 @@ Codes: `unauthorized`, `forbidden`, `not-found`, `validation`, `conflict`, `stal
 
 ## Endpoints
 
-| Method | Path                                        | Notes                                                              |
-| ------ | ------------------------------------------- | ------------------------------------------------------------------ |
-| GET    | `/api/health`                               | `{status, store:{writable}, git, queue, jobs, workers, version}`   |
-| GET    | `/api/version`                              | daemon and schema versions                                         |
-| POST   | `/api/auth`                                 | body `{token}`; sets cookie                                        |
-| POST   | `/api/auth/logout`                          | clears cookie                                                      |
-| GET    | `/api/config/public`                        | public URL, limits, default base                                   |
-| GET    | `/api/repos/branches?path=`                 | validates the repo and returns branch names                        |
-| POST   | `/api/reviews`                              | `{repoRoot,title,scope,reviewer}`; returns `{review,url,warnings}` |
-| GET    | `/api/reviews`                              | `status`, `limit`, `offset`                                        |
-| GET    | `/api/reviews/:id`                          | `{review,latestSnapshot,report}`                                   |
-| GET    | `/api/reviews/:id/snapshot?round=&file=`    | round diff; `file` lazily selects one file                         |
-| POST   | `/api/reviews/:id/comments`                 | body, path, side, lineStart/lineEnd, optional suggestion           |
-| POST   | `/api/reviews/:id/comments/:cid/replies`    | `{body}`                                                           |
-| PATCH  | `/api/reviews/:id/comments/:cid`            | `{state: open\|resolved\|dismissed}`                               |
-| POST   | `/api/reviews/:id/comments/:cid/suggestion` | `{action: accept\|decline\|apply}`                                 |
-| POST   | `/api/reviews/:id/refresh`                  | optional `{scope}`; appends a round                                |
-| POST   | `/api/reviews/:id/submit`                   | `{verdict,summary?,includeResolved?,harness?}`                     |
-| POST   | `/api/reviews/:id/close`                    | `{verdict: approved\|closed}`                                      |
-| POST   | `/api/reviews/:id/fix-status`               | `{items:[{commentId,status,evidence?}]}`                           |
-| POST   | `/api/reviews/:id/agent/cancel`             | cancels queued/leased jobs                                         |
-| GET    | `/api/reviews/:id/events?after=`            | long-poll (default 25s) or SSE with `Accept`                       |
-| GET    | `/api/events?after=`                        | global long-poll/SSE stream                                        |
-| POST   | `/api/workers/register`                     | `{name?,harness?}`; returns worker + lease timings                 |
-| POST   | `/api/workers/:id/heartbeat`                | liveness and lease extension                                       |
-| GET    | `/api/jobs/next?workerId=&wait=25`          | long-poll; `204` on timeout                                        |
-| POST   | `/api/jobs/:id/findings`                    | `{attemptId,findings[]}` idempotent by finding id                  |
-| POST   | `/api/jobs/:id/report`                      | `{attemptId,report}` idempotent by attempt id                      |
-| POST   | `/api/jobs/:id/fail`                        | `{attemptId,code,message,retryable}`                               |
-| GET    | `/api/deliveries/pending?harness=dsh`       | reconnect recovery                                                 |
-| POST   | `/api/deliveries/:id/ack`                   | `{by}`                                                             |
-| POST   | `/api/deliveries/:id/fail`                  | `{error}`                                                          |
-| POST   | `/api/gc`                                   | `{olderThanDays}`; closed reviews and unreferenced snapshots       |
+| Method | Path                                        | Notes                                                               |
+| ------ | ------------------------------------------- | ------------------------------------------------------------------- |
+| GET    | `/api/health`                               | probes store/git; `200` healthy or `503` degraded                   |
+| GET    | `/api/version`                              | daemon and schema versions                                          |
+| POST   | `/api/auth`                                 | body `{token}`; sets cookie                                         |
+| POST   | `/api/auth/logout`                          | clears cookie                                                       |
+| GET    | `/api/config/public`                        | public URL, limits, default base                                    |
+| GET    | `/api/repos/branches?path=`                 | validates the repo and returns branch names                         |
+| POST   | `/api/reviews`                              | `{repoRoot,title,scope,reviewer}`; returns `{review,url,warnings}`  |
+| GET    | `/api/reviews`                              | `status`, `limit`, `offset`                                         |
+| GET    | `/api/reviews/:id`                          | `{review,latestSnapshot,report}`                                    |
+| GET    | `/api/reviews/:id/snapshot?round=&file=`    | round diff; `file` lazily selects one file                          |
+| POST   | `/api/reviews/:id/comments`                 | body, path, side, lineStart/lineEnd, optional suggestion            |
+| POST   | `/api/reviews/:id/comments/:cid/replies`    | `{body}`                                                            |
+| PATCH  | `/api/reviews/:id/comments/:cid`            | `{state: open\|resolved\|dismissed}`                                |
+| POST   | `/api/reviews/:id/comments/:cid/suggestion` | `{action: accept\|decline\|apply}`                                  |
+| POST   | `/api/reviews/:id/refresh`                  | optional `{scope}`; appends a round                                 |
+| POST   | `/api/reviews/:id/submit`                   | `{verdict,summary?,includeResolved?,harness?}`                      |
+| POST   | `/api/reviews/:id/close`                    | `{verdict: approved\|closed}`                                       |
+| POST   | `/api/reviews/:id/fix-status`               | `{items:[{commentId,status,evidence?}]}`                            |
+| POST   | `/api/reviews/:id/agent/cancel`             | cancels queued/leased jobs                                          |
+| GET    | `/api/reviews/:id/events?after=`            | long-poll (default 25s) or SSE with `Accept`                        |
+| GET    | `/api/events?after=`                        | global long-poll/SSE stream                                         |
+| POST   | `/api/workers/register`                     | `{name?,harness?}`; returns worker + lease timings                  |
+| POST   | `/api/workers/:id/heartbeat`                | liveness and lease extension                                        |
+| GET    | `/api/jobs/next?workerId=&wait=25`          | long-poll; `204` on timeout                                         |
+| POST   | `/api/jobs/:id/findings`                    | `{attemptId,findings[]}` idempotent by finding id                   |
+| POST   | `/api/jobs/:id/report`                      | `{attemptId,report}` idempotent by attempt id                       |
+| POST   | `/api/jobs/:id/fail`                        | `{attemptId,code,message,retryable}`                                |
+| GET    | `/api/deliveries/pending?harness=dsh`       | reconnect recovery                                                  |
+| POST   | `/api/deliveries/:id/ack`                   | `{by}`                                                              |
+| POST   | `/api/deliveries/:id/fail`                  | `{error}`                                                           |
+| POST   | `/api/gc`                                   | `{olderThanDays}`; closed-by-age reviews and unreferenced snapshots |
 
 ### Curl example
 
@@ -92,8 +93,16 @@ curl -sS -H "Authorization: Bearer $CODE_REVIEW_TOKEN" \
 `GET /api/reviews/:id/events` returns `{events, latestSeq}` for a long-poll, or an SSE
 stream (`id: <reviewId>:<seq>`, `event: <type>`, `data: <event>`) when
 `Accept: text/event-stream` is present. Reconnect with `Last-Event-ID: <reviewId>:<seq>` or
-`?after=<seq>`. The in-memory buffer keeps the last 1000 events per review and globally;
-the review event log remains authoritative. Heartbeats are sent every 15 seconds.
+`?after=<seq>`. Review cursors use the per-review event sequence.
+
+The global stream (`GET /api/events`) uses a separate, monotonically increasing
+daemon-wide cursor. Its SSE ids are `<reviewId>:<globalSeq>`, and a long-poll returns
+`{events:[{reviewId,event,seq}]}`. Reconnect with that global `seq`; do not mix it with a
+review cursor. Before replaying, both streams sync the event log for the requested review
+(or every review for the global stream), so a client reconnecting after a daemon restart
+still receives historical events rather than only new ones. The in-memory buffer keeps the
+last 1000 events per review and globally; the event log remains authoritative. Heartbeats
+are sent every 15 seconds.
 
 ### Jobs and workers
 
@@ -109,12 +118,21 @@ The job bundle contains `prompt`, the read-only snapshot diff, `schema` and `met
 Workers should treat it as read-only and send a `validateReport`-compatible report
 (`schemaVersion: 1`).
 
+The opt-in `command` backend runs an argv array without a shell. It receives only a minimal
+environment (`PATH`, `HOME`, `LANG`/`LC_*`, `TMPDIR`/`TMP`/`TEMP` and `REVIEW_*`) plus
+explicitly configured overrides; credentials such as `CODE_REVIEW_TOKEN` are not inherited.
+Its stdout and output file are both capped by `maxOutputBytes`, and a timeout or cancel
+kills the whole process group so child processes cannot outlive the reviewer.
+
 ### Deliveries
 
 `submit` creates a delivery with key `reviewId:round:submissionId`. The initiating harness
 reads `GET /api/deliveries/pending?harness=dsh`, injects the markdown/JSON feedback into
 the originating agent session, then calls `ack` (or `fail`). Pending deliveries are
-recoverable after a reconnect; ack/fail are idempotent and never expose the token.
+recoverable after a reconnect; ack/fail are idempotent and never expose the token. Pending
+and acknowledged deliveries are persisted atomically in `deliveries.json` under the store
+root, so a daemon restart does not lose a queued submission or resurrect an acknowledged
+one.
 
 ## CLI
 

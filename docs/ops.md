@@ -150,7 +150,11 @@ rebuilt.
 
 ## 6. Retention and garbage collection
 
-Reviews are retained until `review gc` removes closed reviews and unreferenced snapshots:
+Reviews are retained until `review gc` removes reviews closed longer ago than the cutoff,
+plus snapshots no remaining review references. GC rebuilds state from `events.jsonl` when a
+`snapshot.json` cache is missing or stale, uses `closedAt` when present (falling back to
+`createdAt` for older reviews), and never removes a snapshot that a still-present review
+references:
 
 ```bash
 # Against a local daemon, with the same token:
@@ -206,10 +210,12 @@ docker compose ps
 curl -fsS http://127.0.0.1:3100/api/health | jq .
 ```
 
-`/api/health` is public and reports store writability, git availability, queue/job
-counts, worker count and version. A `healthy` container means the process is up and the
-store is writable, not that a reviewer worker is online or that a review has been
-reviewed.
+`/api/health` is public and actively probes store writability and git availability in
+addition to queue/job counts, worker count and version. It returns `503` with
+`status: "degraded"` when the store cannot be written or git is unavailable, so the Docker
+healthcheck fails instead of reporting a false positive. A `healthy` container means the
+process is up, the store is writable and git works; it does not mean a reviewer worker is
+online or that every review has been reviewed.
 
 ## 9. Failure recovery
 

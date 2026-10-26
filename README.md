@@ -129,7 +129,8 @@ The browser suite runs axe WCAG 2.1 A/AA checks and fails on serious or critical
   loopback or a private network. There are no per-user accounts or token revocation lists.
 - Reviewer output and comments are untrusted data. Rendering is safe text/code; reviewer
   tools deny `write`/`edit`; command backends run as a trusted operator boundary with
-  `shell:false`.
+  `shell:false`, a minimal environment (no inherited `CODE_REVIEW_TOKEN`), bounded output
+  and process-group termination on timeout.
 - Git access removes inherited repository environment, disables external diff/textconv and
   validates paths against the repository root. Symlinks leading outside are not followed.
 - The container runs non-root with a read-only rootfs, all capabilities dropped and a
@@ -232,8 +233,10 @@ const submission = await service.submit(
 console.log(submission.feedback.markdown, submission.deliveryKey);
 ```
 
-All mutations take `CallContext { actor, requestId? }`; repeating the same `requestId` on
-one service instance returns the same result and appends once. Errors are `ReviewError` with
+All mutations take `CallContext { actor, requestId? }`; repeating the same `requestId` for
+the same operation and review on one service instance returns the same result and appends
+once. Concurrent retries are serialized, and a `requestId` reused on a different operation
+or review does not return another route's result. Errors are `ReviewError` with
 `code` in `not-found | validation | conflict | agent-busy | stale-review | internal`.
 
 ### Feedback contract
