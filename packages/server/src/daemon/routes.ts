@@ -1,4 +1,7 @@
+import { randomBytes } from 'node:crypto';
+import { open, unlink } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { join } from 'node:path';
 import {
   CORE_VERSION,
   GitError,
@@ -102,6 +105,36 @@ export function mapError(error: unknown): ApiError {
   if (error instanceof RangeError) return new ApiError('validation', error.message);
   if (error instanceof GitError) return new ApiError('validation', error.message);
   return new ApiError('internal', 'internal server error');
+}
+
+async function probeStore(store: ReviewStore): Promise<boolean> {
+  const probe = join(store.root, `.health-${process.pid}-${randomBytes(6).toString('hex')}`);
+  try {
+    const handle = await open(probe, 'wx');
+    try {
+      await handle.writeFile('ok', 'utf8');
+    } finally {
+      await handle.close();
+    }
+    await unlink(probe);
+    return true;
+  } catch {
+    await unlink(probe).catch(() => undefined);
+    return false;
+  }
+}
+
+async function probeGit(cwd: string): Promise<boolean> {
+  try {
+    const result = await runGit(cwd, ['--version'], {
+      allowFailure: true,
+      maxBytes: 4096,
+      maxStderrBytes: 4096,
+    });
+    return result.code === 0;
+  } catch {
+    return false;
+  }
 }
 
 function str(value: unknown, field: string): string {
@@ -224,10 +257,13 @@ export async function handle(
 
   if (path === '/api/health' && method === 'GET') {
     const queue = ctx.jobs.stats();
-    sendJson(res, 200, {
-      status: 'ok',
-      store: { writable: true },
-      git: { ok: true },
+    const storeWritable = await probeStore(ctx.store);
+    const gitOk = await probeGit(ctx.store.root);
+    const healthy = storeWritable && gitOk;
+    sendJson(res, healthy ? 200 : 503, {
+      status: healthy ? 'ok' : 'degraded',
+      store: { writable: storeWritable },
+      git: { ok: gitOk },
       queue,
       jobs: { queued: queue.queued, running: queue.leased },
       workers: { online: queue.workers },

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { mkdtemp, rm } from 'node:fs/promises';
+import { chmod, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -136,6 +136,39 @@ describe('review daemon auth and transport', () => {
     const unauthorized = await fetch(`${daemonUrl}/api/reviews`);
     expect(unauthorized.status).toBe(401);
     expect(await read(unauthorized)).toMatchObject({ error: { code: 'unauthorized' } });
+  });
+
+  it('reports an unwritable store as unhealthy', async () => {
+    const { daemonUrl, storeDir } = await running();
+    await chmod(storeDir, 0o500);
+    try {
+      const health = await fetch(`${daemonUrl}/api/health`);
+      expect(health.status).toBe(503);
+      expect(await read(health)).toMatchObject({
+        status: 'degraded',
+        store: { writable: false },
+      });
+    } finally {
+      await chmod(storeDir, 0o700);
+    }
+  });
+
+  it('reports missing git as unhealthy', async () => {
+    const { daemonUrl } = await running();
+    const previous = process.env.PATH;
+    process.env.PATH = '/definitely-missing-git-directory';
+    try {
+      const health = await fetch(`${daemonUrl}/api/health`);
+      expect(health.status).toBe(503);
+      expect(await read(health)).toMatchObject({
+        status: 'degraded',
+        store: { writable: true },
+        git: { ok: false },
+      });
+    } finally {
+      if (previous === undefined) delete process.env.PATH;
+      else process.env.PATH = previous;
+    }
   });
 
   it('accepts bearer auth, exchanges the token for a cookie and clears it on logout', async () => {
