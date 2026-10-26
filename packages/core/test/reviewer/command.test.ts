@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -200,6 +200,88 @@ describe('CommandReviewer', () => {
     const result = await backend.run(job(root), () => undefined, new AbortController().signal);
     expect(result.dirtyWorktree).toBe(true);
     expect(calls).toBe(2);
+  });
+
+  it('passes a minimal environment and never leaks credentials', async () => {
+    const previousToken = process.env.CODE_REVIEW_TOKEN;
+    const previousAllowed = process.env.REVIEW_ALLOWED;
+    process.env.CODE_REVIEW_TOKEN = 'top-secret-token';
+    process.env.REVIEW_ALLOWED = 'yes';
+    try {
+      const script = [
+        'if (process.env.CODE_REVIEW_TOKEN !== undefined) process.exit(20);',
+        'if (process.env.REVIEW_ALLOWED !== "yes") process.exit(21);',
+        'if (process.env.PATH === undefined) process.exit(22);',
+        'process.stdout.write(JSON.stringify({schemaVersion:1,summary:"env",riskLevel:"low",',
+        'findings:[],questions:[],tests:{ran:false,commands:[]},verification:[]}));',
+      ].join('');
+      const backend = new CommandReviewer({
+        command: [process.execPath, '-e', script],
+        runGit: cleanGit,
+      });
+      const result = await backend.run(
+        job(await repo()),
+        () => undefined,
+        new AbortController().signal,
+      );
+      expect(result.summary).toBe('env');
+    } finally {
+      if (previousToken === undefined) delete process.env.CODE_REVIEW_TOKEN;
+      else process.env.CODE_REVIEW_TOKEN = previousToken;
+      if (previousAllowed === undefined) delete process.env.REVIEW_ALLOWED;
+      else process.env.REVIEW_ALLOWED = previousAllowed;
+    }
+  });
+
+  it('caps the size of the reviewer output file', async () => {
+    const script = [
+      'require("node:fs").writeFileSync(process.argv[1], JSON.stringify({',
+      'schemaVersion:1,summary:"x".repeat(5000),riskLevel:"low",',
+      'findings:[],questions:[],tests:{ran:false,commands:[]},verification:[]}));',
+    ].join('');
+    const backend = new CommandReviewer({
+      command: [process.execPath, '-e', script, '{outputFile}'],
+      runGit: cleanGit,
+      maxOutputBytes: 1024,
+    });
+    await expect(
+      backend.run(job(await repo()), () => undefined, new AbortController().signal),
+    ).rejects.toMatchObject({ name: 'ReviewerError', code: 'invalid-output' });
+  });
+
+  it('kills descendant processes when the reviewer times out', async () => {
+    const root = await repo();
+    const pidFile = join(root, 'grandchild.pid');
+    const script = [
+      'const {spawn} = require("node:child_process");',
+      'const fs = require("node:fs");',
+      'const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"],',
+      '  {stdio: "ignore"});',
+      `fs.writeFileSync(${JSON.stringify(pidFile)}, String(child.pid));`,
+      'setInterval(() => {}, 1000);',
+    ].join('');
+    const backend = new CommandReviewer({
+      command: [process.execPath, '-e', script],
+      runGit: cleanGit,
+      timeoutMs: 500,
+    });
+    let pid: number | undefined;
+    try {
+      await expect(
+        backend.run(job(root), () => undefined, new AbortController().signal),
+      ).rejects.toMatchObject({ name: 'ReviewerError', code: 'timeout' });
+      pid = Number(await readFile(pidFile, 'utf8'));
+      expect(Number.isSafeInteger(pid) && pid > 0).toBe(true);
+      expect(() => process.kill(pid as number, 0)).toThrow();
+    } finally {
+      if (pid !== undefined) {
+        try {
+          process.kill(pid, 'SIGKILL');
+        } catch {
+          // Already gone.
+        }
+      }
+    }
   });
 
   it('never invokes the command through a shell', async () => {

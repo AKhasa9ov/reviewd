@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, open, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runGit } from '../git/run.js';
@@ -23,6 +23,47 @@ export interface CommandReviewerOptions {
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 const DEFAULT_MAX_OUTPUT_BYTES = 4 * 1024 * 1024;
+const BASE_ENV_KEYS = ['PATH', 'HOME', 'LANG', 'TMPDIR', 'TMP', 'TEMP'] as const;
+const WINDOWS_ENV_KEYS = [
+  'SystemRoot',
+  'ComSpec',
+  'PATHEXT',
+  'USERPROFILE',
+  'APPDATA',
+  'LOCALAPPDATA',
+] as const;
+
+function reviewerEnv(job: ReviewerJob, overrides?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {};
+  const keys =
+    process.platform === 'win32' ? [...BASE_ENV_KEYS, ...WINDOWS_ENV_KEYS] : BASE_ENV_KEYS;
+  for (const key of keys) {
+    const value = process.env[key];
+    if (value !== undefined) env[key] = value;
+  }
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value === undefined) continue;
+    if (key.startsWith('LC_') || key.startsWith('REVIEW_')) env[key] = value;
+  }
+  env.REVIEW_ID = job.reviewId;
+  env.REVIEW_ROUND = String(job.round);
+  env.REVIEW_JOB_ID = job.id;
+  env.REVIEW_REPO = job.repoRoot;
+  return Object.assign(env, overrides);
+}
+
+function killProcess(child: ReturnType<typeof spawn>): void {
+  if (child.pid !== undefined && process.platform !== 'win32') {
+    try {
+      // The child is spawned detached, so a negative pid reaches its whole group.
+      process.kill(-child.pid, 'SIGKILL');
+      return;
+    } catch {
+      // Fall through to the direct child if the group is already gone.
+    }
+  }
+  killProcess(child);
+}
 
 function replacePlaceholders(value: string, values: Record<string, string>): string {
   return value.replace(/\{(promptFile|repo|outputFile|reviewId)\}/g, (_match, key: string) => {
@@ -41,13 +82,33 @@ function lastFencedJson(stdout: string): unknown {
   }
 }
 
-async function parseOutput(outputFile: string, stdout: string): Promise<unknown> {
-  let raw: string | undefined;
+async function readOutputFile(outputFile: string, maxBytes: number): Promise<string | undefined> {
+  let handle;
   try {
-    raw = await readFile(outputFile, 'utf8');
+    handle = await open(outputFile, 'r');
   } catch {
-    raw = undefined;
+    return undefined;
   }
+  try {
+    const info = await handle.stat();
+    if (!info.isFile()) {
+      throw new ReviewerError('invalid-output', 'reviewer output file is not a regular file');
+    }
+    if (info.size > maxBytes) {
+      throw new ReviewerError('invalid-output', `reviewer output file exceeded ${maxBytes} bytes`);
+    }
+    const raw = await handle.readFile({ encoding: 'utf8' });
+    if (Buffer.byteLength(raw) > maxBytes) {
+      throw new ReviewerError('invalid-output', `reviewer output file exceeded ${maxBytes} bytes`);
+    }
+    return raw;
+  } finally {
+    await handle.close();
+  }
+}
+
+async function parseOutput(outputFile: string, stdout: string, maxBytes: number): Promise<unknown> {
+  const raw = await readOutputFile(outputFile, maxBytes);
   if (raw !== undefined && raw.trim() !== '') {
     try {
       return JSON.parse(raw);
@@ -115,7 +176,11 @@ export class CommandReviewer implements ReviewerBackend {
     try {
       const stdout = await this.execute(argv, job, signal);
       const after = await status(runner, job.repoRoot, signal);
-      const parsed = await parseOutput(outputFile, stdout);
+      const parsed = await parseOutput(
+        outputFile,
+        stdout,
+        this.options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES,
+      );
       if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
         throw new ReviewerError('invalid-output', 'reviewer JSON must be an object');
       }
@@ -131,7 +196,7 @@ export class CommandReviewer implements ReviewerBackend {
   }
 
   cancel(): void {
-    this.child?.kill('SIGKILL');
+    if (this.child !== undefined) killProcess(this.child);
   }
 
   private async execute(
@@ -146,14 +211,8 @@ export class CommandReviewer implements ReviewerBackend {
         cwd: job.repoRoot,
         shell: false,
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: {
-          ...process.env,
-          REVIEW_ID: job.reviewId,
-          REVIEW_ROUND: String(job.round),
-          REVIEW_JOB_ID: job.id,
-          REVIEW_REPO: job.repoRoot,
-          ...this.options.env,
-        },
+        detached: process.platform !== 'win32',
+        env: reviewerEnv(job, this.options.env),
       });
       this.child = child;
       const chunks: Buffer[] = [];
@@ -172,12 +231,12 @@ export class CommandReviewer implements ReviewerBackend {
         else resolve(value ?? '');
       };
       const onAbort = (): void => {
-        child.kill('SIGKILL');
+        killProcess(child);
         finish(new ReviewerError('cancelled', 'reviewer was cancelled'));
       };
       const timer = setTimeout(() => {
         timedOut = true;
-        child.kill('SIGKILL');
+        killProcess(child);
         finish(new ReviewerError('timeout', `reviewer timed out after ${timeoutMs}ms`));
       }, timeoutMs);
       signal.addEventListener('abort', onAbort, { once: true });
@@ -193,7 +252,7 @@ export class CommandReviewer implements ReviewerBackend {
       child.stdout.on('data', (chunk: Buffer) => {
         bytes += chunk.length;
         if (bytes > maxOutput) {
-          child.kill('SIGKILL');
+          killProcess(child);
           finish(
             new ReviewerError('invalid-output', `reviewer stdout exceeded ${maxOutput} bytes`),
           );
