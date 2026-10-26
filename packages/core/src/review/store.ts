@@ -258,7 +258,14 @@ function parseReview(
   return { state, eventCount, events };
 }
 
+function shortSha(sha: string | null): string {
+  return sha === null ? 'worktree' : sha.slice(0, 8);
+}
+
 function summary(state: ReviewState): ReviewSummary {
+  const latest = state.rounds.at(-1);
+  const latestClaims = new Map<string, string>();
+  for (const claim of state.fixClaims ?? []) latestClaims.set(claim.commentId, claim.status);
   return {
     id: state.id,
     title: state.title,
@@ -267,6 +274,11 @@ function summary(state: ReviewState): ReviewSummary {
     roundCount: state.rounds.length,
     commentCount: state.comments.length,
     openCommentCount: state.comments.filter((comment) => comment.state === 'open').length,
+    ...(latest === undefined
+      ? { scope: 'no rounds' }
+      : { scope: `${shortSha(latest.baseSha)} → ${shortSha(latest.headSha)}` }),
+    ...(state.createdBy === undefined ? {} : { author: state.createdBy.name }),
+    notFixedCount: [...latestClaims.values()].filter((status) => status === 'not-fixed').length,
   };
 }
 

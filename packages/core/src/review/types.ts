@@ -110,6 +110,8 @@ export interface ReviewState {
   repoRoot: string;
   status: ReviewStatus;
   createdAt: string;
+  /** Human or system actor that opened the review; absent on legacy events. */
+  createdBy?: Actor;
   rounds: Round[];
   comments: Comment[];
   version: number;
@@ -135,6 +137,12 @@ export interface ReviewSummary {
   roundCount: number;
   commentCount: number;
   openCommentCount: number;
+  /** Short base→head label for the latest round. */
+  scope?: string;
+  /** Actor that created the review. */
+  author?: string;
+  /** Comments currently claimed as not fixed by an agent. */
+  notFixedCount?: number;
 }
 
 export interface FixClaimRecord {

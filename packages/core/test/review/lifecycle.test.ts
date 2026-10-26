@@ -123,6 +123,9 @@ describe('ReviewLifecycle', () => {
         roundCount: 0,
         commentCount: 0,
         openCommentCount: 0,
+        scope: 'no rounds',
+        author: 'Ada',
+        notFixedCount: 0,
       },
     ]);
   });

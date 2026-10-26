@@ -84,6 +84,7 @@ export class ReviewLifecycle {
       repoRoot: input.repoRoot,
       status: 'open',
       createdAt: this.now().toISOString(),
+      createdBy: input.actor,
       rounds: [],
       comments: [],
       version: 0,

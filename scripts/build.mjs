@@ -1,6 +1,7 @@
 import { chmod } from 'node:fs/promises';
 import { join } from 'node:path';
 import { build } from 'esbuild';
+import { build as viteBuild } from 'vite';
 
 const coreEntry = join(import.meta.dirname, '..', 'packages/core/src/index.ts');
 
@@ -42,3 +43,7 @@ await build({
 });
 
 await chmod('packages/server/dist/reviewd.js', 0o755);
+
+await viteBuild({
+  configFile: join(import.meta.dirname, '..', 'packages/web/vite.config.ts'),
+});

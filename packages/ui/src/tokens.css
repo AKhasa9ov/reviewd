@@ -1,0 +1,93 @@
+/*
+ * Code review design tokens. Dark is the default; light is a derived theme.
+ * Every text/border pair used by the UI is checked in tokens.test.ts.
+ */
+:root,
+:root[data-theme='dark'],
+.theme-dark {
+  color-scheme: dark;
+  --cr-bg: #101817;
+  --cr-surface: #1b2825;
+  --cr-surface-raised: #273532;
+  --cr-text: #f3f7f6;
+  --cr-text-muted: #a8bdb9;
+  --cr-border: #536a65;
+  --cr-primary: #6ae7ce;
+  --cr-on-primary: #0f2420;
+  --cr-danger: #e5685d;
+  --cr-on-danger: #2f110e;
+  --cr-warning: #e5a85d;
+  --cr-info: #7c9cff;
+  --cr-success: #6ae7ce;
+  --cr-added-bg: rgb(106 231 206 / 10%);
+  --cr-removed-bg: rgb(229 104 93 / 10%);
+  --cr-focus: #6ae7ce;
+  --cr-overlay: rgb(4 10 9 / 72%);
+  --cr-shadow: 0 18px 48px rgb(0 0 0 / 35%);
+}
+
+:root[data-theme='light'],
+.theme-light {
+  color-scheme: light;
+  --cr-bg: #ffffff;
+  --cr-surface: #f6f8f7;
+  --cr-surface-raised: #edf2f0;
+  --cr-text: #0f1a18;
+  --cr-text-muted: #4e625d;
+  /* Design's #C9D6D2 is 1.6:1 on white; darkened to keep UI boundaries ≥3:1. */
+  --cr-border: #7c918c;
+  --cr-primary: #0b7a67;
+  --cr-on-primary: #ffffff;
+  --cr-danger: #b23a2f;
+  --cr-on-danger: #ffffff;
+  --cr-warning: #8a5a12;
+  --cr-info: #2f55b5;
+  --cr-success: #0b7a67;
+  --cr-added-bg: rgb(11 122 103 / 10%);
+  --cr-removed-bg: rgb(178 58 47 / 10%);
+  --cr-focus: #0b7a67;
+  --cr-overlay: rgb(15 26 24 / 45%);
+  --cr-shadow: 0 18px 48px rgb(15 26 24 / 16%);
+}
+
+:root {
+  --cr-space-1: 4px;
+  --cr-space-2: 8px;
+  --cr-space-3: 12px;
+  --cr-space-4: 16px;
+  --cr-space-5: 20px;
+  --cr-space-6: 24px;
+  --cr-space-8: 32px;
+  --cr-space-10: 40px;
+  --cr-space-12: 48px;
+  --cr-radius-control: 6px;
+  --cr-radius-card: 10px;
+  --cr-radius-pill: 999px;
+  --cr-font-ui:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell,
+    'Helvetica Neue', Arial, sans-serif;
+  --cr-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --cr-text-body: 16px;
+  --cr-leading-body: 1.5;
+  --cr-text-control: 14px;
+  --cr-leading-control: 1.4;
+  --cr-text-meta: 13px;
+  --cr-text-code: 12.5px;
+  --cr-leading-code: 20px;
+  --cr-motion-press: 120ms;
+  --cr-motion-tabs: 150ms;
+  --cr-motion-collapse: 180ms;
+  --cr-motion-dialog: 240ms;
+  --cr-sidebar: 280px;
+  --cr-rail: 320px;
+  --cr-focus-ring: 0 0 0 2px var(--cr-bg), 0 0 0 4px var(--cr-focus);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --cr-motion-press: 0ms;
+    --cr-motion-tabs: 0ms;
+    --cr-motion-collapse: 0ms;
+    --cr-motion-dialog: 0ms;
+  }
+}
