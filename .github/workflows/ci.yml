@@ -4,9 +4,22 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Compose requires a token at config time. This is a CI-only dummy, never a secret.
+  CODE_REVIEW_TOKEN: ci-placeholder-token-0123456789abcdef0123456789abcdef
+  CODE_REVIEW_PUBLIC_URL: http://127.0.0.1:3100
+
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -22,3 +35,46 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-evidence
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Compose configuration
+        run: docker compose config > /tmp/compose-config.yml
+      - name: Build reviewd image
+        run: docker build --progress=plain -t dsh-code-review:ci .
+      - name: Smoke-test the image entrypoint
+        run: |
+          docker run --rm dsh-code-review:ci > /tmp/no-token.log 2>&1 || true
+          grep -F 'CODE_REVIEW_TOKEN is required' /tmp/no-token.log
+          test "$(docker run --rm --entrypoint id dsh-code-review:ci -u)" = "1000"
+      - name: Verify no agent CLIs or tests in the image
+        run: |
+          docker run --rm --entrypoint sh dsh-code-review:ci -c \
+            '! command -v claude; ! command -v codex; ! command -v pi; ! find /app -name "*.test.*" | grep -q .'

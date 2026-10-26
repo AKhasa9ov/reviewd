@@ -2,16 +2,165 @@
 
 Harness-agnostic code review control plane: independent agent pre-review, line-anchored
 human comments, round-to-round fix tracking and feedback delivery back to the initiating
-agent session. See `docs/design.md`.
+agent session. DSH, Claude Code, Codex, pi or a plain shell can drive the same daemon over
+the authenticated HTTP/CLI contract. See `docs/design.md` for the full design.
+
+![Review detail](docs/images/review-detail-light.png)
+
+## Quickstart
+
+### Docker (recommended)
+
+Requires Docker 26+ with Compose v2. Generate a token and start the stack; the daemon
+binds `127.0.0.1:3100` by default.
+
+```bash
+TOKEN="$(openssl rand -hex 32)"
+CODE_REVIEW_TOKEN="$TOKEN" CODE_REVIEW_PUBLIC_URL=http://127.0.0.1:3100 \
+  docker compose up -d --build
+docker compose ps
+curl -fsS http://127.0.0.1:3100/api/health
+```
+
+Open <http://127.0.0.1:3100>, sign in with `$TOKEN`, and create a review. To keep the token
+across restarts, copy `.env.example` to `.env`, put the generated token in it, and run
+`docker compose up -d` without the inline variable. `.env` is gitignored; never commit it.
+
+The image does not see host repositories by default. Mount a tree at the same absolute
+path on both sides:
+
+```bash
+CODE_REVIEW_REPOS=/srv/repos \
+  docker compose -f docker-compose.yml -f docker-compose.repo.yml up -d
+```
+
+See [docs/ops.md](docs/ops.md) for TLS/reverse proxy, token rotation, backup/restore,
+retention, upgrades, logs and failure recovery. **Do not expose port 3100 to the public
+internet directly:** there is one shared token and no account system.
+
+### Local (Node 22)
+
+```bash
+pnpm install
+pnpm build
+export CODE_REVIEW_TOKEN="$(openssl rand -hex 32)"
+export CODE_REVIEW_STORE=/tmp/code-review-store
+node packages/server/dist/reviewd.js
+# http://127.0.0.1:3100
+```
+
+Need a disposable repository and a ready-made review? Run `scripts/demo.sh` (see
+[docs/demo.md](docs/demo.md)). It starts a daemon on a random port, creates a `base..feature`
+review and prints the URL, then cleans up on Ctrl-C.
+
+Or use the CLI, which starts the same server:
+
+```bash
+review serve --store /var/lib/code-review --public-url https://review.example
+```
+
+### DSH
+
+Build first, then install the bundle through the profile plugin manager:
+
+```bash
+pnpm build
+# plugin_manager install_bundle target=/absolute/path/to/dsh-code-review/packages/dsh
+```
+
+Configure `daemonUrl`, `token`, `worker` and `repoHint` in the profile patch; the full
+key table, tool list, worker behaviour and delivery contract are in [docs/dsh.md](docs/dsh.md).
+The bundle adds a sidebar panel, a keyed main panel, `review_*` tools, `/review`, the
+reviewer worker and feedback delivery into the initiating session.
+
+### CLI
+
+Remote commands use `CODE_REVIEW_URL` (or `--daemon`) and `CODE_REVIEW_TOKEN`:
+
+```bash
+review start --repo /srv/repo --base main --reviewer worker --json
+review status <id> --json
+review comments add <id> --file src/a.ts --line 42 --body 'Please explain'
+review feedback <id> --wait --format md
+review submit <id> --request-changes --summary 'Address the blocker'
+review refresh <id>
+review health
+```
+
+`review diff` is local and needs no daemon. Exit codes: `0` ok, `2` timeout, `3` auth,
+`4` daemon unavailable, `5` validation/not found, `6` conflict/stale/rate limited. See
+[docs/daemon.md](docs/daemon.md).
+
+## Screenshots
+
+| Review list (dark)                               | Review detail (light)                                 |
+| ------------------------------------------------ | ----------------------------------------------------- |
+| ![Review list](docs/images/review-list-dark.png) | ![Review detail](docs/images/review-detail-light.png) |
+
+The standalone UI supports real git diffs, file and line comments, suggestions, rounds,
+delta/full views, deep links, keyboard navigation, 320px layouts and light/dark themes.
+The browser suite runs axe WCAG 2.1 A/AA checks and fails on serious or critical findings.
+
+## What it does
+
+- **Independent pre-review.** A reviewer worker reads the diff and surrounding code,
+  posts findings with severities, questions and evidence, and can suggest edits.
+- **Human control.** Comments are anchored to a file/side/line or range with a quote,
+  context and content hash. They survive force-pushes and renames by re-anchoring; the
+  previous and current locations are both shown.
+- **Fix tracking.** Every refresh creates an immutable round. Deterministic rules classify
+  comments as `applied`, `addressed`, `unchanged`, `outdated` or `moved`; agent claims and
+  reviewer verification are separate signals, not silent truth.
+- **Feedback to the right agent.** Submitting produces a deterministic markdown/JSON
+  package and a delivery key. The initiating DSH session receives it through
+  `sessionController.prompt`; CLI/other harnesses can read the same feedback.
+- **No hidden writes.** The reviewer is read-only. Suggestions are applied only by an
+  explicit human action against the expected snapshot, with a stale check.
+
+## Security model
+
+- One shared bearer token (`CODE_REVIEW_TOKEN`, 32+ bytes), required at startup and never
+  logged or baked into the image. Browsers exchange it for an HttpOnly, SameSite=Strict
+  cookie; machine clients use `Authorization: Bearer`.
+- Health/version are public; all review data is authenticated. Mutations reject
+  cross-origin requests; there is no CORS. Rate limits and body/diff/snapshot caps bound
+  resource use.
+- `reviewd` is plain HTTP. Terminate TLS at a reverse proxy and keep the listener on
+  loopback or a private network. There are no per-user accounts or token revocation lists.
+- Reviewer output and comments are untrusted data. Rendering is safe text/code; reviewer
+  tools deny `write`/`edit`; command backends run as a trusted operator boundary with
+  `shell:false`.
+- Git access removes inherited repository environment, disables external diff/textconv and
+  validates paths against the repository root. Symlinks leading outside are not followed.
+- The container runs non-root with a read-only rootfs, all capabilities dropped and a
+  writable `/data` volume. See [SECURITY.md](SECURITY.md).
+
+## Limitations
+
+- No bundled model or agent CLI in the image. You need a DSH worker, a command backend, or
+  your own reviewer integration; `none` is explicit and records a skipped report.
+- Single-tenant by design: one token, no accounts, no per-user audit identity, no hosted
+  control plane. Use a VPN/reverse proxy for teams.
+- TLS, backups, retention scheduling and log shipping are deployment responsibilities;
+  `review gc` is manual. See [docs/ops.md](docs/ops.md).
+- MCP and native adapters for harnesses other than DSH are not shipped yet; the HTTP API
+  and CLI are the stable integration surface.
+- The event store is a single-writer local filesystem store; there is no HA/clustering.
+- The image is Linux/amd64-oriented; ARM images are rebuildable from the Dockerfile but not
+  published as a multi-arch manifest in this release.
+- Apply suggestion requires a writable repository mount and a human action; there is no
+  automatic commit/push.
 
 ## Status
 
-Plans 1–5: the git diff/snapshot foundation, the C3 review-state library
+Plans 1–6: the git diff/snapshot foundation, the C3 review-state library
 (event store, rounds, anchors, outcomes), C4 (`ReviewServiceImpl`, feedback package,
 reviewer contract/backends), C5 (`reviewd` HTTP/SSE/long-poll daemon, workers/jobs,
 deliveries and the remote `review` CLI), the standalone review UI served by the daemon,
-and the DSH Cordis bundle (sidebar panel, tools, `/review`, reviewer worker and
-feedback delivery). See `docs/dsh.md` for installation and configuration.
+the DSH Cordis bundle (sidebar panel, tools, `/review`, reviewer worker and feedback
+delivery), and the Docker/Compose deployment plus OSS packaging surface (CI, operations,
+security policy, changelog and demo). See `docs/dsh.md` for DSH installation and
+`docs/ops.md` for deployment.
 
 ## Review state (C3)
 

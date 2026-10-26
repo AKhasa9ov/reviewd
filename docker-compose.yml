@@ -17,7 +17,7 @@ services:
     environment:
       CODE_REVIEW_TOKEN: ${CODE_REVIEW_TOKEN:?set CODE_REVIEW_TOKEN in .env (32+ random bytes)}
       CODE_REVIEW_STORE: /data
-      CODE_REVIEW_PUBLIC_URL: ${CODE_REVIEW_PUBLIC_URL:-http://localhost:3100}
+      CODE_REVIEW_PUBLIC_URL: ${CODE_REVIEW_PUBLIC_URL:-http://127.0.0.1:3100}
       CODE_REVIEW_HOST: 0.0.0.0
       CODE_REVIEW_PORT: '3100'
     volumes:

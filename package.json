@@ -4,11 +4,19 @@
   "private": true,
   "type": "module",
   "license": "MIT",
-  "packageManager": "pnpm@11.22.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dsh-code-review/dsh-code-review.git"
+  },
+  "homepage": "https://github.com/dsh-code-review/dsh-code-review#readme",
+  "bugs": {
+    "url": "https://github.com/dsh-code-review/dsh-code-review/issues"
+  },
   "engines": {
     "node": ">=22",
     "pnpm": ">=11"
   },
+  "packageManager": "pnpm@11.22.0",
   "scripts": {
     "build": "node scripts/build.mjs",
     "format": "prettier --check .",

@@ -9,3 +9,11 @@ test-results/
 playwright-report/
 
 packages/dsh/index.js
+
+# Deployment files are validated by Docker/Compose or their own linters.
+Dockerfile
+.dockerignore
+.env.example
+docker-compose*.yml
+scripts/demo.sh
+docs/images/

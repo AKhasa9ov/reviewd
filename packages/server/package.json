@@ -3,6 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dsh-code-review/dsh-code-review.git"
+  },
+  "homepage": "https://github.com/dsh-code-review/dsh-code-review#readme",
+  "bugs": {
+    "url": "https://github.com/dsh-code-review/dsh-code-review/issues"
+  },
+  "engines": {
+    "node": ">=22"
+  },
   "type": "module",
   "bin": {
     "review": "./dist/cli.js",
