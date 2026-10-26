@@ -113,7 +113,9 @@ describe('worker loop', () => {
     };
     await runWorkerLoop({ config, api, agents, sleep: async () => undefined }, controller.signal);
     expect(calls[0]).toMatchObject({ path: '/api/workers/register' });
-    expect(restricted).toEqual({ deny: ['write', 'edit', 'apply_patch'] });
+    expect(restricted).toEqual({
+      deny: ['bash', 'write', 'edit', 'apply_patch', 'workflow', 'subagent_fork', 'review_start'],
+    });
     expect(calls.some((call) => call.path.endsWith('/findings'))).toBe(true);
     expect(calls.some((call) => call.path.endsWith('/report'))).toBe(true);
     expect(calls.some((call) => call.path.endsWith('/ack'))).toBe(true);

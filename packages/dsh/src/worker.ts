@@ -173,7 +173,9 @@ async function runJob(deps: WorkerDeps, lease: JobLease, signal: AbortSignal): P
     return;
   }
   const agent = handle.agent;
-  const release = agent.ctx?.tools?.restrict({ deny: ['write', 'edit', 'apply_patch'] });
+  const release = agent.ctx?.tools?.restrict({
+    deny: ['bash', 'write', 'edit', 'apply_patch', 'workflow', 'subagent_fork', 'review_start'],
+  });
   const timeoutMs = 10 * 60 * 1000;
   let timeout: ReturnType<typeof setTimeout> | undefined;
   const onAbort = (): void => agent.cancel({ kind: 'disposed' });
