@@ -542,7 +542,7 @@ interface Job {
 
 1. Роль: независимый ревьюер, read-only, не менять файлы.
 2. Вход: заголовок/цель, scope, base→head, список файлов, signals, полный diff (с учётом лимитов), для verify — предыдущий фидбек + delta + unresolved anchors.
-3. Требования: смотреть окружающий код, а не только дифф; можно запускать тесты/линт; каждое замечание — с якорем на изменённую строку, цитатой и evidence; не дублировать; не писать стилевые nitpick без пользы.
+3. Требования: смотреть окружающий код, а не только дифф; работать только read-only инструментами (запуск команд и правки запрещены); каждое замечание — с якорем на изменённую строку, цитатой и evidence; не дублировать; не писать стилевые nitpick без пользы.
 4. «Спорные» вопросы — отдельным списком `questions`, если решение зависит от продукта/намерения.
 5. Выход: строго JSON по схеме; либо tool-вызовы, либо файл `REVIEW_OUTPUT`.
 
@@ -579,7 +579,7 @@ interface Job {
 
 ### 9.4 DSH worker
 
-- При старте (если `worker.enabled` и daemon доступен) регистрируется `POST /api/workers/register`.
+- При старте (если `worker: true` и daemon доступен) регистрируется `POST /api/workers/register` со стабильным id; при ошибке повторяет с backoff 1s..30s до ответа или dispose.
 - Long-poll `GET /api/jobs/next?workerId&wait=25`; backoff при ошибках; прекращает при dispose.
 - Job → создаёт reviewer-агента:
   ```ts
@@ -594,9 +594,10 @@ interface Job {
   await Promise.race([handle.agent.whenIdle(), timeout]);
   ```
 - На `handle.agent.ctx` регистрируются scoped tools `review_submit_finding` и `review_submit_report`; параллельно работает fallback: если агент записал `output.json` в cwd, worker читает его.
-- Ограничения: `write`/`edit` запрещены на ctx ревьюера; после завершения worker сравнивает `git status` до/после и при изменениях помечает job `dirty-worktree` (не откатывает).
-- На завершении: `POST findings` инкрементально, `POST report`, `POST /api/jobs/:id/ack`; dispose reviewer-агента (сессия остаётся для аудита, title `Review <id> rN`).
-- Ошибка/таймаут → `POST fail` с кодом; daemon решает retry/requeue.
+- Ограничения: на ctx ревьюера запрещены `bash`, `write`, `edit`, `apply_patch`, `workflow`, `subagent`, `subagent_fork`, `review_start`, `review_refresh`; ревьюер получает ограниченный unified diff в промпте и работает только read-only инструментами.
+- Отчёт обязан содержать `schemaVersion: 1`; иначе job падает с non-retryable `invalid-output` без записи findings/report.
+- На завершении: `POST findings` инкрементально (каждый finding валидируется daemon), `POST report`, `POST /api/jobs/:id/ack`; dispose reviewer-агента в `finally` на любом пути.
+- Ошибка → `POST fail` с кодом; таймаут `reviewerTimeoutMs` отменяет агента (`cancel({kind:'timeout'})`) и падает с retryable `reviewer-timeout`; daemon решает retry/requeue.
 - Триггер «агент закончил правки»: tool `review_refresh` вызывается агентом; worker не сканирует коммиты.
 
 ### 9.5 Command backend
@@ -669,7 +670,7 @@ Scope: <base>..<head> (<sha>)
 - Подписка на `review.submitted` (SSE или long-poll) с bearer.
 - `sessionController.prompt({ requestId, sessionId, mode: 'queue', content: [{ type: 'text', text }] })`.
 - `requestId` = `deliveryKey` (`reviewId:round:submissionId`); DSH ведёт in-memory dedupe + проверяет статус delivery перед отправкой.
-- Успех → `POST /api/deliveries/:id/ack`; ошибка → retry 3 раза (backoff 2/10/30s) → `fail`; UI показывает copyable пакет и причину.
+- Успех → `POST /api/deliveries/:id/ack` (сбрасывает счётчик попыток); ошибка → до 3 попыток с backoff 1s..30s → `POST /api/deliveries/:id/fail`, после чего запись больше не опрашивается; UI показывает copyable пакет и причину.
 - Закрытая сессия резюмируется (`deliverClosed = true`, конфиг); если сессия не найдена/повреждена → delivery `failed`, пакет остаётся доступным.
 - Delivery в сессию, инициировавшую ревью; `initiator.sessionId` хранится в событии создания. Для ревью из CLI без сессии — pending/нет доставки.
 - At-least-once; дубликат помечается в тексте; идемпотентность по `deliveryKey`.
@@ -1034,7 +1035,7 @@ services:
 
 - **Токен**: без него daemon не стартует; не логируется; сравнение constant-time; rotation инвалидирует cookie.
 - **XSS**: markdown рендерится безопасно (текст/код, без `dangerouslySetInnerHTML` для произвольного HTML); ссылки только http(s); code/quote — текст.
-- **Prompt injection**: вывод ревьюера — данные; suggestions показываются как diff и применяются только человеком; reviewer worker ограничен read-only (запрет write/edit, проверка `git status`).
+- **Prompt injection**: вывод ревьюера — данные; suggestions показываются как diff и применяются только человеком; reviewer worker ограничен read-only (запрещены `bash`, `write`, `edit`, `apply_patch`, `workflow`, `subagent*`, `review_start`, `review_refresh`).
 - **Git**: `--no-ext-diff`, `--no-textconv`, `-c diff.external=`, без hooks; `apply` — только в `repo.root`, realpath-проверка, `--3way`, отказ при stale; после apply — повторный diff и событие.
 - **Path traversal**: все пути нормализуются и проверяются; symlink наружу → отказ.
 - **Command backend**: исполнение команды из конфига — доверенная граница; `shell:false` по умолчанию; env без токена daemon; process group kill.

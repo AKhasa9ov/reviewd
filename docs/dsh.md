@@ -42,29 +42,34 @@ own patch layer (the layer applied after every bundle):
     reviewerBackend: worker
     repoHint: /absolute/repo
     # Optional:
+    # publicUrl: https://reviews.example.lan
     # sessionId: session-...
     # cwd: /absolute/default/cwd
     # reviewerPreset: dsh-sdd
     # reviewerModel: { provider: openrouter, model: deepseek/deepseek-v4.1-flash-1017 }
+    # reviewerTimeoutMs: 600000
 ```
 
-| Key                                                           | Meaning                                                         |
-| ------------------------------------------------------------- | --------------------------------------------------------------- |
-| `daemonUrl`                                                   | External `reviewd` origin. Must be reachable from the DSH host. |
-| `token`                                                       | Shared daemon bearer token. Secret; Host-only.                  |
-| `worker`                                                      | Register a reviewer worker that long-polls `/api/jobs/next`.    |
-| `repoHint`                                                    | Default repository root when the session has no usable cwd.     |
-| `reviewerBackend`                                             | `worker`, `command` or `none`, copied into new reviews.         |
-| `sessionId`                                                   | Parent session for reviewer agents and fallback initiator.      |
-| `cwd`                                                         | Fallback reviewer working directory.                            |
-| `reviewerPreset`                                              | Agent preset for reviewer subagents.                            |
-| `reviewerModel`                                               | Provider/model/reasoning override for reviewer subagents.       |
-| `pollMs`, `deliveryPollMs`, `heartbeatMs`, `requestTimeoutMs` | Loop tuning.                                                    |
+| Key                                                           | Meaning                                                                |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `daemonUrl`                                                   | `reviewd` origin reachable from the DSH host.                          |
+| `publicUrl`                                                   | Browser-facing UI origin when `daemonUrl` is loopback or host-only.    |
+| `token`                                                       | Shared daemon bearer token. Secret; Host-only.                         |
+| `worker`                                                      | Register a reviewer worker that long-polls `/api/jobs/next`.           |
+| `repoHint`                                                    | Default repository root when the session has no usable cwd.            |
+| `reviewerBackend`                                             | `worker`, `command` or `none`, copied into new reviews.                |
+| `sessionId`                                                   | Parent session for reviewer agents and fallback initiator.             |
+| `cwd`                                                         | Fallback reviewer working directory.                                   |
+| `reviewerPreset`                                              | Agent preset for reviewer subagents.                                   |
+| `reviewerModel`                                               | Provider/model/reasoning override for reviewer subagents.              |
+| `reviewerTimeoutMs`                                           | Reviewer deadline in ms (default `600000`); timeouts cancel and retry. |
+| `pollMs`, `deliveryPollMs`, `heartbeatMs`, `requestTimeoutMs` | Loop and request tuning.                                               |
 
 `reviewd` rejects tokens shorter than 32 bytes. The token is never sent to the Client,
 rendered in a panel, logged, or placed in a URL. The Client calls only same-origin
-`/api/code-review/*`; the Host adds `Authorization: Bearer <token>` and strips any
-Client-supplied authorization header.
+`/api/code-review/*`; the Host replaces any Client-supplied authorization header with
+`Authorization: Bearer <token>`, forwards `idempotency-key` and `x-review-actor`, and
+serves `/api/code-review/info` without the token as `{daemonUrl, publicUrl?}`.
 
 ## Tools and command
 
@@ -83,14 +88,22 @@ route feedback even after the originating turn ends.
 ## Worker
 
 With `worker: true`, the bundle registers a worker named `dsh-code-review`, heartbeats,
-long-polls for jobs and creates a subagent through `ctx.agents.create`. The subagent:
+long-polls for jobs and creates a subagent through `ctx.agents.create`. Registration
+retries a stable worker id with 1s..30s backoff instead of giving up after one failure.
+The subagent:
 
 - runs in the review's workspace cwd and inherits the configured preset/model;
-- has `write`, `edit` and `apply_patch` denied; `bash` remains available for read-only
-  commands such as tests and linters;
-- receives the job prompt and diff bundle, then returns one JSON report;
-- posts findings, report and ack; a malformed report or timeout fails the job with a
-  typed code. Plugin disposal cancels an active reviewer.
+- is strictly read-only: `bash`, `write`, `edit`, `apply_patch`, `workflow`, `subagent`,
+  `subagent_fork`, `review_start` and `review_refresh` are all denied, so it can only
+  read the workspace and the prompt;
+- receives the job prompt with a bounded unified diff (60k characters, with an explicit
+  truncation marker), then returns one JSON report;
+- must return `schemaVersion: 1`; anything else is rejected as non-retryable
+  `invalid-output` without posting findings or a report;
+- posts findings (server-side validated), report and ack;
+- is cancelled with `kind: 'timeout'` and failed with retryable `reviewer-timeout` when
+  `reviewerTimeoutMs` expires, and its agent handle is disposed in `finally` on every
+  path. Plugin disposal cancels an active reviewer.
 
 ## Delivery
 
@@ -98,20 +111,24 @@ Feedback for `harness=dsh` is polled from `/api/deliveries/pending`. Each record
 the initiator saved with the review. The Host resumes that session (including a closed
 one) through `ctx.sessionController.resolveAgent`, calls `prompt` with
 `mode:'queue'` and the stable idempotency key `cr:<deliveryKey>`, then acks. Prompt
-failures leave the delivery pending and retry with capped backoff; no partial prompt is
-acked. Legacy/CLI deliveries without an initiator stay pending for a human or CLI.
+failures retry with capped backoff; after three failed attempts the Host POSTs
+`/api/deliveries/:id/fail` and stops prompting that record. A successful ack resets the
+budget; no partial prompt is acked. Legacy/CLI deliveries without an initiator stay
+pending for a human or CLI.
 
 ## Panel
 
 The sidebar entry opens the Code Review panel. It loads reviews through the proxy and
-offers a create form. The `Open` link goes to the daemon's standalone UI; that UI asks
-for the daemon token once and exchanges it for an HttpOnly session cookie. A missing or
-rejected token produces the panel's auth state with a Retry button. The panel uses
-Harness `--dsw-alias-*` tokens and does not load the standalone UI bundle.
+offers a create form. The `Open` link prefers `publicUrl` over `daemonUrl`, so a daemon
+on loopback still produces a link that works from another machine. That UI asks for the
+daemon token once and exchanges it for an HttpOnly session cookie. A missing or rejected
+token produces the panel's auth state with a Retry button. The panel uses Harness
+`--dsw-alias-*` tokens and does not load the standalone UI bundle.
 
 ## Verification
 
-- `pnpm verify` covers typecheck, 34 test files and the DSH bundle tests.
+- `pnpm verify` covers typecheck and 39 test files (19 core, 7 server, 6 DSH, 4 UI,
+  3 web).
 - `packages/dsh/test/integration.test.ts` starts a real daemon, creates a review with an
   initiator, submits feedback and asserts one queued prompt plus an acknowledged
   delivery.
