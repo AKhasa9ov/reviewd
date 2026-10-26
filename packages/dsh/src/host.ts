@@ -1,3 +1,4 @@
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import { ReviewApi } from './api.js';
 import { configProblem, normalizeConfig } from './config.js';
 import type { ReviewConfig } from './config.js';
@@ -11,16 +12,49 @@ import { runWorkerLoop } from './worker.js';
 import type { WorkerDeps } from './worker.js';
 
 export const name = 'code-review';
-export const inject = ['tools', 'commands', 'webServer'];
+export const inject = ['tools', 'commands', 'webServer', 'connection'];
 
 type AnyRecord = Record<string, unknown>;
+
+interface ConnectionHandle {
+  /**
+   * Applies Connection's Host/Origin fence and browser/API credential checks
+   * to a Web route that is not part of the `/api` RPC channel.
+   */
+  requestRejection(request: { headers: IncomingMessage['headers'] }): 401 | 403 | undefined;
+}
 
 interface HostContext extends PluginContext {
   commands: { register(definition: AnyRecord): () => void };
   webServer: { register(route: AnyRecord): () => void };
+  connection: ConnectionHandle;
   effect(callback: () => (() => void) | void): () => void;
   get(service: string): unknown;
   logger?: { info?(message: string): void; warn?(message: string): void };
+}
+
+/**
+ * The prefix route is mounted on the public web server and injects the daemon
+ * bearer, so it must apply DSH's own authentication before proxying. `/info` is
+ * gated as well: it reveals the daemon address and must not be anonymous.
+ *
+ * `requestRejection` is the Connection API for non-RPC Web routes. `admit` /
+ * `admitConnection` are not used: they return a Peer, and `admitConnection`
+ * claims socket ownership, disposes API peers on release, and answers 409 to
+ * concurrent requests - all wrong for a per-request HTTP proxy.
+ */
+function withConnectionGate(
+  connection: ConnectionHandle,
+  handler: (req: IncomingMessage, res: ServerResponse) => Promise<void>,
+): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
+  return async (req, res) => {
+    const rejection = connection.requestRejection({ headers: req.headers });
+    if (rejection !== undefined) {
+      res.writeHead(rejection).end();
+      return;
+    }
+    await handler(req, res);
+  };
 }
 
 function service<T>(ctx: HostContext, key: string): T | undefined {
@@ -74,8 +108,9 @@ export function apply(ctx: HostContext, rawConfig: unknown): void {
   }
   const api = new ReviewApi(config);
   const proxy = createProxyHandler({ config });
+  const gatedProxy = withConnectionGate(ctx.connection, proxy);
   ctx.effect(() =>
-    ctx.webServer.register({ kind: 'prefix', path: '/api/code-review', handler: proxy }),
+    ctx.webServer.register({ kind: 'prefix', path: '/api/code-review', handler: gatedProxy }),
   );
   ctx.effect(() => {
     const disposers = createReviewTools(ctx, config, api);
