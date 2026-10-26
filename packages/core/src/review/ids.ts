@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 
-export type IdPrefix = 'rev' | 'rnd' | 'cmt' | 'evt' | 'snap' | 'anc';
+export type IdPrefix = 'rev' | 'rnd' | 'cmt' | 'evt' | 'snap' | 'anc' | 'sub' | 'job';
 
 export type RandomBytes = (length: number) => Uint8Array;
 
@@ -11,7 +11,7 @@ export class ReviewIdError extends Error {
   }
 }
 
-const PREFIXES = new Set<IdPrefix>(['rev', 'rnd', 'cmt', 'evt', 'snap', 'anc']);
+const PREFIXES = new Set<IdPrefix>(['rev', 'rnd', 'cmt', 'evt', 'snap', 'anc', 'sub', 'job']);
 const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 const TIME_LENGTH = 10;
 const RANDOM_LENGTH = 16;

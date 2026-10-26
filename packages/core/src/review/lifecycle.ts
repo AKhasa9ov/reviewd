@@ -87,6 +87,7 @@ export class ReviewLifecycle {
       rounds: [],
       comments: [],
       version: 0,
+      ...(input.reviewer === undefined ? {} : { reviewer: input.reviewer }),
     };
     await this.store.append(
       id,

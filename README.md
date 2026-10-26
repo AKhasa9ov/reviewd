@@ -6,9 +6,10 @@ agent session. See `docs/design.md`.
 
 ## Status
 
-Plans 1–2 of 6: the git diff/snapshot foundation and the C3 review-state library
-(event store, rounds, anchors, outcomes). HTTP, reviewer jobs, UI and the DSH bundle
-are implemented in later plans.
+Plans 1–3 of 6: the git diff/snapshot foundation, the C3 review-state library
+(event store, rounds, anchors, outcomes) and C4 (`ReviewServiceImpl`, feedback package,
+reviewer contract/backends). HTTP, daemon jobs, UI and the DSH bundle are implemented in
+later plans.
 
 ## Review state (C3)
 
@@ -36,6 +37,115 @@ deterministic outcome (`applied`, `addressed`, `unchanged`, `outdated`, `moved`)
 confidence, and preserves comment ids, bodies, replies and anchor history. Comments are
 never physically deleted; `resolved`/`dismissed` are states. C3 is intentionally not the
 reviewer/HTTP layer.
+
+## Review service and reviewer contract (C4)
+
+`ReviewServiceImpl` is the application interface above C3. Transports (HTTP, CLI, DSH) map
+requests to it; it has no `node:http`, React, Cordis or DSH imports.
+
+```ts
+import { ReviewLifecycle, ReviewServiceImpl, ReviewStore } from '@dsh-code-review/core';
+
+const store = await ReviewStore.open('/var/lib/code-review');
+const lifecycle = new ReviewLifecycle(store);
+const service = new ReviewServiceImpl({
+  lifecycle,
+  store,
+  snapshots: { build: ({ repoRoot, scope }) => buildSnapshot({ repoRoot, scope }) },
+});
+
+const view = await service.create(
+  {
+    repoRoot: '/srv/repo',
+    title: 'Feature review',
+    scope: { kind: 'range', baseRef: 'main', headRef: 'feature' },
+    reviewer: { backend: 'none' },
+  },
+  { actor: { name: 'Ada', kind: 'human' }, requestId: 'create-1' },
+);
+
+const comment = await service.addComment(
+  view.review.id,
+  { body: 'This loses the last item', path: 'src/a.ts', side: 'new', lineStart: 42 },
+  { actor: { name: 'Ada', kind: 'human' }, requestId: 'comment-1' },
+);
+
+const report = await service.runReviewer(view.review.id, {
+  actor: { name: 'Reviewer', kind: 'agent' },
+});
+const submission = await service.submit(
+  view.review.id,
+  { verdict: 'request-changes', summary: 'Please address the blocker' },
+  { actor: { name: 'Ada', kind: 'human' }, requestId: 'submit-1' },
+);
+console.log(submission.feedback.markdown, submission.deliveryKey);
+```
+
+All mutations take `CallContext { actor, requestId? }`; repeating the same `requestId` on
+one service instance returns the same result and appends once. Errors are `ReviewError` with
+`code` in `not-found | validation | conflict | agent-busy | stale-review | internal`.
+
+### Feedback contract
+
+`submit` appends `review/submitted` and returns a deterministic markdown + JSON package
+(no timestamps or random values). Both the markdown and the JSON are capped at 100 KiB;
+the JSON gets `truncated: true` and a notice when items must be dropped. It includes open human comments, open blocker/major findings, accepted
+and applied suggestions (applied ones are marked “do not reapply”), questions, verification
+entries and a resolved summary. `deliveryKey` is `reviewId:round:submissionId` and is stable
+for delivery idempotency. An `approve` verdict closes the review; other verdicts keep it
+open. A round can be submitted once.
+
+`FeedbackJson` (schemaVersion 1):
+
+```json
+{
+  "schemaVersion": 1,
+  "reviewId": "rev_…",
+  "round": 2,
+  "verdict": "request-changes",
+  "title": "Feature review",
+  "scope": { "baseSha": "…", "headSha": "…", "label": "main..feature" },
+  "deliveryKey": "rev_…:2:sub_…",
+  "findings": [
+    {
+      "id": "f1",
+      "severity": "blocker",
+      "file": "src/a.ts",
+      "lineStart": 42,
+      "lineEnd": 42,
+      "title": "…",
+      "rationale": "…",
+      "evidence": "…"
+    }
+  ],
+  "humanComments": [
+    { "commentId": "cmt_…", "path": "src/a.ts", "lineStart": 42, "lineEnd": 42, "body": "…" }
+  ],
+  "appliedSuggestions": [],
+  "acceptedSuggestions": [],
+  "questions": [],
+  "verification": [],
+  "resolved": { "count": 1, "commentIds": ["cmt_…"] }
+}
+```
+
+### Reviewer contract
+
+`ReviewerBackend.run(job, sink, signal)` returns a `ReviewerReport`; findings stream through
+`FindingSink`. `validateReport(raw, { snapshot })` is dependency-free and rejects invalid
+items individually (duplicate ids, bad enums, missing snapshot paths, out-of-range lines,
+texts over 32 KiB, more than 200 findings / 50 questions), keeping the rest. A suggestion
+whose `original` does not match the snapshot after whitespace normalization is dropped and
+the finding is marked `unanchored`.
+
+`runReviewer` persists `agent/started`, `agent/finding`, `agent/report` (or `agent/failed`),
+exposes `ReviewView.report`, and rejects a concurrent run with `agent-busy`. The `none`
+backend records a skipped report; `cancelAgent` aborts an active run and records failure.
+`FakeReviewer` is deterministic for tests. `CommandReviewer` runs an argv array only (no
+shell), with `{promptFile}`, `{repo}`, `{outputFile}` and `{reviewId}` placeholders, a
+timeout, captured stdout/stderr, last-fenced-JSON fallback, and before/after
+`git status --porcelain` via an injected runner; it sets `dirtyWorktree` and never writes
+the repository itself.
 
 ## Development
 

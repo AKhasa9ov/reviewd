@@ -1,3 +1,4 @@
+import type { AgentReport, Finding, ReviewerBackendKind } from '../reviewer/types.js';
 import type {
   Actor,
   ActorKind,
@@ -9,6 +10,7 @@ import type {
   ReviewState,
   Round,
   ReviewId,
+  SubmissionRecord,
 } from './types.js';
 import { createId } from './ids.js';
 import type { IdPrefix } from './ids.js';
@@ -52,6 +54,35 @@ export interface ReviewClosedData {
   verdict: 'approved' | 'closed';
 }
 
+export interface ReviewSubmittedData {
+  submission: SubmissionRecord;
+  feedback: {
+    markdown: string;
+    json: unknown;
+    deliveryKey: string;
+  };
+}
+
+export interface AgentStartedData {
+  jobId: string;
+  round: number;
+  backend: ReviewerBackendKind;
+}
+
+export interface AgentFindingData {
+  finding: Finding;
+  round: number;
+}
+
+export interface AgentReportData {
+  report: AgentReport;
+}
+
+export interface AgentFailedData {
+  code: string;
+  message: string;
+}
+
 export interface ReviewEventDataMap {
   'review/created': ReviewCreatedData;
   'round/created': RoundCreatedData;
@@ -61,6 +92,11 @@ export interface ReviewEventDataMap {
   'comment/anchor': CommentAnchorData;
   'suggestion/applied': SuggestionAppliedData;
   'review/closed': ReviewClosedData;
+  'review/submitted': ReviewSubmittedData;
+  'agent/started': AgentStartedData;
+  'agent/finding': AgentFindingData;
+  'agent/report': AgentReportData;
+  'agent/failed': AgentFailedData;
 }
 
 export type ReviewEventType = keyof ReviewEventDataMap;
@@ -74,11 +110,18 @@ export const REVIEW_EVENT_TYPES: readonly ReviewEventType[] = [
   'comment/anchor',
   'suggestion/applied',
   'review/closed',
+  'review/submitted',
+  'agent/started',
+  'agent/finding',
+  'agent/report',
+  'agent/failed',
 ];
 
 export interface ReviewEventBase<T extends ReviewEventType = ReviewEventType> {
   v: 1;
   id: string;
+  /** 1-based append position in the review's JSONL log. Older logs are backfilled on read. */
+  seq?: number;
   reviewId: ReviewId;
   type: T;
   at: string;
@@ -190,5 +233,11 @@ export function isReviewEvent(value: unknown): value is ReviewEvent {
   if (!isIsoTimestamp(value.at)) return false;
   if (!isActor(value.actor)) return false;
   if (!isRecord(value.data)) return false;
+  if (
+    value.seq !== undefined &&
+    (typeof value.seq !== 'number' || !Number.isInteger(value.seq) || value.seq < 1)
+  ) {
+    return false;
+  }
   return true;
 }

@@ -100,6 +100,50 @@ export function fold(state: ReviewState, event: ReviewEvent): ReviewState {
       next.status = 'closed';
       break;
     }
+    case 'review/submitted': {
+      const submission = structuredClone(event.data.submission);
+      next.submissions ??= [];
+      if (next.submissions.some((item) => item.submissionId === submission.submissionId)) {
+        throw new ReviewFoldError(`duplicate submission: ${submission.submissionId}`);
+      }
+      next.submissions.push(submission);
+      if (submission.verdict === 'approve') next.status = 'closed';
+      break;
+    }
+    case 'agent/started': {
+      next.agent = {
+        status: 'running',
+        jobId: event.data.jobId,
+        round: event.data.round,
+        startedAt: event.at,
+        findings: [],
+      };
+      break;
+    }
+    case 'agent/finding': {
+      next.agent ??= { status: 'running', findings: [] };
+      next.agent.findings ??= [];
+      next.agent.findings.push(structuredClone(event.data.finding));
+      break;
+    }
+    case 'agent/report': {
+      next.report = structuredClone(event.data.report);
+      next.agent = {
+        ...(next.agent ?? {}),
+        status: event.data.report.skipped === true ? 'skipped' : 'done',
+        round: event.data.report.round,
+        findings: structuredClone(event.data.report.findings),
+      };
+      break;
+    }
+    case 'agent/failed': {
+      next.agent = {
+        ...(next.agent ?? {}),
+        status: 'failed',
+        error: event.data.message,
+      };
+      break;
+    }
   }
 
   return next;

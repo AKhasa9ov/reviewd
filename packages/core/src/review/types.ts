@@ -1,3 +1,5 @@
+import type { AgentReport, Finding, ReviewerConfig } from '../reviewer/types.js';
+
 export type ReviewId = string;
 export type RoundNo = number;
 export type CommentId = string;
@@ -79,6 +81,25 @@ export interface Round {
   path: string;
 }
 
+export interface SubmissionRecord {
+  submissionId: string;
+  round: RoundNo;
+  verdict: 'approve' | 'request-changes' | 'comment';
+  deliveryKey: string;
+  createdAt: string;
+}
+
+export type AgentStatus = 'running' | 'done' | 'failed' | 'skipped';
+
+export interface AgentState {
+  status: AgentStatus;
+  jobId?: string;
+  round?: RoundNo;
+  startedAt?: string;
+  error?: string;
+  findings?: Finding[];
+}
+
 export interface ReviewState {
   id: ReviewId;
   title: string;
@@ -90,6 +111,14 @@ export interface ReviewState {
   version: number;
   /** Non-fatal recovery notices, e.g. a torn final JSONL line. */
   warnings?: string[];
+  /** Reviewer configuration captured at creation (defaults to none). */
+  reviewer?: ReviewerConfig;
+  /** Latest validated reviewer report, if any. */
+  report?: AgentReport;
+  /** Reviewer run lifecycle for concurrency and UI. */
+  agent?: AgentState;
+  /** Submissions in append order; one per round. */
+  submissions?: SubmissionRecord[];
 }
 
 export interface ReviewSummary {
@@ -106,6 +135,7 @@ export interface CreateReviewInput {
   title: string;
   repoRoot: string;
   actor: Actor;
+  reviewer?: ReviewerConfig;
 }
 
 export interface AddCommentInput {

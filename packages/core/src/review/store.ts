@@ -15,6 +15,7 @@ export interface ReviewStoreOptions {
 interface CacheEntry {
   state: ReviewState;
   eventCount: number;
+  events?: ReviewEvent[];
 }
 
 interface SnapshotCache {
@@ -190,7 +191,7 @@ function splitEventLines(content: string): string[] {
 function parseReview(
   content: string,
   reviewId: ReviewId,
-): { state: ReviewState; eventCount: number } {
+): { state: ReviewState; eventCount: number; events: ReviewEvent[] } {
   const hasTrailingNewline = content.endsWith('\n');
   const lines = splitEventLines(content);
   if (lines.length === 0) throw new ReviewNotFoundError(reviewId);
@@ -198,6 +199,7 @@ function parseReview(
   let state: ReviewState | undefined;
   let eventCount = 0;
   let torn = false;
+  const events: ReviewEvent[] = [];
 
   for (let index = 0; index < lines.length; index++) {
     const line = lines[index] ?? '';
@@ -233,6 +235,9 @@ function parseReview(
       throw corrupt(reviewId, lineNo, 'invalid review event');
     }
 
+    parsed.seq ??= lineNo;
+    events.push(structuredClone(parsed));
+
     try {
       if (state === undefined) {
         if (parsed.type !== 'review/created') {
@@ -250,7 +255,7 @@ function parseReview(
 
   if (state === undefined) throw new ReviewNotFoundError(reviewId);
   if (torn) state.warnings = [...(state.warnings ?? []), 'torn-tail'];
-  return { state, eventCount };
+  return { state, eventCount, events };
 }
 
 function summary(state: ReviewState): ReviewSummary {
@@ -321,7 +326,7 @@ export class ReviewStore {
     return new ReviewStore(absolute, createdAt);
   }
 
-  async append(reviewId: ReviewId, event: ReviewEvent): Promise<void> {
+  async append(reviewId: ReviewId, event: ReviewEvent): Promise<ReviewEvent> {
     if (this.closed) throw new Error('review store is closed');
     const id = safeReviewId(reviewId);
     if (!isReviewEvent(event)) {
@@ -355,7 +360,8 @@ export class ReviewStore {
     // Validate against the aggregate before touching the log: a rejected event
     // must not leave a line that makes every later replay fail.
     const state = fold(entry.state, event);
-    const payload = `${JSON.stringify(event)}\n`;
+    const sequenced = { ...event, seq: entry.eventCount + 1 } as ReviewEvent;
+    const payload = `${JSON.stringify(sequenced)}\n`;
     const handle = await open(eventsPath, 'a');
     try {
       const result = await handle.write(payload);
@@ -370,6 +376,7 @@ export class ReviewStore {
     const next = { state, eventCount: entry.eventCount + 1 };
     this.entries.set(id, next);
     await this.writeCache(id, next);
+    return structuredClone(sequenced);
   }
 
   async load(reviewId: ReviewId): Promise<ReviewState> {
@@ -378,6 +385,17 @@ export class ReviewStore {
     const entry = await this.readEntry(id);
     this.entries.set(id, entry);
     return structuredClone(entry.state);
+  }
+
+  async events(reviewId: ReviewId, after = 0): Promise<ReviewEvent[]> {
+    if (this.closed) throw new Error('review store is closed');
+    const id = safeReviewId(reviewId);
+    if (!Number.isInteger(after) || after < 0) {
+      throw new ReviewEventError('invalid-event', 'after must be a non-negative integer');
+    }
+    const entry = await this.readEntry(id);
+    this.entries.set(id, entry);
+    return structuredClone((entry.events ?? []).filter((event) => (event.seq ?? 0) > after));
   }
 
   async list(): Promise<ReviewSummary[]> {
@@ -495,7 +513,7 @@ export class ReviewStore {
       throw error;
     }
 
-    const { state, eventCount } = parseReview(content, reviewId);
+    const { state, eventCount, events } = parseReview(content, reviewId);
     const cache = await this.readCache(reviewId);
     if (
       cache !== null &&
@@ -509,10 +527,11 @@ export class ReviewStore {
           warnings: [...(state.warnings ?? [])],
         },
         eventCount,
+        events,
       };
     }
 
-    const entry = { state, eventCount };
+    const entry = { state, eventCount, events };
     await this.writeCache(reviewId, entry);
     return entry;
   }
