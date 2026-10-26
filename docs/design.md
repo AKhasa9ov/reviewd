@@ -1041,7 +1041,7 @@ services:
 - **Command backend**: исполнение команды из конфига — доверенная граница; `shell:false` по умолчанию; env без токена daemon; process group kill.
 - **DoS**: лимиты diff/файлов/комментариев/размеров тел; rate limit; таймауты; max SSE connections.
 - **Секреты в коде**: signals подсвечивают, но не блокируют; диффы могут содержать секреты — доступ только по токену; логи не содержат дифф.
-- **Docker**: non-root, read-only rootfs, cap_drop ALL, no-new-privileges; repo mount rw нужен только для Apply — можно `:ro` и Apply через worker, но v1 rw с явным предупреждением.
+- **Docker**: non-root, read-only rootfs, cap_drop ALL, no-new-privileges; repo mount по умолчанию `:ro`; `:rw` — явный opt-in для внешних apply-инструментов.
 - **Supply chain**: lockfile, минимальные deps, npm audit в CI, pinned base image digest.
 
 ---

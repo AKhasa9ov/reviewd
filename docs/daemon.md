@@ -22,7 +22,7 @@ single-writer store root; `lock` rejects a second live daemon. Optional:
 
 `review serve --store <dir> [--host <h>] [--port <p>] [--public-url <url>]` starts the same
 server from the CLI. It prints `reviewd listening on <url>` and shuts down on SIGINT/SIGTERM.
-`GET /` and `GET /auth` are placeholder pages until the UI plan; no SPA is served yet.
+`GET /` serves the built SPA from `packages/web/dist` (override with `CODE_REVIEW_WEB_DIR`); `/review/<id>`, `/new`, `/auth` and `/health` are SPA deep links. If the UI is not built, a small fallback page explains how to build it.
 
 ## Authentication
 
@@ -115,7 +115,7 @@ review event, so the review audit trail survives a daemon restart even though qu
 leases themselves are in memory.
 
 The job bundle contains `prompt`, the read-only snapshot diff, `schema` and `meta`.
-Workers should treat it as read-only and send a `validateReport`-compatible report
+Workers should treat it as read-only and send a `validateReport`-compatible report; each incremental finding is validated before it is recorded.
 (`schemaVersion: 1`).
 
 The opt-in `command` backend runs an argv array without a shell. It receives only a minimal
