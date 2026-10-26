@@ -62,7 +62,7 @@ async function untrackedFile(
   if (info === null || info.isSymbolicLink() || !info.isFile()) return null;
 
   const read = await readBlob(repoRoot, null, path, maxFileLines);
-  const contentHash = includeContent && read.hash !== '' ? read.hash : null;
+  const contentHash = includeContent && !read.oversized && read.hash !== '' ? read.hash : null;
 
   if (read.lines === null) {
     if (!read.binary && !read.oversized) return null;
@@ -158,7 +158,7 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
     const binary = entry.binary || base?.binary === true || head?.binary === true;
     const oversized = base?.oversized === true || head?.oversized === true;
     let contentHash: string | null = null;
-    if (includeContent) {
+    if (includeContent && !oversized) {
       if (head !== null && head.hash !== '') contentHash = head.hash;
       else if (base !== null && base.hash !== '') contentHash = base.hash;
     }

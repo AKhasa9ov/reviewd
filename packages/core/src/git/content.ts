@@ -71,7 +71,7 @@ export async function readBlob(
 
   const lines = splitLines(buffer);
   if (lines.length > maxLines) {
-    return { ...EMPTY, oversized: true, hash: hashOf(buffer) };
+    return { ...EMPTY, oversized: true };
   }
 
   return {

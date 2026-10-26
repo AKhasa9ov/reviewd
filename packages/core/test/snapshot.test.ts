@@ -102,6 +102,23 @@ describe('buildSnapshot', () => {
     const result = await snapshot(repo.root, { maxFileLines: 2 });
     expect(result.files[0]?.oversized).toBe(true);
     expect(result.files[0]?.newLines).toBeUndefined();
+    expect(result.files[0]?.contentHash).toBeNull();
+  });
+
+  it('does not fall back to the base hash when only the head is oversized', async () => {
+    const repo = await makeRepo();
+    cleanups.push(repo.cleanup);
+    await repo.write('src/a.ts', 'a\n');
+    await repo.commit('base');
+    await repo.git('checkout', '-b', 'feature');
+    await repo.write('src/a.ts', 'a\nb\nc\n');
+    await repo.commit('feature');
+
+    const result = await snapshot(repo.root, { maxFileLines: 2 });
+    const file = result.files.find((entry) => entry.path === 'src/a.ts');
+    expect(file?.oversized).toBe(true);
+    expect(file?.newLines).toBeUndefined();
+    expect(file?.contentHash).toBeNull();
   });
 
   it('hashes committed binary bytes without decoding them', async () => {
