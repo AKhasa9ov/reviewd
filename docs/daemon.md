@@ -96,7 +96,9 @@ stream (`id: <reviewId>:<seq>`, `event: <type>`, `data: <event>`) when
 `?after=<seq>`. Review cursors use the per-review event sequence.
 
 The global stream (`GET /api/events`) uses a separate, monotonically increasing
-daemon-wide cursor. Its SSE ids are `<reviewId>:<globalSeq>`, and a long-poll returns
+daemon-wide cursor persisted in `stream-cursor.json`. The cursor is reserved before
+events are published, so a restart can skip ids but never reuses one; historical events
+may be replayed under new ids, which SSE clients must treat idempotently. Its SSE ids are `<reviewId>:<globalSeq>`, and a long-poll returns
 `{events:[{reviewId,event,seq}]}`. Reconnect with that global `seq`; do not mix it with a
 review cursor. Before replaying, both streams sync the event log for the requested review
 (or every review for the global stream), so a client reconnecting after a daemon restart
