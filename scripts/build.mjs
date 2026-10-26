@@ -28,3 +28,17 @@ await build({
 });
 
 await chmod('packages/server/dist/cli.js', 0o755);
+
+await build({
+  entryPoints: ['packages/server/src/reviewd.ts'],
+  outfile: 'packages/server/dist/reviewd.js',
+  bundle: true,
+  platform: 'node',
+  format: 'esm',
+  target: 'node22',
+  sourcemap: true,
+  logLevel: 'info',
+  alias: { '@dsh-code-review/core': coreEntry },
+});
+
+await chmod('packages/server/dist/reviewd.js', 0o755);

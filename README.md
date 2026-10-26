@@ -6,10 +6,10 @@ agent session. See `docs/design.md`.
 
 ## Status
 
-Plans 1–3 of 6: the git diff/snapshot foundation, the C3 review-state library
-(event store, rounds, anchors, outcomes) and C4 (`ReviewServiceImpl`, feedback package,
-reviewer contract/backends). HTTP, daemon jobs, UI and the DSH bundle are implemented in
-later plans.
+Plans 1–5 of 6: the git diff/snapshot foundation, the C3 review-state library
+(event store, rounds, anchors, outcomes), C4 (`ReviewServiceImpl`, feedback package,
+reviewer contract/backends) and C5 (`reviewd` HTTP/SSE/long-poll daemon, workers/jobs,
+deliveries and the remote `review` CLI). The DSH bundle and review UI are later plans.
 
 ## Review state (C3)
 
@@ -146,6 +146,47 @@ shell), with `{promptFile}`, `{repo}`, `{outputFile}` and `{reviewId}` placehold
 timeout, captured stdout/stderr, last-fenced-JSON fallback, and before/after
 `git status --porcelain` via an injected runner; it sets `dirtyWorktree` and never writes
 the repository itself.
+
+## Daemon and CLI (C5)
+
+`reviewd` exposes the service over authenticated HTTP. Start it with a 32+ byte token and a
+store directory:
+
+```bash
+export CODE_REVIEW_TOKEN="$(openssl rand -hex 32)"
+export CODE_REVIEW_STORE=/var/lib/code-review
+node packages/server/dist/reviewd.js
+# or: review serve --store /var/lib/code-review --public-url https://review.example
+```
+
+Machine clients use `Authorization: Bearer $CODE_REVIEW_TOKEN`; browsers can exchange the
+token for the HttpOnly `cr_session` cookie at `/api/auth`. Health and version are public.
+Everything else is behind auth, mutations are same-origin, and per-peer rate limits return
+`429` with `Retry-After`. Errors are `{error:{code,message,details?}}` with the daemon
+codes (`unauthorized`, `validation`, `not-found`, `conflict`, `stale-review`, `agent-busy`,
+`rate-limited`, `internal`, …).
+
+The daemon provides review REST routes, a 25s long-poll/SSE event stream, worker
+registration/heartbeat, 60-second job leases with `attemptId` idempotency, and a delivery
+queue keyed by `reviewId:round:submissionId`. Review state stays in the C3 event log; worker
+steps are appended as `agent/*` events. See `docs/daemon.md` for endpoint payloads, curl
+examples, the worker loop and the delivery contract.
+
+```bash
+review start --repo /srv/repo --base main --reviewer worker --json
+review status <id> --json
+review feedback <id> --wait --format md
+review comments add <id> --file src/a.ts --line 42 --body 'Please explain'
+review submit <id> --request-changes --summary 'Address the blocker'
+review health
+review gc --older-than 90d
+```
+
+`review diff` remains a local command and is unchanged. Remote commands take `--daemon`
+or `CODE_REVIEW_URL` and `CODE_REVIEW_TOKEN` (or `~/.config/code-review/config.json`,
+mode `0600`). Exit codes: `0` ok, `2` timeout, `3` auth, `4` daemon unavailable, `5`
+validation, `6` conflict/stale. `review serve` and the built `reviewd` entry print the
+listener URL and shut down cleanly on SIGINT/SIGTERM.
 
 ## Development
 

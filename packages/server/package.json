@@ -5,7 +5,8 @@
   "license": "MIT",
   "type": "module",
   "bin": {
-    "review": "./dist/cli.js"
+    "review": "./dist/cli.js",
+    "reviewd": "./dist/reviewd.js"
   },
   "dependencies": {
     "@dsh-code-review/core": "workspace:*"
