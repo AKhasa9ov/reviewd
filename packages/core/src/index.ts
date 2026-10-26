@@ -81,6 +81,7 @@ export type {
   SuggestionState,
   FixStatus,
   FixClaimRecord,
+  Initiator,
   SubmissionRecord,
   Suggestion,
 } from './review/types.js';

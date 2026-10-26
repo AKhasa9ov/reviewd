@@ -66,6 +66,7 @@ async function createReview(
   base: string,
   reviewer: Record<string, unknown> = { backend: 'worker' },
   repoRoot?: string,
+  initiator?: Record<string, unknown>,
 ) {
   const response = await fetch(`${base}/api/reviews`, {
     method: 'POST',
@@ -75,6 +76,7 @@ async function createReview(
       title: 'Demo review',
       scope: { kind: 'range', baseRef: 'main', headRef: 'HEAD' },
       reviewer,
+      ...(initiator === undefined ? {} : { initiator }),
     }),
   });
   return { response, body: await read(response) };
@@ -266,7 +268,11 @@ describe('jobs, workers and deliveries', () => {
   it('leases a job once, accepts idempotent reports and queues a delivery', async () => {
     const { daemonUrl } = await running({ longPollMs: 50 });
     const checkout = await repo();
-    const created = await createReview(daemonUrl, { backend: 'worker' }, checkout.root);
+    const created = await createReview(daemonUrl, { backend: 'worker' }, checkout.root, {
+      harness: 'dsh',
+      sessionId: 'session-42',
+      cwd: checkout.root,
+    });
     const reviewId = created.body.review.review.id as string;
 
     const registered = await fetch(`${daemonUrl}/api/workers/register`, {
@@ -326,6 +332,10 @@ describe('jobs, workers and deliveries', () => {
     expect(pending.status).toBe(200);
     const pendingBody = await read(pending);
     expect(pendingBody.deliveries).toHaveLength(1);
+    expect(pendingBody.deliveries[0].initiator).toMatchObject({
+      harness: 'dsh',
+      sessionId: 'session-42',
+    });
     const deliveryId = pendingBody.deliveries[0].id as string;
     const ack = await fetch(`${daemonUrl}/api/deliveries/${deliveryId}/ack`, {
       method: 'POST',

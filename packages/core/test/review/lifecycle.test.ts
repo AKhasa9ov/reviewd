@@ -130,6 +130,27 @@ describe('ReviewLifecycle', () => {
     ]);
   });
 
+  it('persists and reloads the initiating session', async () => {
+    const store = await openStore();
+    const lifecycle = new ReviewLifecycle(store);
+    const initiator = {
+      harness: 'dsh',
+      sessionId: 'session-42',
+      cwd: '/tmp/repo',
+      agentPreset: 'reviewer',
+    };
+
+    const review = await lifecycle.create({
+      title: 'Initiator',
+      repoRoot: '/tmp/repo',
+      actor,
+      initiator,
+    });
+
+    expect(review.initiator).toEqual(initiator);
+    await expect(lifecycle.get(review.id)).resolves.toMatchObject({ initiator });
+  });
+
   it('adds immutable rounds and persists each snapshot', async () => {
     const store = await openStore();
     const lifecycle = new ReviewLifecycle(store);

@@ -6,6 +6,14 @@ export type CommentId = string;
 
 export type ActorKind = 'human' | 'agent' | 'system';
 
+/** Where the review was requested; used to route feedback back to that session. */
+export interface Initiator {
+  harness: string;
+  sessionId: string;
+  cwd?: string;
+  agentPreset?: string;
+}
+
 export interface Actor {
   name: string;
   kind: ActorKind;
@@ -112,6 +120,8 @@ export interface ReviewState {
   createdAt: string;
   /** Human or system actor that opened the review; absent on legacy events. */
   createdBy?: Actor;
+  /** Initiating harness session, when created by an agent. Absent on legacy events. */
+  initiator?: Initiator;
   rounds: Round[];
   comments: Comment[];
   version: number;
@@ -158,6 +168,7 @@ export interface CreateReviewInput {
   repoRoot: string;
   actor: Actor;
   reviewer?: ReviewerConfig;
+  initiator?: Initiator;
 }
 
 export interface AddCommentInput {

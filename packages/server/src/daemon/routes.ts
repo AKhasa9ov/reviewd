@@ -15,6 +15,7 @@ import type {
   CommentState,
   DiffScope,
   Finding,
+  Initiator,
   ReviewEvent,
   ReviewService,
   ReviewerConfig,
@@ -163,6 +164,22 @@ async function enqueueWorkerJob(ctx: RouteContext, reviewId: string): Promise<vo
   });
 }
 
+function parseInitiator(value: unknown): Initiator | undefined {
+  if (value === undefined) return undefined;
+  const input = object(value, 'initiator');
+  const harness = str(input.harness, 'initiator.harness');
+  const sessionId = str(input.sessionId, 'initiator.sessionId');
+  const cwd = input.cwd === undefined ? undefined : str(input.cwd, 'initiator.cwd');
+  const agentPreset =
+    input.agentPreset === undefined ? undefined : str(input.agentPreset, 'initiator.agentPreset');
+  return {
+    harness,
+    sessionId,
+    ...(cwd === undefined ? {} : { cwd }),
+    ...(agentPreset === undefined ? {} : { agentPreset }),
+  };
+}
+
 async function createReview(
   ctx: RouteContext,
   req: IncomingMessage,
@@ -173,12 +190,14 @@ async function createReview(
     body.reviewer === undefined
       ? undefined
       : (object(body.reviewer, 'reviewer') as unknown as ReviewerConfig);
+  const initiator = parseInitiator(body.initiator);
   const view = await ctx.service.create(
     {
       repoRoot: str(body.repoRoot, 'repoRoot'),
       title: str(body.title, 'title'),
       scope: object(body.scope, 'scope') as unknown as DiffScope,
       ...(reviewer === undefined ? {} : { reviewer }),
+      ...(initiator === undefined ? {} : { initiator }),
     },
     ctxFor(req, auth),
   );
@@ -411,12 +430,17 @@ export async function handle(
           : { includeResolved: body.includeResolved === true }),
       };
       const submission = await ctx.service.submit(reviewId, input, ctxFor(req, options.auth));
+      const review = await ctx.service.get(reviewId);
+      const initiator = review.review.initiator;
       const delivery = ctx.deliveries.create({
         deliveryKey: submission.deliveryKey,
         reviewId,
         round: submission.round,
         submissionId: submission.deliveryKey.split(':')[2] ?? 'unknown',
-        harness: typeof body.harness === 'string' && body.harness !== '' ? body.harness : 'dsh',
+        harness:
+          initiator?.harness ??
+          (typeof body.harness === 'string' && body.harness !== '' ? body.harness : 'dsh'),
+        ...(initiator === undefined ? {} : { initiator }),
         feedback: submission.feedback,
       });
       await ctx.hub.sync(reviewId);

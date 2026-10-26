@@ -74,6 +74,25 @@ function assertContext(ctx: CallContext): void {
   }
 }
 
+function validateInitiator(value: ServiceCreateInput['initiator']): void {
+  if (value === undefined) return;
+  if (typeof value !== 'object' || value === null) {
+    throw new ReviewError('validation', 'initiator must be an object');
+  }
+  if (typeof value.harness !== 'string' || value.harness.trim() === '') {
+    throw new ReviewError('validation', 'initiator.harness must be a non-empty string');
+  }
+  if (typeof value.sessionId !== 'string' || value.sessionId.trim() === '') {
+    throw new ReviewError('validation', 'initiator.sessionId must be a non-empty string');
+  }
+  for (const field of ['cwd', 'agentPreset'] as const) {
+    const fieldValue = value[field];
+    if (fieldValue !== undefined && (typeof fieldValue !== 'string' || fieldValue.trim() === '')) {
+      throw new ReviewError('validation', `initiator.${field} must be a non-empty string`);
+    }
+  }
+}
+
 function validateReviewer(config: ReviewerConfig): void {
   if (!['fake', 'command', 'none', 'worker'].includes(config.backend)) {
     throw new ReviewError('validation', `unknown reviewer backend: ${config.backend}`);
@@ -152,6 +171,7 @@ export class ReviewServiceImpl implements ReviewService {
       }
       const reviewer = input.reviewer ?? { backend: 'none' as const };
       validateReviewer(reviewer);
+      validateInitiator(input.initiator);
 
       let snapshot: Snapshot;
       try {
@@ -167,6 +187,7 @@ export class ReviewServiceImpl implements ReviewService {
           repoRoot: input.repoRoot,
           actor: ctx.actor,
           reviewer,
+          ...(input.initiator === undefined ? {} : { initiator: input.initiator }),
         });
         await this.lifecycle.addRound(state.id, snapshot, ctx.actor);
       } catch (error) {

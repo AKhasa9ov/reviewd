@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import type { FeedbackPackage } from '@dsh-code-review/core';
+import type { FeedbackPackage, Initiator } from '@dsh-code-review/core';
 
 export interface DeliveryRecord {
   id: string;
@@ -8,6 +8,8 @@ export interface DeliveryRecord {
   round: number;
   submissionId: string;
   harness: string;
+  /** Initiating session route; absent for legacy/CLI deliveries. */
+  initiator?: Initiator;
   status: 'pending' | 'acked' | 'failed';
   feedback: FeedbackPackage;
   createdAt: string;
@@ -31,6 +33,7 @@ export class DeliveryQueue {
     round: number;
     submissionId: string;
     harness: string;
+    initiator?: Initiator;
     feedback: FeedbackPackage;
   }): DeliveryRecord {
     const existing = this.byKey.get(input.deliveryKey);
@@ -47,6 +50,7 @@ export class DeliveryQueue {
       round: input.round,
       submissionId: input.submissionId,
       harness: input.harness,
+      ...(input.initiator === undefined ? {} : { initiator: input.initiator }),
       status: 'pending',
       feedback: input.feedback,
       createdAt: at,

@@ -85,6 +85,7 @@ export class ReviewLifecycle {
       status: 'open',
       createdAt: this.now().toISOString(),
       createdBy: input.actor,
+      ...(input.initiator === undefined ? {} : { initiator: input.initiator }),
       rounds: [],
       comments: [],
       version: 0,

@@ -14,6 +14,7 @@ import type {
   ReviewId,
   ReviewState,
   ReviewSummary,
+  Initiator,
   RoundNo,
   SubmissionRecord,
 } from '../review/types.js';
@@ -50,6 +51,7 @@ export interface ServiceCreateInput {
   title: string;
   scope: DiffScope;
   reviewer?: ReviewerConfig;
+  initiator?: Initiator;
 }
 
 export interface ReviewView {

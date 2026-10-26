@@ -185,6 +185,29 @@ describe('ReviewServiceImpl', () => {
     });
   });
 
+  it('validates and persists the initiator', async () => {
+    const h = await harness();
+    const initiator = { harness: 'dsh', sessionId: 'session-42', cwd: '/work/repo' };
+    const view = await h.service.create(
+      { repoRoot: '/tmp/repo', title: 'Initiator', scope: h.scope, initiator },
+      { actor },
+    );
+    expect(view.review.initiator).toEqual(initiator);
+
+    await expectError(
+      h.service.create(
+        {
+          repoRoot: '/tmp/repo',
+          title: 'Bad initiator',
+          scope: h.scope,
+          initiator: { harness: 'dsh', sessionId: '' },
+        },
+        { actor },
+      ),
+      'validation',
+    );
+  });
+
   it('returns the same review for a repeated create request id', async () => {
     const h = await harness();
     const input = { repoRoot: '/tmp/repo', title: 'Idem', scope: h.scope };

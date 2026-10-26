@@ -211,6 +211,7 @@ function help(): string {
     '',
     'daemon commands:',
     '  review start --repo <path> [--base <ref>] [--head <ref>|--worktree|--commit <sha>]',
+    '               [--session-id <id> [--harness <name>] [--cwd <path>]]',
     '  review status <id> | review feedback <id> [--wait] [--format md|json]',
     '  review comments list|add ... | review submit ... | review refresh <id>',
     '  review fix-status <id> --json @file.json | review health | review gc',
@@ -426,9 +427,26 @@ async function runRemote(
     if (explicitWorktree) args.splice(args.indexOf('--worktree'), 1);
     const title = remove('--title') ?? 'Code review';
     const reviewer = remove('--reviewer') ?? 'none';
+    const sessionId = remove('--session-id');
+    const harness = remove('--harness') ?? 'dsh';
+    const initiatorCwd = remove('--cwd');
     const waitAgent = args.includes('--wait-agent');
     if (waitAgent) args.splice(args.indexOf('--wait-agent'), 1);
     if (args.length > 0) throw new UsageError(`unknown flag: ${args[0]}`);
+    if (sessionId === undefined && (harness !== 'dsh' || initiatorCwd !== undefined)) {
+      throw new UsageError('--session-id is required with --harness or --cwd');
+    }
+    if (sessionId !== undefined && sessionId.trim() === '') {
+      throw new UsageError('--session-id must be non-empty');
+    }
+    const initiator =
+      sessionId === undefined
+        ? undefined
+        : {
+            harness,
+            sessionId,
+            cwd: initiatorCwd ?? repo,
+          };
     if (explicitWorktree && commit !== undefined)
       throw new UsageError('choose only one of --worktree or --commit');
     if (commit !== undefined && head !== undefined)
@@ -456,6 +474,7 @@ async function runRemote(
       title,
       scope,
       reviewer: parseReviewer(reviewer),
+      ...(initiator === undefined ? {} : { initiator }),
     });
     if (waitAgent) {
       const review = created.review as
