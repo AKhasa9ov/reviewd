@@ -12,6 +12,15 @@ export interface CliIO {
   stderr: { write: (text: string) => unknown };
 }
 
+export interface CliDeps {
+  resolveRepoRoot: typeof resolveRepoRoot;
+  resolveDefaultBase: typeof resolveDefaultBase;
+  buildSnapshot: typeof buildSnapshot;
+  debug?: boolean;
+}
+
+const defaultDeps: CliDeps = { resolveRepoRoot, resolveDefaultBase, buildSnapshot };
+
 class UsageError extends Error {
   constructor(message: string) {
     super(message);
@@ -108,6 +117,26 @@ function parseDiff(args: string[]): DiffOptions {
 
   const selectors = [options.worktree, options.commit !== undefined].filter(Boolean).length;
   if (selectors > 1) throw new UsageError('choose only one of --worktree or --commit');
+
+  if (options.commit !== undefined) {
+    const conflicts: string[] = [];
+    if (options.base !== undefined) conflicts.push('--base');
+    if (options.head !== undefined) conflicts.push('--head');
+    if (options.twoDot) conflicts.push('--two-dot');
+    if (conflicts.length > 0) {
+      throw new UsageError(`--commit cannot be combined with ${conflicts.join(', ')}`);
+    }
+  }
+
+  if (options.worktree) {
+    const conflicts: string[] = [];
+    if (options.head !== undefined) conflicts.push('--head');
+    if (options.twoDot) conflicts.push('--two-dot');
+    if (conflicts.length > 0) {
+      throw new UsageError(`--worktree cannot be combined with ${conflicts.join(', ')}`);
+    }
+  }
+
   return options;
 }
 
@@ -167,10 +196,17 @@ function help(): string {
     '  --max-lines <n>     cap lines per file',
     '  --ignore <glob>     exclude a path pattern (repeatable)',
     '',
+    'flags take a separate value (--base main); --flag=value and -- are not supported.',
+    'exit codes: 0 success, 1 internal failure, 5 usage or git validation',
+    '',
   ].join('\n');
 }
 
-export async function runCli(argv: readonly string[], io: CliIO): Promise<number> {
+export async function runCli(
+  argv: readonly string[],
+  io: CliIO,
+  deps: CliDeps = defaultDeps,
+): Promise<number> {
   const args = [...argv];
   const command = args.shift() ?? 'help';
 
@@ -188,12 +224,12 @@ export async function runCli(argv: readonly string[], io: CliIO): Promise<number
     }
 
     const options = parseDiff(args);
-    const repoRoot = await resolveRepoRoot(options.repo);
+    const repoRoot = await deps.resolveRepoRoot(options.repo);
     const baseRef =
       options.commit === undefined
-        ? (options.base ?? (await resolveDefaultBase(repoRoot)))
+        ? (options.base ?? (await deps.resolveDefaultBase(repoRoot)))
         : 'HEAD';
-    const snapshot = await buildSnapshot({
+    const snapshot = await deps.buildSnapshot({
       repoRoot,
       scope: scope(options, baseRef),
       includeUntracked: options.includeUntracked,
@@ -214,8 +250,11 @@ export async function runCli(argv: readonly string[], io: CliIO): Promise<number
       io.stderr.write(`error: ${error.message}\n`);
       return 5;
     }
-    const message = error instanceof Error ? error.message : String(error);
-    io.stderr.write(`error: ${message}\n`);
-    return 5;
+    io.stderr.write('error: internal failure\n');
+    if (deps.debug ?? Boolean(process.env.DEBUG)) {
+      const detail = error instanceof Error ? (error.stack ?? error.message) : String(error);
+      io.stderr.write(`${detail}\n`);
+    }
+    return 1;
   }
 }
