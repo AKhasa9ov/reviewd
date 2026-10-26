@@ -64,6 +64,7 @@ export function deriveOutcome(
 
   if (
     suggestion !== undefined &&
+    normalizeQuote(suggestion.original) === previousQuote &&
     content === normalizeQuote(suggestion.replacement) &&
     content !== previousQuote
   ) {
