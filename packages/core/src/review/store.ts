@@ -1,5 +1,16 @@
 import { randomBytes } from 'node:crypto';
-import { open, readdir, readFile, mkdir, rename, rm, truncate, unlink } from 'node:fs/promises';
+import type { Dirent } from 'node:fs';
+import {
+  link,
+  open,
+  readdir,
+  readFile,
+  mkdir,
+  rename,
+  rm,
+  truncate,
+  unlink,
+} from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { isReviewEvent, ReviewEventError } from './events.js';
 import type { ReviewEvent } from './events.js';
@@ -100,6 +111,7 @@ function isReviewState(value: unknown): value is ReviewState {
     typeof value.status === 'string' &&
     REVIEW_STATUSES.has(value.status as ReviewStatus) &&
     isTimestamp(value.createdAt) &&
+    (value.closedAt === undefined || isTimestamp(value.closedAt)) &&
     Array.isArray(value.rounds) &&
     Array.isArray(value.comments) &&
     value.comments.every(isComment) &&
@@ -297,6 +309,7 @@ export class ReviewStore {
   readonly lockPath: string;
   private readonly lockCreatedAt: string;
   private readonly entries = new Map<ReviewId, CacheEntry>();
+  private readonly locks = new Map<ReviewId, Promise<unknown>>();
   private closed = false;
 
   private constructor(root: string, lockCreatedAt: string) {
@@ -357,52 +370,61 @@ export class ReviewStore {
       );
     }
 
-    const dir = this.reviewDir(id);
-    await mkdir(dir, { recursive: true });
-    const eventsPath = join(dir, 'events.jsonl');
-    await this.repairTornTail(eventsPath);
+    // A review's read-fold-append-cache sequence is one critical section. Two
+    // concurrent appends must not both read the same event count and write the
+    // same sequence number.
+    return await this.withReviewLock(id, async () => {
+      const dir = this.reviewDir(id);
+      await mkdir(dir, { recursive: true });
+      const eventsPath = join(dir, 'events.jsonl');
+      await this.repairTornTail(eventsPath);
 
-    let entry: CacheEntry | undefined = this.entries.get(id);
-    if (entry === undefined) {
+      let entry: CacheEntry | undefined = this.entries.get(id);
+      if (entry === undefined) {
+        try {
+          entry = await this.readEntry(id);
+        } catch (error) {
+          if (!(error instanceof ReviewNotFoundError)) throw error;
+        }
+      }
+      if (entry === undefined) {
+        if (event.type !== 'review/created') throw new ReviewNotFoundError(id);
+        entry = { state: event.data.review, eventCount: 0 };
+      }
+
+      // Validate against the aggregate before touching the log: a rejected event
+      // must not leave a line that makes every later replay fail.
+      const state = fold(entry.state, event);
+      const sequenced = { ...event, seq: entry.eventCount + 1 } as ReviewEvent;
+      const payload = `${JSON.stringify(sequenced)}\n`;
+      const handle = await open(eventsPath, 'a');
       try {
-        entry = await this.readEntry(id);
-      } catch (error) {
-        if (!(error instanceof ReviewNotFoundError)) throw error;
+        const result = await handle.write(payload);
+        if (result.bytesWritten !== Buffer.byteLength(payload)) {
+          throw new Error('short event write');
+        }
+        await handle.sync();
+      } finally {
+        await handle.close();
       }
-    }
-    if (entry === undefined) {
-      if (event.type !== 'review/created') throw new ReviewNotFoundError(id);
-      entry = { state: event.data.review, eventCount: 0 };
-    }
 
-    // Validate against the aggregate before touching the log: a rejected event
-    // must not leave a line that makes every later replay fail.
-    const state = fold(entry.state, event);
-    const sequenced = { ...event, seq: entry.eventCount + 1 } as ReviewEvent;
-    const payload = `${JSON.stringify(sequenced)}\n`;
-    const handle = await open(eventsPath, 'a');
-    try {
-      const result = await handle.write(payload);
-      if (result.bytesWritten !== Buffer.byteLength(payload)) {
-        throw new Error('short event write');
-      }
-      await handle.sync();
-    } finally {
-      await handle.close();
-    }
-
-    const next = { state, eventCount: entry.eventCount + 1 };
-    this.entries.set(id, next);
-    await this.writeCache(id, next);
-    return structuredClone(sequenced);
+      const next = { state, eventCount: entry.eventCount + 1 };
+      this.entries.set(id, next);
+      // The event log is the source of truth. A cache failure must not turn a
+      // committed mutation into an error; the next read rebuilds the cache.
+      await this.writeCache(id, next).catch(() => undefined);
+      return structuredClone(sequenced);
+    });
   }
 
   async load(reviewId: ReviewId): Promise<ReviewState> {
     if (this.closed) throw new Error('review store is closed');
     const id = safeReviewId(reviewId);
-    const entry = await this.readEntry(id);
-    this.entries.set(id, entry);
-    return structuredClone(entry.state);
+    return await this.withReviewLock(id, async () => {
+      const entry = await this.readEntry(id);
+      this.entries.set(id, entry);
+      return structuredClone(entry.state);
+    });
   }
 
   async events(reviewId: ReviewId, after = 0): Promise<ReviewEvent[]> {
@@ -411,9 +433,11 @@ export class ReviewStore {
     if (!Number.isInteger(after) || after < 0) {
       throw new ReviewEventError('invalid-event', 'after must be a non-negative integer');
     }
-    const entry = await this.readEntry(id);
-    this.entries.set(id, entry);
-    return structuredClone((entry.events ?? []).filter((event) => (event.seq ?? 0) > after));
+    return await this.withReviewLock(id, async () => {
+      const entry = await this.readEntry(id);
+      this.entries.set(id, entry);
+      return structuredClone((entry.events ?? []).filter((event) => (event.seq ?? 0) > after));
+    });
   }
 
   async list(): Promise<ReviewSummary[]> {
@@ -430,9 +454,18 @@ export class ReviewStore {
     const summaries: ReviewSummary[] = [];
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
-      const cache = await this.readCache(entry.name).catch(() => null);
-      if (cache === null || cache.state.id !== entry.name) continue;
-      summaries.push(summary(cache.state));
+      const id = entry.name as ReviewId;
+      const cache = await this.readCache(id).catch(() => null);
+      if (cache !== null && cache.state.id === id) {
+        summaries.push(summary(cache.state));
+        continue;
+      }
+      // A missing or corrupt cache must not hide the review: replay its JSONL
+      // log and write a replacement cache as a side effect.
+      const rebuilt = await this.readEntry(id).catch(() => null);
+      if (rebuilt === null || rebuilt.state.id !== id) continue;
+      this.entries.set(id, rebuilt);
+      summaries.push(summary(rebuilt.state));
     }
     summaries.sort((left, right) => {
       if (left.createdAt !== right.createdAt) return left.createdAt < right.createdAt ? -1 : 1;
@@ -460,11 +493,14 @@ export class ReviewStore {
       await handle.close();
     }
     try {
-      await rename(temp, target);
+      // A hard link publishes the finished file atomically and fails with
+      // EEXIST when the snapshot id is already taken, so snapshots are immutable.
+      await link(temp, target);
     } catch (error) {
       await unlink(temp).catch(() => undefined);
       throw error;
     }
+    await unlink(temp).catch(() => undefined);
   }
 
   async readSnapshot(snapshotId: string): Promise<Snapshot> {
@@ -500,17 +536,33 @@ export class ReviewStore {
       throw new RangeError('olderThanDays must be a non-negative number');
     }
     const cutoff = now.getTime() - olderThanDays * 24 * 60 * 60 * 1000;
-    const summaries = await this.list();
+    const reviewsRoot = join(this.root, 'reviews');
+    let reviewEntries: Dirent[] = [];
+    try {
+      reviewEntries = await readdir(reviewsRoot, { withFileTypes: true });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+
+    // Scan directories directly instead of trusting list(): a missing or stale
+    // cache must not make an old review invisible to garbage collection.
     const all = new Map<ReviewId, ReviewState>();
-    for (const summary of summaries) {
-      const entry = await this.readEntry(summary.id).catch(() => null);
-      if (entry !== null) all.set(summary.id, entry.state);
+    for (const entry of reviewEntries) {
+      if (!entry.isDirectory()) continue;
+      const id = entry.name as ReviewId;
+      const loaded = await this.readEntry(id).catch(() => null);
+      if (loaded === null) continue;
+      all.set(id, loaded.state);
+      this.entries.set(id, loaded);
     }
 
     const removedReviews: ReviewId[] = [];
     for (const [id, state] of all) {
       if (state.status !== 'closed') continue;
-      if (new Date(state.createdAt).getTime() >= cutoff) continue;
+      // Newer logs carry the close time; legacy logs fall back to createdAt so
+      // their previous collection behavior is preserved.
+      const closedTime = new Date(state.closedAt ?? state.createdAt).getTime();
+      if (!Number.isFinite(closedTime) || closedTime >= cutoff) continue;
       removedReviews.push(id);
       await rm(this.reviewDir(id), { recursive: true, force: true });
       this.entries.delete(id);
@@ -551,6 +603,27 @@ export class ReviewStore {
       await unlink(this.lockPath).catch((error: unknown) => {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
       });
+    }
+  }
+
+  /**
+   * Serializes work per review without blocking other reviews. A failed task
+   * releases the gate so later appends can still make progress.
+   */
+  private async withReviewLock<T>(reviewId: ReviewId, task: () => Promise<T>): Promise<T> {
+    const previous = this.locks.get(reviewId) ?? Promise.resolve();
+    let release!: () => void;
+    const gate = new Promise<void>((resolveGate) => {
+      release = resolveGate;
+    });
+    const current: Promise<unknown> = previous.catch(() => undefined).then(() => gate);
+    this.locks.set(reviewId, current);
+    await previous.catch(() => undefined);
+    try {
+      return await task();
+    } finally {
+      release();
+      if (this.locks.get(reviewId) === current) this.locks.delete(reviewId);
     }
   }
 
@@ -602,7 +675,7 @@ export class ReviewStore {
     }
 
     const entry = { state, eventCount, events };
-    await this.writeCache(reviewId, entry);
+    await this.writeCache(reviewId, entry).catch(() => undefined);
     return entry;
   }
 

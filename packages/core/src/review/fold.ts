@@ -108,6 +108,7 @@ export function fold(state: ReviewState, event: ReviewEvent): ReviewState {
     }
     case 'review/closed': {
       next.status = 'closed';
+      next.closedAt ??= event.at;
       break;
     }
     case 'review/submitted': {
@@ -117,7 +118,10 @@ export function fold(state: ReviewState, event: ReviewEvent): ReviewState {
         throw new ReviewFoldError(`duplicate submission: ${submission.submissionId}`);
       }
       next.submissions.push(submission);
-      if (submission.verdict === 'approve') next.status = 'closed';
+      if (submission.verdict === 'approve') {
+        next.status = 'closed';
+        next.closedAt ??= event.at;
+      }
       break;
     }
     case 'agent/started': {

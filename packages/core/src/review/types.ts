@@ -118,6 +118,8 @@ export interface ReviewState {
   repoRoot: string;
   status: ReviewStatus;
   createdAt: string;
+  /** Set when the review first closes; absent while open and on legacy events. */
+  closedAt?: string;
   /** Human or system actor that opened the review; absent on legacy events. */
   createdBy?: Actor;
   /** Initiating harness session, when created by an agent. Absent on legacy events. */

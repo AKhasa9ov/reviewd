@@ -9,7 +9,15 @@ import {
   ReviewStoreLockedError,
   ReviewNotFoundError,
 } from '../../src/index.js';
-import type { Actor, Anchor, Comment, ReviewEvent, ReviewState, Round } from '../../src/index.js';
+import type {
+  Actor,
+  Anchor,
+  Comment,
+  ReviewEvent,
+  ReviewState,
+  Round,
+  Snapshot,
+} from '../../src/index.js';
 
 const actor: Actor = { name: 'Ada', kind: 'human' };
 const at = '2026-10-26T12:00:00.000Z';
@@ -48,6 +56,25 @@ function round(no = 1): Round {
     baseSha: 'a'.repeat(40),
     headSha: 'b'.repeat(40),
     path: 'snapshots/one.json',
+  };
+}
+
+function snapshotFixture(): Snapshot {
+  return {
+    schemaVersion: 1,
+    scope: {
+      kind: 'range',
+      repoRoot: '/tmp/repo',
+      baseRef: 'main',
+      headRef: 'HEAD',
+      baseSha: 'a'.repeat(40),
+      headSha: 'b'.repeat(40),
+      label: 'main..HEAD',
+      worktreeDigest: 'c'.repeat(40),
+    },
+    files: [],
+    totals: { files: 0, added: 0, deleted: 0, truncated: false },
+    warnings: [],
   };
 }
 
@@ -342,6 +369,118 @@ describe('ReviewStore', () => {
     await store.load(reviewId);
     const files = await readdir(join(root, 'reviews', reviewId));
     expect(files.sort()).toEqual(['events.jsonl', 'snapshot.json']);
+    await store.close();
+  });
+
+  it('serializes concurrent appends so every event gets a unique sequence', async () => {
+    const root = await tempRoot();
+    const store = await ReviewStore.open(root);
+    await store.append(reviewId, created());
+    await store.append(reviewId, event('round/created', { round: round() }, 'evt_round'));
+
+    const comments = Array.from({ length: 20 }, (_item, index) => `cmt_${index}`);
+    await Promise.all(
+      comments.map(async (commentId, index) =>
+        store.append(
+          reviewId,
+          event(
+            'comment/added',
+            { comment: comment(commentId) },
+            `evt_comment_${index.toString().padStart(2, '0')}`,
+          ),
+        ),
+      ),
+    );
+    await store.close();
+
+    const reopened = await ReviewStore.open(root);
+    const state = await reopened.load(reviewId);
+    const events = await reopened.events(reviewId, 0);
+    expect(state.comments.map((item) => item.id).sort()).toEqual(comments.sort());
+    expect(events).toHaveLength(22);
+    expect(events.map((item) => item.seq)).toEqual(Array.from({ length: 22 }, (_v, i) => i + 1));
+    await reopened.close();
+  });
+
+  it('keeps an append committed when the cache cannot be written', async () => {
+    const root = await tempRoot();
+    const store = await ReviewStore.open(root);
+    await store.append(reviewId, created());
+    await store.close();
+
+    const cachePath = join(root, 'reviews', reviewId, 'snapshot.json');
+    await rm(cachePath);
+    await mkdir(cachePath);
+
+    const reopened = await ReviewStore.open(root);
+    const appended = await reopened.append(
+      reviewId,
+      event('comment/added', { comment: comment('cmt_cache') }, 'evt_cache'),
+    );
+    expect(appended.seq).toBe(2);
+    const state = await reopened.load(reviewId);
+    expect(state.comments.map((item) => item.id)).toEqual(['cmt_cache']);
+    await reopened.close();
+  });
+
+  it('lists a review whose cache is missing by rebuilding it from the event log', async () => {
+    const root = await tempRoot();
+    const store = await ReviewStore.open(root);
+    await store.append(reviewId, created());
+    await store.close();
+    await rm(join(root, 'reviews', reviewId, 'snapshot.json'));
+
+    const reopened = await ReviewStore.open(root);
+    const summaries = await reopened.list();
+    expect(summaries).toHaveLength(1);
+    expect(summaries[0]).toMatchObject({ id: reviewId, title: 'Review state' });
+    const cache = await readJson(join(root, 'reviews', reviewId, 'snapshot.json'));
+    expect(cache['eventCount']).toBe(1);
+    await reopened.close();
+  });
+
+  it('keeps a recently closed review even when it was created long ago', async () => {
+    const root = await tempRoot();
+    const store = await ReviewStore.open(root);
+    await store.append(reviewId, created(baseReview({ createdAt: '2026-01-01T00:00:00.000Z' })));
+    await store.append(reviewId, {
+      ...event('review/closed', { verdict: 'approved' }, 'evt_closed_recent'),
+      at: '2026-10-20T00:00:00.000Z',
+    });
+
+    const result = await store.gc(30, new Date('2026-10-26T00:00:00.000Z'));
+    expect(result.removedReviews).toEqual([]);
+    const state = await store.load(reviewId);
+    expect(state.status).toBe('closed');
+    expect(state.closedAt).toBe('2026-10-20T00:00:00.000Z');
+    await store.close();
+  });
+
+  it('keeps snapshots referenced by a review whose cache is missing', async () => {
+    const root = await tempRoot();
+    const store = await ReviewStore.open(root);
+    await store.writeSnapshot('snap_1', snapshotFixture());
+    await store.writeSnapshot('snap_orphan', snapshotFixture());
+    await store.append(reviewId, created(baseReview({ rounds: [round()] })));
+    await rm(join(root, 'reviews', reviewId, 'snapshot.json'));
+
+    const result = await store.gc(90, new Date(at));
+    expect(result.removedReviews).toEqual([]);
+    expect(result.removedSnapshots).toBe(1);
+    await expect(store.readSnapshot('snap_1')).resolves.toMatchObject({ schemaVersion: 1 });
+    await expect(store.readSnapshot('snap_orphan')).rejects.toBeInstanceOf(ReviewNotFoundError);
+    await store.close();
+  });
+
+  it('refuses to overwrite an existing snapshot id', async () => {
+    const root = await tempRoot();
+    const store = await ReviewStore.open(root);
+    await store.writeSnapshot('snap_1', snapshotFixture());
+
+    await expect(store.writeSnapshot('snap_1', snapshotFixture())).rejects.toMatchObject({
+      code: 'EEXIST',
+    });
+    await expect(store.readSnapshot('snap_1')).resolves.toMatchObject({ schemaVersion: 1 });
     await store.close();
   });
 });
