@@ -1,4 +1,5 @@
 import type { DiffScope, Snapshot } from '../types.js';
+import type { GcResult } from '../review/store.js';
 import type { AgentReport } from '../reviewer/types.js';
 import type { IdPrefix } from '../review/ids.js';
 import type { ReviewEvent } from '../review/events.js';
@@ -8,11 +9,13 @@ import type {
   Actor,
   AddCommentInput,
   Comment,
+  FixClaimRecord,
   CommentState,
   ReviewId,
   ReviewState,
   ReviewSummary,
   RoundNo,
+  SubmissionRecord,
 } from '../review/types.js';
 import type {
   GitStatusRunner,
@@ -153,6 +156,24 @@ export interface SubmissionView {
   deliveryKey: string;
 }
 
+export interface SuggestionActionInput {
+  action: 'accept' | 'decline' | 'apply';
+}
+
+export interface FixStatusInput {
+  items: Array<{ commentId: string; status: FixClaimRecord['status']; evidence?: string }>;
+}
+
+export interface RefreshInput {
+  /** Omit to rebuild the latest scope; pass a scope after new commits. */
+  scope?: DiffScope;
+}
+
+export interface LatestFeedbackView {
+  submission: SubmissionRecord;
+  feedback: FeedbackPackage;
+}
+
 export interface ServiceSnapshotView {
   snapshot: Snapshot;
   round: RoundNo;
@@ -173,6 +194,17 @@ export interface ReviewService {
     ctx: CallContext,
   ): Promise<CommentView>;
   events(id: ReviewId, after?: number): Promise<ReviewEvent[]>;
+  suggestionAction(
+    id: ReviewId,
+    commentId: string,
+    action: SuggestionActionInput['action'],
+    ctx: CallContext,
+  ): Promise<CommentView>;
+  refresh(id: ReviewId, input: RefreshInput, ctx: CallContext): Promise<ReviewView>;
+  close(id: ReviewId, verdict: 'approved' | 'closed', ctx: CallContext): Promise<ReviewView>;
+  claimFixStatus(id: ReviewId, input: FixStatusInput, ctx: CallContext): Promise<void>;
+  latestFeedback(id: ReviewId): Promise<LatestFeedbackView | null>;
+  gc(olderThanDays: number): Promise<GcResult>;
   submit(id: ReviewId, input: SubmitInput, ctx: CallContext): Promise<SubmissionView>;
   runReviewer(id: ReviewId, ctx: CallContext): Promise<AgentReport>;
   cancelAgent(id: ReviewId, ctx: CallContext): Promise<void>;

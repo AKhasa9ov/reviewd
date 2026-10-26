@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { open, readdir, readFile, mkdir, rename, truncate, unlink } from 'node:fs/promises';
+import { open, readdir, readFile, mkdir, rename, rm, truncate, unlink } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { isReviewEvent, ReviewEventError } from './events.js';
 import type { ReviewEvent } from './events.js';
@@ -274,6 +274,12 @@ function summary(state: ReviewState): ReviewSummary {
  * One process writes a review store. JSONL is the source of truth; the
  * atomically replaced snapshot.json is only a replay cache.
  */
+
+export interface GcResult {
+  removedReviews: ReviewId[];
+  removedSnapshots: number;
+}
+
 export class ReviewStore {
   readonly root: string;
   readonly lockPath: string;
@@ -470,6 +476,58 @@ export class ReviewStore {
     }
     if (!isSnapshot(value)) throw new ReviewNotFoundError(id);
     return structuredClone(value);
+  }
+
+  /**
+   * Removes closed reviews older than `olderThanDays` and snapshots that no
+   * remaining review references. Open reviews are never touched.
+   */
+  async gc(olderThanDays: number, now: Date = new Date()): Promise<GcResult> {
+    if (this.closed) throw new Error('review store is closed');
+    if (!Number.isFinite(olderThanDays) || olderThanDays < 0) {
+      throw new RangeError('olderThanDays must be a non-negative number');
+    }
+    const cutoff = now.getTime() - olderThanDays * 24 * 60 * 60 * 1000;
+    const summaries = await this.list();
+    const all = new Map<ReviewId, ReviewState>();
+    for (const summary of summaries) {
+      const entry = await this.readEntry(summary.id).catch(() => null);
+      if (entry !== null) all.set(summary.id, entry.state);
+    }
+
+    const removedReviews: ReviewId[] = [];
+    for (const [id, state] of all) {
+      if (state.status !== 'closed') continue;
+      if (new Date(state.createdAt).getTime() >= cutoff) continue;
+      removedReviews.push(id);
+      await rm(this.reviewDir(id), { recursive: true, force: true });
+      this.entries.delete(id);
+      all.delete(id);
+    }
+
+    const referenced = new Set<string>();
+    for (const state of all.values()) {
+      for (const round of state.rounds) referenced.add(round.snapshotId);
+    }
+    let removedSnapshots = 0;
+    let entries: string[] = [];
+    try {
+      entries = await readdir(join(this.root, 'snapshots'));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+    for (const entry of entries) {
+      if (!entry.endsWith('.json')) continue;
+      const snapshotId = entry.slice(0, -'.json'.length);
+      if (referenced.has(snapshotId)) continue;
+      try {
+        await unlink(join(this.root, 'snapshots', entry));
+        removedSnapshots += 1;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      }
+    }
+    return { removedReviews, removedSnapshots };
   }
 
   async close(): Promise<void> {

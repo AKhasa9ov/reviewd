@@ -16,6 +16,8 @@ export type ReviewStatus = 'open' | 'closed';
 export type CommentState = 'open' | 'resolved' | 'dismissed';
 export type AnchorState = 'active' | 'ambiguous' | 'outdated';
 export type OutcomeStatus = 'applied' | 'addressed' | 'unchanged' | 'outdated' | 'moved';
+export type SuggestionState = 'proposed' | 'accepted' | 'declined' | 'applied';
+export type FixStatus = 'fixed' | 'not-fixed' | 'unclear';
 export type Confidence = 'high' | 'medium' | 'low';
 
 export interface AnchorPosition {
@@ -66,6 +68,8 @@ export interface Comment {
   author: Actor;
   body: string;
   suggestion?: Suggestion;
+  /** Human decision for the suggestion; apply also records a suggestion/applied outcome. */
+  suggestionState?: SuggestionState;
   state: CommentState;
   replies: Reply[];
   anchors: Anchor[];
@@ -119,6 +123,8 @@ export interface ReviewState {
   agent?: AgentState;
   /** Submissions in append order; one per round. */
   submissions?: SubmissionRecord[];
+  /** Agent/harness claims after a fix round; independent from reviewer verification. */
+  fixClaims?: FixClaimRecord[];
 }
 
 export interface ReviewSummary {
@@ -129,6 +135,14 @@ export interface ReviewSummary {
   roundCount: number;
   commentCount: number;
   openCommentCount: number;
+}
+
+export interface FixClaimRecord {
+  commentId: CommentId;
+  status: FixStatus;
+  evidence?: string;
+  by: Actor;
+  at: string;
 }
 
 export interface CreateReviewInput {

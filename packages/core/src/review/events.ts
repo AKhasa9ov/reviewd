@@ -5,7 +5,9 @@ import type {
   Anchor,
   Comment,
   CommentState,
+  FixClaimRecord,
   Outcome,
+  SuggestionState,
   Reply,
   ReviewState,
   Round,
@@ -41,6 +43,15 @@ export interface CommentAnchorData {
   commentId: string;
   anchor: Anchor;
   outcome?: Outcome;
+}
+
+export interface SuggestionStateData {
+  commentId: string;
+  state: SuggestionState;
+}
+
+export interface FixClaimData {
+  claims: FixClaimRecord[];
 }
 
 export interface SuggestionAppliedData {
@@ -90,7 +101,9 @@ export interface ReviewEventDataMap {
   'comment/replied': CommentRepliedData;
   'comment/state': CommentStateData;
   'comment/anchor': CommentAnchorData;
+  'suggestion/state': SuggestionStateData;
   'suggestion/applied': SuggestionAppliedData;
+  'fix/claim': FixClaimData;
   'review/closed': ReviewClosedData;
   'review/submitted': ReviewSubmittedData;
   'agent/started': AgentStartedData;
@@ -108,7 +121,9 @@ export const REVIEW_EVENT_TYPES: readonly ReviewEventType[] = [
   'comment/replied',
   'comment/state',
   'comment/anchor',
+  'suggestion/state',
   'suggestion/applied',
+  'fix/claim',
   'review/closed',
   'review/submitted',
   'agent/started',

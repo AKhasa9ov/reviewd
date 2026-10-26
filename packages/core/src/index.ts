@@ -41,6 +41,8 @@ export type {
   CommentRepliedData,
   CommentStateData,
   CreateEventInput,
+  FixClaimData,
+  SuggestionStateData,
   ReviewClosedData,
   ReviewCreatedData,
   ReviewEvent,
@@ -76,6 +78,9 @@ export type {
   Round,
   RoundNo,
   Side,
+  SuggestionState,
+  FixStatus,
+  FixClaimRecord,
   SubmissionRecord,
   Suggestion,
 } from './review/types.js';
@@ -91,6 +96,7 @@ export {
   ReviewStoreCorruptionError,
   ReviewStoreLockedError,
 } from './review/store.js';
+export type { GcResult } from './review/store.js';
 export type { ReviewStoreOptions } from './review/store.js';
 
 export { FakeReviewer } from './reviewer/fake.js';
@@ -152,6 +158,10 @@ export type {
   ServiceCreateInput,
   ServiceSnapshotView,
   SubmissionView,
+  SuggestionActionInput,
+  FixStatusInput,
+  RefreshInput,
+  LatestFeedbackView,
   SubmitInput,
 } from './service/types.js';
 export { buildFeedback, FEEDBACK_BYTE_LIMIT } from './service/feedback.js';

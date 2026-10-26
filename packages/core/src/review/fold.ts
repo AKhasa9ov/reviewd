@@ -82,6 +82,15 @@ export function fold(state: ReviewState, event: ReviewEvent): ReviewState {
       }
       break;
     }
+    case 'suggestion/state': {
+      findComment(next, event.data.commentId).suggestionState = event.data.state;
+      break;
+    }
+    case 'fix/claim': {
+      next.fixClaims ??= [];
+      next.fixClaims.push(...structuredClone(event.data.claims));
+      break;
+    }
     case 'suggestion/applied': {
       const comment = findComment(next, event.data.commentId);
       const alreadyApplied = comment.outcomes.some(
@@ -93,6 +102,7 @@ export function fold(state: ReviewState, event: ReviewEvent): ReviewState {
           status: 'applied',
           confidence: 'high',
         });
+        comment.suggestionState = 'applied';
       }
       break;
     }

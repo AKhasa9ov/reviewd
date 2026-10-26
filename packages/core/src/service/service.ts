@@ -1,5 +1,6 @@
 import { createId } from '../review/ids.js';
 import { ReviewNotFoundError } from '../review/store.js';
+import type { GcResult } from '../review/store.js';
 import { ReviewLifecycleError } from '../review/lifecycle.js';
 import { createEvent } from '../review/events.js';
 import type { ReviewEvent } from '../review/events.js';
@@ -13,7 +14,7 @@ import type {
   RoundNo,
   SubmissionRecord,
 } from '../review/types.js';
-import type { Snapshot } from '../types.js';
+import type { DiffScope, Snapshot } from '../types.js';
 import { CommandReviewer } from '../reviewer/command.js';
 import { FakeReviewer } from '../reviewer/fake.js';
 import { ReviewerError } from '../reviewer/types.js';
@@ -40,6 +41,10 @@ import type {
   ServiceSnapshotView,
   SubmissionView,
   SubmitInput,
+  SuggestionActionInput,
+  FixStatusInput,
+  RefreshInput,
+  LatestFeedbackView,
 } from './types.js';
 
 const IDEMPOTENCY_LIMIT = 1000;
@@ -48,6 +53,19 @@ const COMMENT_STATES = new Set<CommentState>(['open', 'resolved', 'dismissed']);
 
 function clone<T>(value: T): T {
   return structuredClone(value);
+}
+
+function scopeFromSnapshot(snapshot: Snapshot): DiffScope {
+  const scope = snapshot.scope;
+  if (scope.kind === 'worktree') return { kind: 'worktree', baseRef: scope.baseRef ?? 'HEAD' };
+  if (scope.kind === 'commit') {
+    return { kind: 'commit', sha: scope.headSha ?? scope.baseSha };
+  }
+  return {
+    kind: 'range',
+    baseRef: scope.baseSha,
+    headRef: scope.headRef ?? scope.headSha ?? 'HEAD',
+  };
 }
 
 function assertContext(ctx: CallContext): void {
@@ -287,6 +305,169 @@ export class ReviewServiceImpl implements ReviewService {
     } catch (error) {
       throw this.translate(error);
     }
+  }
+
+  async suggestionAction(
+    id: ReviewId,
+    commentId: string,
+    action: SuggestionActionInput['action'],
+    ctx: CallContext,
+  ): Promise<CommentView> {
+    assertContext(ctx);
+    return await this.idempotent(async () => {
+      if (!['accept', 'decline', 'apply'].includes(action)) {
+        throw new ReviewError('validation', `unknown suggestion action: ${String(action)}`);
+      }
+      const review = await this.requireReview(id);
+      if (review.status === 'closed') {
+        throw new ReviewError('conflict', `review is closed: ${id}`, { id });
+      }
+      const comment = review.comments.find((candidate) => candidate.id === commentId);
+      if (comment === undefined) {
+        throw new ReviewError('not-found', `unknown comment: ${commentId}`, { id, commentId });
+      }
+      if (comment.suggestion === undefined) {
+        throw new ReviewError('validation', `comment has no suggestion: ${commentId}`, {
+          id,
+          commentId,
+        });
+      }
+      if (action === 'apply') {
+        const round = review.rounds.at(-1);
+        if (round === undefined) throw new ReviewError('validation', `review has no rounds: ${id}`);
+        try {
+          await this.store.append(
+            id,
+            createEvent({
+              reviewId: id,
+              type: 'suggestion/applied',
+              actor: ctx.actor,
+              data: { commentId, round: round.no },
+              now: this.now,
+            }),
+          );
+        } catch (error) {
+          throw this.translate(error);
+        }
+      } else {
+        const state = action === 'accept' ? 'accepted' : 'declined';
+        try {
+          await this.store.append(
+            id,
+            createEvent({
+              reviewId: id,
+              type: 'suggestion/state',
+              actor: ctx.actor,
+              data: { commentId, state },
+              now: this.now,
+            }),
+          );
+        } catch (error) {
+          throw this.translate(error);
+        }
+      }
+      return await this.getComment(id, commentId);
+    }, ctx.requestId);
+  }
+
+  async refresh(id: ReviewId, input: RefreshInput, ctx: CallContext): Promise<ReviewView> {
+    assertContext(ctx);
+    return await this.idempotent(async () => {
+      const review = await this.requireReview(id);
+      if (review.status === 'closed') {
+        throw new ReviewError('conflict', `review is closed: ${id}`, { id });
+      }
+      const latest = await this.latestSnapshotOrThrow(review);
+      const scope = input.scope ?? scopeFromSnapshot(latest);
+      let snapshot: Snapshot;
+      try {
+        snapshot = await this.snapshots.build({ repoRoot: review.repoRoot, scope });
+      } catch (error) {
+        throw this.translate(error);
+      }
+      try {
+        await this.lifecycle.refresh(id, snapshot, ctx.actor);
+      } catch (error) {
+        throw this.translate(error);
+      }
+      return await this.get(id);
+    }, ctx.requestId);
+  }
+
+  async close(id: ReviewId, verdict: 'approved' | 'closed', ctx: CallContext): Promise<ReviewView> {
+    assertContext(ctx);
+    return await this.idempotent(async () => {
+      if (verdict !== 'approved' && verdict !== 'closed') {
+        throw new ReviewError('validation', `unknown close verdict: ${String(verdict)}`);
+      }
+      try {
+        await this.lifecycle.close(id, verdict, ctx.actor);
+      } catch (error) {
+        throw this.translate(error);
+      }
+      return await this.get(id);
+    }, ctx.requestId);
+  }
+
+  async claimFixStatus(id: ReviewId, input: FixStatusInput, ctx: CallContext): Promise<void> {
+    assertContext(ctx);
+    await this.idempotent(async () => {
+      if (!Array.isArray(input.items) || input.items.length === 0) {
+        throw new ReviewError('validation', 'items must be a non-empty array');
+      }
+      const review = await this.requireReview(id);
+      const known = new Set(review.comments.map((comment) => comment.id));
+      const claims = input.items.map((item) => {
+        if (!['fixed', 'not-fixed', 'unclear'].includes(item.status)) {
+          throw new ReviewError('validation', `unknown fix status: ${String(item.status)}`);
+        }
+        if (!known.has(item.commentId)) {
+          throw new ReviewError('not-found', `unknown comment: ${item.commentId}`, {
+            id,
+            commentId: item.commentId,
+          });
+        }
+        if (item.evidence !== undefined && typeof item.evidence !== 'string') {
+          throw new ReviewError('validation', 'evidence must be a string');
+        }
+        return {
+          commentId: item.commentId,
+          status: item.status,
+          ...(item.evidence === undefined ? {} : { evidence: item.evidence }),
+          by: ctx.actor,
+          at: this.now().toISOString(),
+        };
+      });
+      await this.store.append(
+        id,
+        createEvent({
+          reviewId: id,
+          type: 'fix/claim',
+          actor: ctx.actor,
+          data: { claims },
+          now: this.now,
+        }),
+      );
+    }, ctx.requestId);
+  }
+
+  async latestFeedback(id: ReviewId): Promise<LatestFeedbackView | null> {
+    const events = await this.events(id, 0);
+    for (let index = events.length - 1; index >= 0; index -= 1) {
+      const event = events[index];
+      if (event?.type !== 'review/submitted') continue;
+      return {
+        submission: event.data.submission,
+        feedback: event.data.feedback as LatestFeedbackView['feedback'],
+      };
+    }
+    return null;
+  }
+
+  async gc(olderThanDays: number): Promise<GcResult> {
+    const result = await this.store.gc(olderThanDays, this.now());
+    this.results.clear();
+    return result;
   }
 
   async submit(id: ReviewId, input: SubmitInput, ctx: CallContext): Promise<SubmissionView> {
@@ -587,6 +768,27 @@ export class ReviewServiceImpl implements ReviewService {
     }
   }
 
+  private async getComment(id: ReviewId, commentId: string): Promise<CommentView> {
+    const review = await this.requireReview(id);
+    const comment = review.comments.find((candidate) => candidate.id === commentId);
+    if (comment === undefined) {
+      throw new ReviewError('not-found', `unknown comment: ${commentId}`, { id, commentId });
+    }
+    return { comment };
+  }
+
+  private async latestSnapshotOrThrow(review: ReviewState): Promise<Snapshot> {
+    const round = review.rounds.at(-1);
+    if (round === undefined) {
+      throw new ReviewError('validation', `review has no rounds: ${review.id}`, { id: review.id });
+    }
+    try {
+      return await this.store.readSnapshot(round.snapshotId);
+    } catch (error) {
+      throw this.translate(error);
+    }
+  }
+
   private async requireReview(id: ReviewId): Promise<ReviewState> {
     try {
       return await this.lifecycle.get(id);
@@ -597,8 +799,7 @@ export class ReviewServiceImpl implements ReviewService {
 
   private async idempotent<T>(operation: () => Promise<T>, requestId?: string): Promise<T> {
     if (requestId === undefined || requestId === '') return await operation();
-    const cached = this.results.get(requestId);
-    if (cached !== undefined) return clone(cached as T);
+    if (this.results.has(requestId)) return clone(this.results.get(requestId) as T);
     const result = await operation();
     if (this.results.size >= this.idempotencyLimit) {
       const oldest = this.results.keys().next().value as string | undefined;
