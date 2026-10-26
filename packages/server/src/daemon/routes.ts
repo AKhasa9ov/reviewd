@@ -23,7 +23,7 @@ import type {
   SubmitInput,
 } from '@dsh-code-review/core';
 import { ApiError } from './errors.js';
-import { parsePositiveInt, readJson, requestId, sendJson } from './http.js';
+import { parsePositiveInt, readForm, readJson, requestId, sendJson } from './http.js';
 import type { DeliveryQueue } from './deliveries.js';
 import type { JobQueue } from './jobs.js';
 import { serveStatic } from './static.js';
@@ -240,7 +240,10 @@ export async function handle(
     return;
   }
   if (path === '/api/auth' && method === 'POST') {
-    const body = await readJson(req, ctx.config.maxBodyBytes);
+    const contentType = String(req.headers['content-type'] ?? '');
+    const body = contentType.includes('application/x-www-form-urlencoded')
+      ? await readForm(req, ctx.config.maxBodyBytes)
+      : await readJson(req, ctx.config.maxBodyBytes);
     const token = str(body.token, 'token');
     const { tokenMatches, sessionCookie } = await import('./auth.js');
     if (!tokenMatches(ctx.config.token, token)) throw new ApiError('unauthorized', 'invalid token');

@@ -19,10 +19,7 @@ export function requestId(req: IncomingMessage): string {
   return `req_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
 }
 
-export async function readJson(
-  req: IncomingMessage,
-  maxBytes = DEFAULT_MAX_BODY_BYTES,
-): Promise<Record<string, unknown>> {
+async function readBody(req: IncomingMessage, maxBytes: number): Promise<Buffer> {
   const declared = req.headers['content-length'];
   if (typeof declared === 'string' && Number(declared) > maxBytes) {
     throw new ApiError('validation', `request body exceeds ${maxBytes} bytes`);
@@ -37,10 +34,18 @@ export async function readJson(
     }
     chunks.push(buffer);
   }
-  if (total === 0) return {};
+  return Buffer.concat(chunks);
+}
+
+export async function readJson(
+  req: IncomingMessage,
+  maxBytes = DEFAULT_MAX_BODY_BYTES,
+): Promise<Record<string, unknown>> {
+  const raw = await readBody(req, maxBytes);
+  if (raw.length === 0) return {};
   let value: unknown;
   try {
-    value = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    value = JSON.parse(raw.toString('utf8'));
   } catch {
     throw new ApiError('validation', 'request body is not valid JSON');
   }
@@ -48,6 +53,21 @@ export async function readJson(
     throw new ApiError('validation', 'request body must be a JSON object');
   }
   return value as Record<string, unknown>;
+}
+
+/** Reads a browser form post; the fallback /auth form uses urlencoded bodies. */
+export async function readForm(
+  req: IncomingMessage,
+  maxBytes = DEFAULT_MAX_BODY_BYTES,
+): Promise<Record<string, string>> {
+  const raw = await readBody(req, maxBytes);
+  if (raw.length === 0) return {};
+  const params = new URLSearchParams(raw.toString('utf8'));
+  const result: Record<string, string> = {};
+  for (const [key, value] of params) {
+    result[key] = value;
+  }
+  return result;
 }
 
 export function sendJson(

@@ -127,6 +127,22 @@ describe('daemon SPA static serving', () => {
     });
     expect(auth.status).toBe(200);
     expect(auth.headers.get('set-cookie')).toContain('cr_session=');
+
+    const form = await fetch(`${fx.base}/api/auth`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ token: TOKEN }).toString(),
+    });
+    expect(form.status).toBe(200);
+    expect(form.headers.get('set-cookie')).toContain('cr_session=');
+
+    const rejected = await fetch(`${fx.base}/api/auth`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ token: 'wrong-token' }).toString(),
+    });
+    expect(rejected.status).toBe(401);
+    expect(rejected.headers.get('set-cookie')).toBeNull();
   });
 });
 
