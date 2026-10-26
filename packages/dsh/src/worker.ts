@@ -174,7 +174,19 @@ async function runJob(deps: WorkerDeps, lease: JobLease, signal: AbortSignal): P
   }
   const agent = handle.agent;
   const release = agent.ctx?.tools?.restrict({
-    deny: ['bash', 'write', 'edit', 'apply_patch', 'workflow', 'subagent_fork', 'review_start'],
+    // The reviewer is strictly read-only: it must not mutate the workspace,
+    // spawn agents that could bypass this policy, or start/refresh reviews.
+    deny: [
+      'bash',
+      'write',
+      'edit',
+      'apply_patch',
+      'workflow',
+      'subagent_fork',
+      'subagent',
+      'review_start',
+      'review_refresh',
+    ],
   });
   const timeoutMs = 10 * 60 * 1000;
   let timeout: ReturnType<typeof setTimeout> | undefined;
