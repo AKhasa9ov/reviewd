@@ -62,7 +62,7 @@ function killProcess(child: ReturnType<typeof spawn>): void {
       // Fall through to the direct child if the group is already gone.
     }
   }
-  killProcess(child);
+  child.kill('SIGKILL');
 }
 
 function replacePlaceholders(value: string, values: Record<string, string>): string {
