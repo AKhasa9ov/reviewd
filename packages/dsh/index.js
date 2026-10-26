@@ -211,6 +211,16 @@ function createProxyHandler(deps) {
         json(res, 400, "bad-path", "invalid proxy path");
         return;
       }
+      if (path === "/info" && (req.method === "GET" || req.method === "HEAD")) {
+        const body2 = JSON.stringify({ daemonUrl: deps.config.daemonUrl });
+        res.writeHead(200, {
+          "content-type": "application/json; charset=utf-8",
+          "content-length": String(Buffer.byteLength(body2)),
+          "cache-control": "no-store"
+        });
+        res.end(req.method === "HEAD" ? void 0 : body2);
+        return;
+      }
       if (deps.config.token === "") {
         json(res, 503, "not-configured", "review daemon token is not configured");
         return;

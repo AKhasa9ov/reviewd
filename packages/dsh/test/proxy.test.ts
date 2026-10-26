@@ -81,4 +81,19 @@ describe('same-origin proxy', () => {
       'not-configured',
     );
   });
+
+  it('exposes the daemon URL without the token for UI links', async () => {
+    const proxyServer = createServer(
+      (req, res) =>
+        void createProxyHandler({
+          config: normalizeConfig({ daemonUrl: 'http://127.0.0.1:3100', token: 'z'.repeat(32) }),
+        })(req, res),
+    );
+    const proxyUrl = await listen(proxyServer);
+    const response = await fetch(`${proxyUrl}/api/code-review/info`);
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { daemonUrl: string };
+    expect(body.daemonUrl).toBe('http://127.0.0.1:3100');
+    expect(JSON.stringify(body)).not.toContain('z'.repeat(32));
+  });
 });

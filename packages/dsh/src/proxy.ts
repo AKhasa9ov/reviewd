@@ -47,6 +47,16 @@ export function createProxyHandler(deps: ProxyDeps) {
         json(res, 400, 'bad-path', 'invalid proxy path');
         return;
       }
+      if (path === '/info' && (req.method === 'GET' || req.method === 'HEAD')) {
+        const body = JSON.stringify({ daemonUrl: deps.config.daemonUrl });
+        res.writeHead(200, {
+          'content-type': 'application/json; charset=utf-8',
+          'content-length': String(Buffer.byteLength(body)),
+          'cache-control': 'no-store',
+        });
+        res.end(req.method === 'HEAD' ? undefined : body);
+        return;
+      }
       if (deps.config.token === '') {
         json(res, 503, 'not-configured', 'review daemon token is not configured');
         return;

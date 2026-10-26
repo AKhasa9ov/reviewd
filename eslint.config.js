@@ -2,7 +2,15 @@ import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['**/dist/**', '**/node_modules/**', 'coverage/**', 'packages/dsh/index.js'] },
+  {
+    ignores: [
+      '**/dist/**',
+      '**/node_modules/**',
+      'coverage/**',
+      'packages/dsh/index.js',
+      '.superpowers/**',
+    ],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

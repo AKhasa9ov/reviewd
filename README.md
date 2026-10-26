@@ -6,11 +6,12 @@ agent session. See `docs/design.md`.
 
 ## Status
 
-Plans 1–6: the git diff/snapshot foundation, the C3 review-state library
+Plans 1–5: the git diff/snapshot foundation, the C3 review-state library
 (event store, rounds, anchors, outcomes), C4 (`ReviewServiceImpl`, feedback package,
 reviewer contract/backends), C5 (`reviewd` HTTP/SSE/long-poll daemon, workers/jobs,
-deliveries and the remote `review` CLI), and the standalone review UI served by the
-daemon. The DSH bundle remains a later plan.
+deliveries and the remote `review` CLI), the standalone review UI served by the daemon,
+and the DSH Cordis bundle (sidebar panel, tools, `/review`, reviewer worker and
+feedback delivery). See `docs/dsh.md` for installation and configuration.
 
 ## Review state (C3)
 

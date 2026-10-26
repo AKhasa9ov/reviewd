@@ -114,12 +114,14 @@ window.__ModuleLoader__.load({
       const [title, setTitle] = React.useState('Code review');
       const [repo, setRepo] = React.useState('');
       const [createdUrl, setCreatedUrl] = React.useState(null);
+      const [uiBase, setUiBase] = React.useState('');
       const headingRef = React.useRef(null);
 
       const load = React.useCallback(async () => {
         setState((current) => ({ ...current, status: 'loading', error: null }));
         try {
-          const page = await request('/reviews?limit=50');
+          const [page, info] = await Promise.all([request('/reviews?limit=50'), request('/info')]);
+          setUiBase(info && typeof info.daemonUrl === 'string' ? info.daemonUrl : '');
           setState({ status: 'ready', reviews: page.items || [], error: null });
         } catch (error) {
           setState({ status: 'error', reviews: [], error });
@@ -302,7 +304,7 @@ window.__ModuleLoader__.load({
                     'a',
                     {
                       className: 'cr-link',
-                      href: '/review/' + encodeURIComponent(review.id),
+                      href: (uiBase || '') + '/review/' + encodeURIComponent(review.id),
                       target: '_blank',
                       rel: 'noreferrer',
                     },
