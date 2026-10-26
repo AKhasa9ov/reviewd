@@ -29,6 +29,7 @@ import { ApiError } from './errors.js';
 import { parsePositiveInt, readForm, readJson, requestId, sendJson } from './http.js';
 import type { DeliveryQueue } from './deliveries.js';
 import type { JobQueue } from './jobs.js';
+import { buildReviewPrompt } from './prompt.js';
 import { serveStatic } from './static.js';
 import { openSse } from './sse.js';
 import type { EventHub } from './sse.js';
@@ -169,31 +170,34 @@ async function append(
   await ctx.hub.sync(reviewId);
 }
 
-function promptFor(title: string, reviewId: string, round: number, files: unknown): string {
-  return [
-    `# Independent code review: ${title}`,
-    '',
-    `Review: ${reviewId}`,
-    `Round: ${round}`,
-    '',
-    'Read-only review. Return strict JSON (schemaVersion 1) with actionable findings.',
-    'Files:',
-    JSON.stringify(files, null, 2).slice(0, 20_000),
-  ].join('\n');
-}
-
 async function enqueueWorkerJob(ctx: RouteContext, reviewId: string): Promise<void> {
   const view = await ctx.service.get(reviewId);
   const round = view.review.rounds.at(-1);
   if (round === undefined || view.review.reviewer?.backend !== 'worker') return;
+  const kind = view.report === null ? 'initial' : 'verify';
+  const { prompt } = buildReviewPrompt({
+    title: view.review.title,
+    reviewId,
+    round: round.no,
+    kind,
+    files: view.latestSnapshot?.files ?? [],
+  });
+  const initiator = view.review.initiator;
   ctx.jobs.enqueue({
     reviewId,
     round: round.no,
-    kind: view.report === null ? 'initial' : 'verify',
+    kind,
     backend: 'worker',
-    prompt: promptFor(view.review.title, reviewId, round.no, view.latestSnapshot?.files ?? []),
+    prompt,
     diff: view.latestSnapshot,
-    meta: { reviewId, round: round.no },
+    meta: {
+      reviewId,
+      round: round.no,
+      // The worker runs the reviewer in the initiator's visible worktree; the
+      // daemon's checkout is only a fallback for reviews without an initiator.
+      cwd: initiator?.cwd ?? view.review.repoRoot,
+      ...(initiator === undefined ? {} : { initiator }),
+    },
   });
 }
 
