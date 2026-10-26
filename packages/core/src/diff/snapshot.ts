@@ -187,12 +187,21 @@ async function listRawChanges(
   return parseRawDiff(result.stdout);
 }
 
-async function listUntracked(repoRoot: string, signal?: AbortSignal): Promise<string[]> {
+interface UntrackedListing {
+  paths: string[];
+  truncated: boolean;
+}
+
+async function listUntracked(repoRoot: string, signal?: AbortSignal): Promise<UntrackedListing> {
   const result = await runGit(repoRoot, ['ls-files', '--others', '--exclude-standard', '-z'], {
     signal,
     maxBytes: 8 * 1024 * 1024,
+    truncateOnOverflow: true,
   });
-  return result.stdout.split('\0').filter((path) => path.length > 0);
+  return {
+    paths: result.stdout.split('\0').filter((path) => path.length > 0),
+    truncated: result.truncated === true,
+  };
 }
 
 interface ModeListing {
@@ -559,8 +568,14 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
   }
 
   if (scope.kind === 'worktree' && includeUntracked) {
-    const untrackedPaths = await listUntracked(scope.repoRoot, options.signal);
-    for (const path of untrackedPaths) {
+    const listing = await listUntracked(scope.repoRoot, options.signal);
+    if (listing.truncated) {
+      if (!warnings.includes('untracked-list-truncated')) {
+        warnings.push('untracked-list-truncated');
+      }
+      truncated = true;
+    }
+    for (const path of listing.paths) {
       const absolute = safeJoin(scope.repoRoot, path);
       const info = await lstat(absolute).catch(() => null);
       if (info?.isSymbolicLink() === true || (await hasSymlinkParent(scope.repoRoot, path))) {

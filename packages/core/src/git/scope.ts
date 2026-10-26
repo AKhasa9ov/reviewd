@@ -1,6 +1,7 @@
 import { createHash, type Hash } from 'node:crypto';
 import { constants } from 'node:fs';
-import { lstat, open, readlink } from 'node:fs/promises';
+import { lstat, open, readlink, realpath } from 'node:fs/promises';
+import { isAbsolute, relative, sep } from 'node:path';
 import type { DiffScope, ResolvedScope } from '../types.js';
 import { hasSymlinkParent, safeJoin } from '../paths.js';
 import { resolveRepoRoot } from './repo.js';
@@ -202,6 +203,7 @@ function fileRecord(pathBytes: Buffer, size: number): Hash {
 
 async function untrackedRecord(
   repoRoot: string,
+  realRoot: string,
   path: string,
   signal?: AbortSignal,
 ): Promise<Buffer> {
@@ -232,6 +234,11 @@ async function untrackedRecord(
   let handle;
   try {
     handle = await open(absolute, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    const resolved = await realpath(absolute);
+    const rel = relative(realRoot, resolved);
+    if (rel === '' || rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
+      return unreadableRecord(pathBytes);
+    }
     const stat = await handle.stat();
     if (!stat.isFile()) return unreadableRecord(pathBytes);
     const record = fileRecord(pathBytes, stat.size);
@@ -291,12 +298,13 @@ async function worktreeDigestState(
   const hash = createHash('sha256').update(DIGEST_DOMAIN);
   updateFramed(hash, TAG_STATUS, status.stdoutBytes);
   updateFramed(hash, TAG_DIFF, diff.stdoutBytes);
+  const realRoot = await realpath(repoRoot);
   const paths = untracked.stdout
     .split('\0')
     .filter((path) => path.length > 0)
     .sort(compareBytePaths);
   for (const path of paths) {
-    updateFramed(hash, TAG_UNTRACKED, await untrackedRecord(repoRoot, path, signal));
+    updateFramed(hash, TAG_UNTRACKED, await untrackedRecord(repoRoot, realRoot, path, signal));
   }
   return {
     hash: hash.digest('hex'),

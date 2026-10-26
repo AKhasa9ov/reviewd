@@ -76,15 +76,17 @@ silently pretending every file was added. `--two-dot`, `--max-files`, `--max-lin
 ignored entries remain visible and never consume that cap.
 
 Limits: 2 MiB of diff text, 500 files, 20 000 lines per file, 1 MiB of content per file and
-64 MiB of content per snapshot. `totals.truncated` is true for diff, file-count or
-content-budget truncation. A file cut by the diff cap remains visible as an `oversized`
+64 MiB of content per snapshot, and untracked path listings at 8 MiB. `totals.truncated`
+is true for diff, file-count, content-budget or untracked-listing truncation. A file cut by
+the diff cap remains visible as an `oversized`
 synthetic entry; every changed path wholly beyond the cap is recovered from one `--raw -z`
 metadata call as a `truncated`/`diff-truncated` entry with no content or hash. Backfilled
 entries report `binary:false` because their content was not read; treat `truncated` and
 `reason:"diff-truncated"` as authoritative. Reports include
 `diff-truncated`, `diff-file-truncated:<path>`, `diff-file-skipped:<path>`,
 `files-truncated`, `content-budget-truncated`, `worktree-digest-truncated`,
-`symlink-not-followed:<path>` and `unreadable:<path>` where relevant.
+`untracked-list-truncated`, `symlink-not-followed:<path>` and `unreadable:<path>` where
+relevant. A truncated untracked listing continues with the paths returned before the cap.
 `scope.worktreeDigestTruncated` is present when the digest itself had to be computed from
 truncated status/diff output or an overflowing untracked path listing.
 
@@ -93,8 +95,10 @@ and length-framed: status/diff byte fields and per-file records carry explicit t
 lengths, and per-file records distinguish regular files, symlinks and unreadable paths. Paths
 are sorted by UTF-8 bytes; regular files are opened with `O_NOFOLLOW` and streamed from the
 handle; symlinks hash their link target rather than the target contents; unreadable or raced
-paths hash a stable marker. The untracked path list is capped at 8 MiB (overflow sets
-`worktreeDigestTruncated`), while untracked content itself is not capped.
+paths hash a stable marker. Both the digest and the snapshot cap their untracked path
+listing at 8 MiB; digest overflow sets `worktreeDigestTruncated`, while snapshot overflow
+adds `untracked-list-truncated` and marks totals truncated. Untracked content itself is not
+capped.
 
 The human output prefixes the change letter with `I` (ignored), `B` (binary) or `L`
 (oversized), for example `IM src/a.ts` or `B? image.bin`.
