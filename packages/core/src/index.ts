@@ -21,3 +21,53 @@ export type {
   Snapshot,
   SnapshotOptions,
 } from './types.js';
+export { createId, ID_LENGTHS, ReviewIdError } from './review/ids.js';
+export type { IdPrefix, RandomBytes } from './review/ids.js';
+export {
+  createEvent,
+  isActor,
+  isReviewEvent,
+  isReviewEventType,
+  REVIEW_EVENT_TYPES,
+  ReviewEventError,
+} from './review/events.js';
+export type {
+  CommentAddedData,
+  CommentAnchorData,
+  CommentRepliedData,
+  CommentStateData,
+  CreateEventInput,
+  ReviewClosedData,
+  ReviewCreatedData,
+  ReviewEvent,
+  ReviewEventBase,
+  ReviewEventDataMap,
+  ReviewEventErrorCode,
+  ReviewEventType,
+  RoundCreatedData,
+  SuggestionAppliedData,
+} from './review/events.js';
+export type {
+  Actor,
+  ActorKind,
+  AddCommentInput,
+  Anchor,
+  AnchorPosition,
+  AnchorState,
+  Comment,
+  CommentId,
+  CommentState,
+  Confidence,
+  CreateReviewInput,
+  Outcome,
+  OutcomeStatus,
+  Reply,
+  ReviewId,
+  ReviewState,
+  ReviewStatus,
+  ReviewSummary,
+  Round,
+  RoundNo,
+  Side,
+  Suggestion,
+} from './review/types.js';
