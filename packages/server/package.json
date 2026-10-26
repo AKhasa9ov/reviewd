@@ -1,0 +1,16 @@
+{
+  "name": "@dsh-code-review/server",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "review": "./dist/cli.js"
+  },
+  "dependencies": {
+    "@dsh-code-review/core": "workspace:*"
+  },
+  "files": [
+    "dist"
+  ]
+}
