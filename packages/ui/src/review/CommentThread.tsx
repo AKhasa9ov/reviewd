@@ -98,16 +98,24 @@ export function CommentThread({
           type="button"
           className="cr-anchor-jump"
           onClick={() => onJump(comment)}
-          aria-label={`Jump to ${anchor.path} ${history.label}`}
+          aria-label={`${anchor.path} ${history.label}${
+            anchor.state !== 'active' ? ` ${anchor.state}` : ''
+          } (jump to line)`}
+          title={`Jump to ${anchor.path} ${history.label}`}
         >
           <span className="cr-anchor-path">
             {history.pathChanged && history.from !== undefined
               ? `${history.from.path} → ${anchor.path}`
               : anchor.path}
-          </span>
+          </span>{' '}
           <span className="cr-anchor-line">{history.label}</span>
           {anchor.state !== 'active' ? (
-            <Badge tone={anchor.state === 'ambiguous' ? 'warning' : 'danger'}>{anchor.state}</Badge>
+            <>
+              {' '}
+              <Badge tone={anchor.state === 'ambiguous' ? 'warning' : 'danger'}>
+                {anchor.state}
+              </Badge>
+            </>
           ) : null}
         </button>
       ) : null}

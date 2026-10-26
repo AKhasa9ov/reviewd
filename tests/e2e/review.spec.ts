@@ -1,0 +1,109 @@
+import { expect, test } from '@playwright/test';
+import { login, openReview } from './fixture.js';
+
+test('lists reviews and completes comment, reply, resolve and submit from the real daemon', async ({
+  page,
+}) => {
+  const fx = await login(page);
+  await page.goto(`${fx.baseUrl}/`);
+  await expect(page.getByRole('heading', { name: 'Reviews', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: /E2E feature review/ })).toBeVisible();
+
+  await page.getByRole('link', { name: /E2E feature review/ }).click();
+  await expect(page.getByTestId('review-detail')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'E2E feature review' })).toBeVisible();
+
+  await page.getByRole('tab', { name: /Files changed/ }).click();
+  const addedLine = page.getByRole('row', { name: /line 2, added/ }).first();
+  await expect(addedLine).toBeVisible();
+  await addedLine.click();
+  await page.keyboard.press('c');
+  const composer = page.getByRole('form', { name: /Comment on line 2/ });
+  await expect(composer).toBeVisible();
+  const body = 'E2E: this value should be configurable.';
+  await composer.getByRole('textbox', { name: 'Comment', exact: true }).fill(body);
+  await composer.getByRole('button', { name: 'Post comment' }).click();
+  await expect(page.getByText('Comment posted')).toBeVisible();
+
+  await page.getByRole('tab', { name: /Conversation/ }).click();
+  const thread = page.locator('.cr-thread').filter({ hasText: body }).first();
+  await expect(thread).toBeVisible();
+  await thread.getByRole('button', { name: 'Reply' }).click();
+  await thread.getByRole('textbox', { name: /Reply to/ }).fill('E2E reply from the browser.');
+  await thread.getByRole('button', { name: 'Send reply' }).click();
+  await expect(thread.getByText('E2E reply from the browser.')).toBeVisible();
+
+  await thread.getByRole('button', { name: 'Resolve' }).click();
+  await expect(thread.getByText('resolved', { exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Submit', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Submit review' });
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel('Comment only').check();
+  await dialog.getByRole('textbox', { name: 'Summary' }).fill('E2E browser feedback.');
+  await dialog.getByRole('button', { name: 'Submit feedback' }).click();
+  await expect(page.getByText(/Feedback submitted for round 2/)).toBeVisible();
+
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+  const refreshDialog = page.getByRole('dialog', { name: 'Re-review this branch' });
+  await expect(refreshDialog).toBeVisible();
+  await refreshDialog.getByRole('button', { name: 'Create round' }).click();
+  await expect(page.getByText(/Round 3 created/)).toBeVisible();
+  await expect(page.getByRole('button', { name: /^r3 / })).toBeVisible();
+});
+
+test('switches immutable rounds, toggles delta, and honors deep links', async ({ page }) => {
+  const fx = await openReview(page);
+  await page.getByRole('tab', { name: /Files changed/ }).click();
+
+  await page.getByRole('button', { name: /^r1 / }).click();
+  await expect(page.getByRole('button', { name: /^r1 / })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: 'Delta' })).toBeDisabled();
+
+  await page.getByRole('button', { name: /^r2 / }).click();
+  await expect(
+    page.getByRole('tabpanel', { name: 'Files changed' }).getByText('r2 vs r1'),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Full diff to base' }).click();
+  await expect(
+    page.getByRole('tabpanel', { name: 'Files changed' }).getByText('base → head'),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Delta' }).click();
+  await expect(
+    page.getByRole('tabpanel', { name: 'Files changed' }).getByText('r2 vs r1'),
+  ).toBeVisible();
+
+  await page.goto(
+    `${fx.baseUrl}/review/${encodeURIComponent(fx.reviewId)}?round=2#file=src%2Fapp.ts&line=2`,
+  );
+  await expect(page.getByRole('tab', { name: /Files changed/ })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(page.locator('.cr-diff-file[data-file="src/app.ts"]')).toBeVisible();
+  await expect(page.locator('.cr-diff-line-selected').first()).toBeVisible();
+});
+
+test('supports c, ?, and g l keyboard shortcuts outside form fields', async ({ page }) => {
+  const fx = await openReview(page);
+  await page.goto(
+    `${fx.baseUrl}/review/${encodeURIComponent(fx.reviewId)}?round=2#file=src%2Fapp.ts&line=2`,
+  );
+  await expect(page.locator('.cr-diff-file[data-file="src/app.ts"]')).toBeVisible();
+
+  await page.keyboard.press('c');
+  await expect(page.getByRole('form', { name: /Comment on line 2/ })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('form', { name: /Comment on line 2/ })).not.toBeVisible();
+
+  await page.keyboard.press('?');
+  const help = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
+  await expect(help).toBeVisible();
+  await help.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(help).not.toBeVisible();
+
+  await page.keyboard.press('g');
+  await page.keyboard.press('l');
+  await expect(page).toHaveURL(`${fx.baseUrl}/`);
+  await expect(page.getByRole('heading', { name: 'Reviews', exact: true })).toBeVisible();
+});

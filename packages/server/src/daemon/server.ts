@@ -21,6 +21,7 @@ import { EventHub } from './sse.js';
 import { JobQueue } from './jobs.js';
 import { DeliveryQueue } from './deliveries.js';
 import { handle, mapError } from './routes.js';
+import { resolveWebDir } from './static.js';
 import type { RouteContext } from './routes.js';
 import type { DaemonConfig, DaemonDeps, ReviewDaemon } from './types.js';
 
@@ -76,6 +77,7 @@ export async function startDaemon(
   const deliveries = new DeliveryQueue(now);
   const rateLimiter = new RateLimiter(config.rateLimit ?? DEFAULTS.rateLimit);
   const publicUrl = config.publicUrl ?? '';
+  const webDir = await resolveWebDir(config.webDir);
   const ctx: RouteContext = {
     config: {
       token: config.token,
@@ -86,6 +88,7 @@ export async function startDaemon(
       jobLeaseMs: config.jobLeaseMs ?? DEFAULTS.jobLeaseMs,
       jobMaxAttempts: config.jobMaxAttempts ?? DEFAULTS.jobMaxAttempts,
       publicUrl,
+      webDir,
       rateLimit: config.rateLimit ?? DEFAULTS.rateLimit,
     },
     service,

@@ -10,6 +10,7 @@ if (token === undefined || token === '') {
   const host = process.env.CODE_REVIEW_HOST;
   const port = Number(process.env.CODE_REVIEW_PORT ?? '3100');
   const publicUrl = process.env.CODE_REVIEW_PUBLIC_URL;
+  const webDir = process.env.CODE_REVIEW_WEB_DIR;
   try {
     const daemon = await startDaemon({
       storeDir,
@@ -17,6 +18,7 @@ if (token === undefined || token === '') {
       ...(host === undefined ? {} : { host }),
       port,
       ...(publicUrl === undefined ? {} : { publicUrl }),
+      ...(webDir === undefined ? {} : { webDir }),
     });
     process.stdout.write(`reviewd listening on ${daemon.url}\n`);
     const stop = async (): Promise<void> => {

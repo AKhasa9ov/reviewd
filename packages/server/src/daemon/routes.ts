@@ -25,6 +25,7 @@ import { ApiError } from './errors.js';
 import { parsePositiveInt, readJson, requestId, sendJson } from './http.js';
 import type { DeliveryQueue } from './deliveries.js';
 import type { JobQueue } from './jobs.js';
+import { serveStatic } from './static.js';
 import { openSse } from './sse.js';
 import type { EventHub } from './sse.js';
 import type { DaemonConfig } from './types.js';
@@ -43,6 +44,7 @@ export interface RouteContext {
     >
   > & {
     publicUrl: string;
+    webDir: string | null;
     maxBodyBytes: number;
     rateLimit: { mutations: number; reads: number; windowMs: number };
   };
@@ -199,26 +201,7 @@ export async function handle(
   const method = req.method ?? 'GET';
   const id = requestId(req);
 
-  if (path === '/' && method === 'GET') {
-    const html =
-      '<!doctype html><meta charset="utf-8"><title>code review</title><h1>code review daemon</h1><p><a href="/auth">Sign in</a></p>';
-    res.writeHead(200, {
-      'content-type': 'text/html; charset=utf-8',
-      'content-length': Buffer.byteLength(html),
-    });
-    res.end(html);
-    return;
-  }
-  if (path === '/auth' && method === 'GET') {
-    const html =
-      '<!doctype html><meta charset="utf-8"><title>sign in</title><h1>Sign in</h1><form method="post" action="/api/auth"><input name="token" type="password" autocomplete="current-password"><button>Sign in</button></form>';
-    res.writeHead(200, {
-      'content-type': 'text/html; charset=utf-8',
-      'content-length': Buffer.byteLength(html),
-    });
-    res.end(html);
-    return;
-  }
+  if (method === 'GET' && (await serveStatic(path, res, ctx.config.webDir))) return;
 
   if (path === '/api/health' && method === 'GET') {
     const queue = ctx.jobs.stats();

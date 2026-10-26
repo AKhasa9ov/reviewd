@@ -5,6 +5,7 @@ export interface DaemonConfig {
   port?: number;
   storeDir: string;
   publicUrl?: string;
+  webDir?: string;
   token: string;
   trustProxy?: boolean;
   maxBodyBytes?: number;

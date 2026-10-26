@@ -55,9 +55,9 @@ describe('review detail', () => {
     expect(
       screen.getAllByText('This should use the configured max attempts.').length,
     ).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: 'Addressed: 2 comments' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Outdated: 1 comments' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Needs decision: 0 comments' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '2 Addressed' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '1 Outdated' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '0 Needs decision' })).toBeInTheDocument();
   });
 
   it('switches rounds and keeps the selected file deep link', async () => {
@@ -69,11 +69,11 @@ describe('review detail', () => {
     render(<App client={fakeClient({ getSnapshot })} />);
     await screen.findByRole('heading', { name: 'Billing retry semantics' });
 
-    await user.click(screen.getByRole('button', { name: 'Round 1, 3 comments' }));
+    await user.click(screen.getByRole('button', { name: /Round 1, 3 comments/ }));
     await waitFor(() => expect(getSnapshot).toHaveBeenCalledWith('rev_01', 1));
     expect(window.location.search).toContain('round=1');
     expect(window.location.hash).toContain('file=src%2Fauth.ts');
-    expect(screen.getByRole('button', { name: 'Round 1, 3 comments' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: /Round 1, 3 comments/ })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
@@ -179,7 +179,7 @@ describe('review detail', () => {
     await user.click(screen.getByRole('tab', { name: /Conversation/ }));
     expect(screen.getByText('Outdated', { selector: '.cr-fix-label' })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Outdated: 1 comments' }));
+    await user.click(screen.getByRole('button', { name: '1 Outdated' }));
     expect(screen.getByRole('heading', { name: 'Conversation' })).toBeInTheDocument();
     expect(screen.getAllByText('Clear filter').length).toBeGreaterThan(0);
     expect(
@@ -189,7 +189,7 @@ describe('review detail', () => {
       screen.getByText('The docs claim three retries but the code says two.'),
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /Jump to docs\/retries.md/ }));
+    await user.click(screen.getByRole('button', { name: /docs\/retries.md/ }));
     await waitFor(() => expect(window.location.search).toContain('tab=files'));
     expect(window.location.hash).toContain('line=3');
   });
@@ -258,7 +258,7 @@ describe('review detail', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Create round' }));
     await waitFor(() => expect(refresh).toHaveBeenCalledWith('rev_01'));
     expect(await screen.findByText(/Round 3 created/)).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: 'Round 3, 0 comments' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Round 3, 0 comments/ })).toBeInTheDocument();
   });
 
   it('exposes keyboard help, file navigation and comment shortcuts', async () => {

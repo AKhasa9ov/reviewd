@@ -16,6 +16,10 @@ await build({
   logLevel: 'info',
 });
 
+await viteBuild({
+  configFile: join(import.meta.dirname, '..', 'packages/web/vite.config.ts'),
+});
+
 await build({
   entryPoints: ['packages/server/src/cli.ts'],
   outfile: 'packages/server/dist/cli.js',
@@ -43,7 +47,3 @@ await build({
 });
 
 await chmod('packages/server/dist/reviewd.js', 0o755);
-
-await viteBuild({
-  configFile: join(import.meta.dirname, '..', 'packages/web/vite.config.ts'),
-});

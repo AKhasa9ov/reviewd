@@ -60,7 +60,7 @@ export function Shell({ children }: ShellProps): JSX.Element {
         Skip to content
       </a>
       <aside className="cr-sidebar" aria-label="Primary navigation">
-        <Link className="cr-brand" to="/" aria-label="reviewd home">
+        <Link className="cr-brand" to="/">
           <span className="cr-brand-mark" aria-hidden="true">
             r/
           </span>
@@ -99,7 +99,6 @@ export function Shell({ children }: ShellProps): JSX.Element {
               className="cr-nav-link"
               to="/health"
               aria-current={navCurrent(routePath, '/health')}
-              aria-label="Daemon health"
             >
               <span className="cr-nav-icon">
                 <PulseIcon />
@@ -135,7 +134,7 @@ export function Shell({ children }: ShellProps): JSX.Element {
           <IconButton label="Open navigation" onClick={() => setDrawerOpen(true)}>
             <MenuIcon />
           </IconButton>
-          <Link className="cr-brand" to="/" aria-label="reviewd home">
+          <Link className="cr-brand" to="/">
             <span className="cr-brand-mark" aria-hidden="true">
               r/
             </span>

@@ -852,7 +852,8 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
                 <button
                   type="button"
                   className="cr-link-button"
-                  aria-label={`Copy base commit ${scope.baseSha}`}
+                  aria-label={`base ${shortSha(scope.baseSha)} (copy full commit)`}
+                  title={`Copy base commit ${scope.baseSha}`}
                   onClick={() => void copyText(scope.baseSha, 'Base SHA')}
                 >
                   base {shortSha(scope.baseSha)}
@@ -861,7 +862,8 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
                 <button
                   type="button"
                   className="cr-link-button"
-                  aria-label={`Copy head commit ${scope.headSha ?? 'worktree'}`}
+                  aria-label={`head ${shortSha(scope.headSha)} (copy full commit)`}
+                  title={`Copy head commit ${scope.headSha ?? 'worktree'}`}
                   onClick={() => void copyText(scope.headSha ?? 'worktree', 'Head SHA')}
                 >
                   head {shortSha(scope.headSha)}
@@ -882,11 +884,14 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
                 key={item.no}
                 className="cr-round-pill"
                 aria-pressed={item.no === selectedRound}
-                aria-label={`Round ${item.no}, ${roundCommentCount(review, item.no)} comments`}
+                title={`Round ${item.no}, ${roundCommentCount(review, item.no)} comments`}
                 onClick={() => changeRound(item.no)}
               >
-                <span>r{item.no}</span>
-                <span className="cr-round-count">{roundCommentCount(review, item.no)}</span>
+                <span>r{item.no}</span>{' '}
+                <span className="cr-round-count">{roundCommentCount(review, item.no)}</span>{' '}
+                <span className="cr-visually-hidden">
+                  Round {item.no}, {roundCommentCount(review, item.no)} comments
+                </span>
               </button>
             ))}
           </div>

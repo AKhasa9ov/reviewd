@@ -6,10 +6,11 @@ agent session. See `docs/design.md`.
 
 ## Status
 
-Plans 1–5 of 6: the git diff/snapshot foundation, the C3 review-state library
+Plans 1–6: the git diff/snapshot foundation, the C3 review-state library
 (event store, rounds, anchors, outcomes), C4 (`ReviewServiceImpl`, feedback package,
-reviewer contract/backends) and C5 (`reviewd` HTTP/SSE/long-poll daemon, workers/jobs,
-deliveries and the remote `review` CLI). The DSH bundle and review UI are later plans.
+reviewer contract/backends), C5 (`reviewd` HTTP/SSE/long-poll daemon, workers/jobs,
+deliveries and the remote `review` CLI), and the standalone review UI served by the
+daemon. The DSH bundle remains a later plan.
 
 ## Review state (C3)
 
@@ -187,6 +188,54 @@ or `CODE_REVIEW_URL` and `CODE_REVIEW_TOKEN` (or `~/.config/code-review/config.j
 mode `0600`). Exit codes: `0` ok, `2` timeout, `3` auth, `4` daemon unavailable, `5`
 validation, `6` conflict/stale. `review serve` and the built `reviewd` entry print the
 listener URL and shut down cleanly on SIGINT/SIGTERM.
+
+## Review UI
+
+`pnpm build` builds the core package, the Vite web app into `packages/web/dist`, and the
+server CLI/daemon. `reviewd` serves that SPA on the same authenticated origin as the API:
+
+- `/` — review list with status and search filters.
+- `/review/<id>?round=N#file=<path>&line=<n>` — conversation, changed files, round switch,
+  delta/full diff, line comments and submit/refresh controls.
+- `/new` — create a review from a repository and range.
+- `/auth` — exchange `CODE_REVIEW_TOKEN` for the HttpOnly `cr_session` cookie.
+- `/health` — daemon health.
+
+Set `CODE_REVIEW_WEB_DIR` to serve a different built SPA directory. The daemon resolves
+`packages/web/dist` automatically in a source checkout and prints the listener URL; if the
+directory is missing it serves a small diagnostic page instead of failing API requests.
+Unknown SPA deep links fall back to `index.html`, while unknown `/api/*` routes keep their
+JSON 404. Hashed files under `/assets/` are cached immutably; `index.html` and other static
+files use `no-store`. Static responses set a strict CSP (`default-src 'self'; script-src
+'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self';
+frame-ancestors 'none'`), `Referrer-Policy: no-referrer`, `X-Content-Type-Options: nosniff`
+and `X-Frame-Options: DENY`.
+
+For manual UI work, build once and start the daemon with a store:
+
+```bash
+pnpm install
+pnpm build
+CODE_REVIEW_TOKEN="$(openssl rand -hex 32)" \
+CODE_REVIEW_STORE=/tmp/code-review-store \
+node packages/server/dist/reviewd.js
+```
+
+The browser flow uses the token only at `/auth`; subsequent API calls use the session
+cookie. The Playwright suite starts the built `reviewd` with a temporary store and a
+temporary git repository, seeds a review and exercises login, list/detail, diff comments,
+replies, resolve, rounds, deep links, keyboard shortcuts, 320/1440 layouts and light/dark
+screenshots. It also runs axe WCAG 2.1 A/AA scans and fails on serious or critical
+findings:
+
+```bash
+pnpm test:e2e    # build + full Chromium suite
+pnpm test:a11y   # build + axe-tagged tests only
+```
+
+Screenshots are written to `test-results/screens/` and the Playwright HTML report to
+`playwright-report/`; both are generated artifacts and are gitignored. Chromium is the
+only browser dependency (`pnpm exec playwright install chromium`).
 
 ## Development
 

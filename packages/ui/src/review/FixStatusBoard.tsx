@@ -32,11 +32,10 @@ export function FixStatusBoard({
               className="cr-fix-cell"
               data-group={group.id}
               aria-pressed={selected}
-              aria-label={`${group.label}: ${counts[group.id]} comments`}
               title={group.description}
               onClick={() => onFilter(selected ? 'all' : group.id)}
             >
-              <span className="cr-fix-count">{counts[group.id]}</span>
+              <span className="cr-fix-count">{counts[group.id]}</span>{' '}
               <span className="cr-fix-label">{group.label}</span>
             </button>
           );
