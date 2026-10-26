@@ -2903,6 +2903,24 @@ a:hover {
     overflow-wrap: anywhere;
   }
 
+  .cr-detail-tabs {
+    flex-wrap: wrap;
+  }
+
+  .cr-detail-tabs .cr-tab {
+    flex: 1 1 45%;
+    justify-content: center;
+    min-width: 0;
+    padding: 0 8px;
+    font-size: 12.5px;
+  }
+
+  .cr-detail-tabs .cr-tab-count {
+    margin-left: 5px;
+    min-width: 17px;
+    padding: 0 4px;
+  }
+
   .cr-detail-actions {
     display: grid;
     grid-template-columns: minmax(0, 1fr);

@@ -46,6 +46,15 @@ test('captures auth, list, detail and submit screenshots at 1440 and 320 in both
   await expect(page.getByTestId('review-detail')).toBeVisible();
   await expectNoPageOverflow(page);
   await page.screenshot({ path: screenshotPath(fx, 'detail-dark-320'), fullPage: true });
+
+  await page.locator('.cr-topbar [data-testid="theme-toggle"]').click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await page.screenshot({ path: screenshotPath(fx, 'detail-light-320'), fullPage: true });
+
+  await page.goto(`${fx.baseUrl}/`);
+  await expect(page.getByRole('heading', { name: 'Reviews', exact: true })).toBeVisible();
+  await expectNoPageOverflow(page);
+  await page.screenshot({ path: screenshotPath(fx, 'list-light-320'), fullPage: true });
 });
 
 test('creates a review through /new and opens it', async ({ page }) => {
