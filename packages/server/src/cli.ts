@@ -1,4 +1,8 @@
 #!/usr/bin/env node
-import { CORE_VERSION } from '@dsh-code-review/core';
+import { runCli } from './cli/run.js';
 
-console.log(`review ${CORE_VERSION}`);
+const code = await runCli(process.argv.slice(2), {
+  stdout: process.stdout,
+  stderr: process.stderr,
+});
+process.exitCode = code;
