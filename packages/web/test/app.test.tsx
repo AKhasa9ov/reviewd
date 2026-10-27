@@ -223,9 +223,13 @@ describe('new review form', () => {
 });
 
 describe('repository settings', () => {
-  it('adds a repository and saves its default target', async () => {
+  it('loads git branches after a repository path is entered and saves the selection', async () => {
     const user = userEvent.setup();
     const saveRepositories = vi.fn(async (repositories: unknown) => ({ repositories }));
+    const listBranches = vi.fn(async (path: string) => ({
+      repoRoot: path,
+      branches: ['feature', 'main'],
+    }));
     go('/settings');
     render(
       <App
@@ -238,6 +242,7 @@ describe('repository settings', () => {
             entries: [],
             truncated: false,
           })),
+          listBranches,
           saveRepositories,
         })}
       />,
@@ -247,7 +252,10 @@ describe('repository settings', () => {
     await user.click(screen.getByRole('button', { name: 'Add repository' }));
     await user.type(screen.getByLabelText('Repository name'), 'Checkout');
     await user.type(screen.getByLabelText('Path on daemon'), '/srv/checkout');
-    await user.type(screen.getByLabelText('Default target branch'), 'main');
+    await waitFor(() => expect(listBranches.mock.calls[0]?.[0]).toBe('/srv/checkout'));
+    const target = screen.getByLabelText('Default target branch');
+    await waitFor(() => expect(target).toBeEnabled());
+    await user.selectOptions(target, 'main');
     await user.click(screen.getByRole('button', { name: 'Save repositories' }));
 
     await waitFor(() =>
@@ -256,6 +264,103 @@ describe('repository settings', () => {
       ]),
     );
     expect(await screen.findByText('Repository settings saved.')).toBeInTheDocument();
+  });
+
+  it('resets the selected branch when the repository path changes', async () => {
+    const user = userEvent.setup();
+    const checkout = { name: 'Checkout', path: '/srv/checkout', defaultTarget: 'main' };
+    go('/settings');
+    render(
+      <App
+        client={fakeClient({
+          listRepositories: vi.fn(async () => ({ repositories: [checkout] })),
+          listBranches: vi.fn(async (path: string) => ({
+            repoRoot: path,
+            branches: ['main', 'release'],
+          })),
+        })}
+      />,
+    );
+
+    const target = await screen.findByLabelText('Default target branch');
+    await waitFor(() => expect(target).toBeEnabled());
+    expect(target).toHaveValue('main');
+
+    const path = screen.getByLabelText('Path on daemon');
+    await user.clear(path);
+    await user.type(path, '/srv/other');
+
+    expect(target).toHaveValue('');
+    await waitFor(() => expect(target).toBeEnabled());
+    expect(target).toHaveValue('');
+  });
+
+  it('shows a disabled loading selector while the first branch list is fetched', async () => {
+    const checkout = { name: 'Checkout', path: '/srv/checkout', defaultTarget: 'main' };
+    const listBranches = vi.fn(() => new Promise<never>(() => undefined));
+    go('/settings');
+    render(
+      <App
+        client={fakeClient({
+          listRepositories: vi.fn(async () => ({ repositories: [checkout] })),
+          listBranches,
+        })}
+      />,
+    );
+
+    const target = await screen.findByLabelText('Default target branch');
+    expect(target).toBeDisabled();
+    expect(within(target).getByRole('option', { name: 'Loading branches…' })).toBeInTheDocument();
+    await waitFor(() => expect(listBranches).toHaveBeenCalledTimes(1));
+    expect(target).toBeDisabled();
+    expect(within(target).getByRole('option', { name: 'Loading branches…' })).toBeInTheDocument();
+  });
+
+  it('offers a retry when git branches cannot be loaded', async () => {
+    const user = userEvent.setup();
+    const checkout = { name: 'Checkout', path: '/srv/checkout' };
+    let attempts = 0;
+    const listBranches = vi.fn(async () => {
+      attempts += 1;
+      if (attempts === 1) throw new Error('git unavailable');
+      return { repoRoot: '/srv/checkout', branches: ['main'] };
+    });
+    go('/settings');
+    render(
+      <App
+        client={fakeClient({
+          listRepositories: vi.fn(async () => ({ repositories: [checkout] })),
+          listBranches,
+        })}
+      />,
+    );
+
+    expect(await screen.findByText(/git unavailable/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Default target branch')).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Retry branches' }));
+
+    await waitFor(() => expect(listBranches).toHaveBeenCalledTimes(2));
+    const target = screen.getByLabelText('Default target branch');
+    await waitFor(() => expect(target).toBeEnabled());
+    expect(within(target).getByRole('option', { name: 'main' })).toBeInTheDocument();
+  });
+
+  it('keeps a saved target that is absent from the branch list', async () => {
+    const checkout = { name: 'Checkout', path: '/srv/checkout', defaultTarget: 'release-1' };
+    go('/settings');
+    render(
+      <App
+        client={fakeClient({
+          listRepositories: vi.fn(async () => ({ repositories: [checkout] })),
+          listBranches: vi.fn(async () => ({ repoRoot: '/srv/checkout', branches: ['main'] })),
+        })}
+      />,
+    );
+
+    const target = await screen.findByLabelText('Default target branch');
+    await waitFor(() => expect(target).toBeEnabled());
+    expect(target).toHaveValue('release-1');
+    expect(within(target).getByRole('option', { name: 'release-1 (saved)' })).toBeInTheDocument();
   });
 
   it('does not let an empty save overwrite settings while loading', async () => {
@@ -493,5 +598,24 @@ describe('auth, health and shell', () => {
     expect(document.querySelector('.cr-shell')).toHaveAttribute('data-drawer', 'open');
     await user.click(screen.getByRole('button', { name: 'Close navigation' }));
     expect(document.querySelector('.cr-shell')).toHaveAttribute('data-drawer', 'closed');
+  });
+
+  it('collapses and expands the desktop sidebar and remembers the choice', async () => {
+    const user = userEvent.setup();
+    const first = render(<App client={fakeClient()} />);
+    const shell = document.querySelector('.cr-shell');
+    expect(shell).toHaveAttribute('data-sidebar', 'expanded');
+
+    await user.click(screen.getByRole('button', { name: 'Collapse sidebar' }));
+    expect(shell).toHaveAttribute('data-sidebar', 'collapsed');
+    expect(window.localStorage.getItem('cr-sidebar-collapsed')).toBe('1');
+
+    first.unmount();
+    render(<App client={fakeClient()} />);
+    expect(document.querySelector('.cr-shell')).toHaveAttribute('data-sidebar', 'collapsed');
+
+    await user.click(screen.getByRole('button', { name: 'Expand sidebar' }));
+    expect(document.querySelector('.cr-shell')).toHaveAttribute('data-sidebar', 'expanded');
+    expect(window.localStorage.getItem('cr-sidebar-collapsed')).toBeNull();
   });
 });

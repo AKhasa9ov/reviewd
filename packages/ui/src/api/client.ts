@@ -216,9 +216,11 @@ export class ApiClient {
     });
   }
 
-  async listBranches(path: string): Promise<RepoBranchesResponse> {
+  async listBranches(path: string, signal?: AbortSignal): Promise<RepoBranchesResponse> {
     const query = new URLSearchParams({ path });
-    return this.request<RepoBranchesResponse>(`/api/repos/branches?${query.toString()}`);
+    return this.request<RepoBranchesResponse>(`/api/repos/branches?${query.toString()}`, {
+      ...(signal === undefined ? {} : { signal }),
+    });
   }
 
   async listCommits(path: string, base: string, head: string): Promise<RepoCommitsResponse> {

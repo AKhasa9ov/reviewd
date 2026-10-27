@@ -947,12 +947,12 @@ interface Config {
 
 ### 15.3 Layout
 
-- Standalone 1440: sidebar 280 / main flexible / right rail 320 на Conversation/Report/Signals; на Files changed правый rail скрыт, diff занимает всю ширину. 1024 — rail сворачивается; 768 — file tree drawer, rail drawer; 320 — single column, sticky action bar.
+- Standalone 1440: sidebar 280 / main flexible / right rail 320 на Conversation/Report/Signals; на Files changed правый rail скрыт, diff занимает всю ширину. На ≥1025 глобальный sidebar сворачивается кнопкой в icon rail 76px (подписи скрыты, иконки и aria-label остаются), состояние хранится в `localStorage`. 1024 — rail сворачивается; 768 — file tree drawer, rail drawer; 320 — single column, sticky action bar.
 - DSH panel: sidebar хоста + main; правая панель скрыта по умолчанию, открывается как sheet; всё в токенах хоста.
 - Список ревью: фильтры, поиск, строки с branch/scope, автор, возраст, статус, «N not fixed».
 - Деталь: header (base→head, SHA copy, round pills, verdict, Submit), tabs Conversation / Files changed / Report / Signals, file tree, diff, right rail (summary, fix status, agent, delivery, submit). Files changed открывается по умолчанию, если в URL нет `tab`.
 - Diff: длинные строки переносятся по умолчанию (тумблер Wrap lines), чтобы не было горизонтального скролла; inline-карточки findings и треды комментариев рендерятся сразу под строкой; file tree следует за вертикальным скроллом через `aria-current`.
-- Settings: у каждого репозитория кнопка Browse… открывает локальный просмотр папок с хлебными крошками, переходом вверх и пометкой git-репозиториев; выбор папки заполняет Path on daemon.
+- Settings: у каждого репозитория компактная иконка папки открывает локальный просмотр папок с хлебными крошками, переходом вверх и пометкой git-репозиториев; выбор папки заполняет Path on daemon и загружает ветки через `GET /api/repos/branches`, после чего Default target branch выбирается из выпадающего списка. Смена пути сбрасывает выбранную ветку; сохранённое значение вне списка остаётся доступным как `<ref> (saved)`.
 - Round pills показывают counts; дефолт rN — дельта с rN-1, тумблер «Full diff to base».
 - Fix status board: Addressed / Not fixed / Outdated / Needs decision; клик фильтрует треды; у каждого пункта jump-to-line.
 - Тред: цитата кода, anchor history («line 42 → 57»), статусы, ответы, markdown preview.

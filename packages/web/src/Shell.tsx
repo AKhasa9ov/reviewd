@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
   IconButton,
   MenuIcon,
   MoonIcon,
@@ -14,6 +16,17 @@ import {
   useTheme,
 } from '@dsh-code-review/ui';
 import { Link, useCloseOnNavigate, useLocation } from './router.js';
+
+const SIDEBAR_STORAGE_KEY = 'cr-sidebar-collapsed';
+
+function readCollapsedSidebar(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
 
 export interface ShellProps {
   children: ReactNode;
@@ -42,6 +55,7 @@ function ThemeToggle(): JSX.Element {
 
 export function Shell({ children }: ShellProps): JSX.Element {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(readCollapsedSidebar);
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
   const location = useLocation();
   const routePath = new URL(location, 'http://local').pathname;
@@ -55,21 +69,49 @@ export function Shell({ children }: ShellProps): JSX.Element {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
+  function toggleSidebar(): void {
+    const next = !sidebarCollapsed;
+    setSidebarCollapsed(next);
+    try {
+      if (next) window.localStorage.setItem(SIDEBAR_STORAGE_KEY, '1');
+      else window.localStorage.removeItem(SIDEBAR_STORAGE_KEY);
+    } catch {
+      // Storage can be unavailable in privacy modes; collapsing still works for this session.
+    }
+  }
+
   return (
-    <div className="cr-shell" data-drawer={drawerOpen ? 'open' : 'closed'}>
+    <div
+      className="cr-shell"
+      data-drawer={drawerOpen ? 'open' : 'closed'}
+      data-sidebar={sidebarCollapsed ? 'collapsed' : 'expanded'}
+    >
       <a className="cr-skip-link" href="#main">
         Skip to content
       </a>
-      <aside className="cr-sidebar" aria-label="Primary navigation">
-        <Link className="cr-brand" to="/">
-          <span className="cr-brand-mark" aria-hidden="true">
-            r/
-          </span>
-          <span className="cr-brand-copy">
-            <span className="cr-brand-name">reviewd</span>
-            <span className="cr-brand-sub">code review</span>
-          </span>
-        </Link>
+      <aside className="cr-sidebar" id="primary-sidebar" aria-label="Primary navigation">
+        <div className="cr-sidebar-head">
+          <Link className="cr-brand" to="/">
+            <span className="cr-brand-mark" aria-hidden="true">
+              r/
+            </span>
+            <span className="cr-brand-copy" aria-hidden="true">
+              <span className="cr-brand-name">reviewd</span>
+              <span className="cr-brand-sub">code review</span>
+            </span>
+            <span className="cr-visually-hidden">reviewd code review home</span>
+          </Link>
+          <IconButton
+            label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className="cr-sidebar-toggle"
+            aria-controls="primary-sidebar"
+            aria-expanded={!sidebarCollapsed}
+            onClick={toggleSidebar}
+          >
+            {sidebarCollapsed ? <ArrowRightIcon /> : <ArrowLeftIcon />}
+          </IconButton>
+        </div>
 
         <nav>
           <p className="cr-nav-label">Workspace</p>
@@ -110,6 +152,7 @@ export function Shell({ children }: ShellProps): JSX.Element {
             <Link
               className="cr-nav-link"
               to="/health"
+              aria-label="Health"
               aria-current={navCurrent(routePath, '/health')}
             >
               <span className="cr-nav-icon">

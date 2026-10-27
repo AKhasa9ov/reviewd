@@ -88,6 +88,10 @@ test.describe('@a11y accessibility', () => {
     await expect(page.getByRole('heading', { name: 'Repositories', exact: true })).toBeVisible();
     await expectNoSeriousAxe(page, 'settings dark');
 
+    await page.getByRole('button', { name: 'Collapse sidebar' }).click();
+    await expectNoSeriousAxe(page, 'settings collapsed sidebar');
+    await page.getByRole('button', { name: 'Expand sidebar' }).click();
+
     await page.getByRole('button', { name: 'Add repository' }).click();
     await page.getByRole('button', { name: 'Browse folders for repository 1' }).click();
     const folderDialog = page.getByRole('dialog', { name: 'Choose a repository folder' });

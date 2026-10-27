@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ApiClient, RepositorySetting } from '@dsh-code-review/ui';
-import { Button } from '@dsh-code-review/ui';
+import { Button, FolderIcon, IconButton, Tooltip } from '@dsh-code-review/ui';
 import { ErrorPanel, PageHeader } from '../components.js';
 import { FolderPickerDialog } from './FolderPickerDialog.js';
+import { RepositoryBranchSelect } from './RepositoryBranchSelect.js';
 
 interface DraftRepository extends RepositorySetting {
   key: number;
@@ -64,7 +65,15 @@ export function SettingsPage({ client }: SettingsPageProps): JSX.Element {
 
   function update(key: number, patch: Partial<RepositorySetting>): void {
     setDrafts((current) =>
-      current.map((draft) => (draft.key === key ? { ...draft, ...patch } : draft)),
+      current.map((draft) => {
+        if (draft.key !== key) return draft;
+        const pathChanged = patch.path !== undefined && patch.path !== draft.path;
+        return {
+          ...draft,
+          ...patch,
+          ...(pathChanged ? { defaultTarget: '' } : {}),
+        };
+      }),
     );
     setErrors((current) => {
       const next = { ...current };
@@ -86,7 +95,12 @@ export function SettingsPage({ client }: SettingsPageProps): JSX.Element {
     setDrafts((current) =>
       current.map((draft) =>
         draft.key === key
-          ? { ...draft, path, name: draft.name.trim() === '' ? name : draft.name }
+          ? {
+              ...draft,
+              path,
+              ...(path === draft.path ? {} : { defaultTarget: '' }),
+              name: draft.name.trim() === '' ? name : draft.name,
+            }
           : draft,
       ),
     );
@@ -259,18 +273,18 @@ export function SettingsPage({ client }: SettingsPageProps): JSX.Element {
                                 : `repo-${draft.key}-path-error`
                             }
                           />
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="small"
-                            disabled={saving}
-                            aria-label={`Browse folders for repository ${
-                              draft.name.trim() || draft.path.trim() || index + 1
-                            }`}
-                            onClick={() => setPicker({ key: draft.key, path: draft.path.trim() })}
-                          >
-                            Browse…
-                          </Button>
+                          <Tooltip label="Browse folders">
+                            <IconButton
+                              label={`Browse folders for repository ${
+                                draft.name.trim() || draft.path.trim() || index + 1
+                              }`}
+                              className="cr-path-browse"
+                              disabled={saving}
+                              onClick={() => setPicker({ key: draft.key, path: draft.path.trim() })}
+                            >
+                              <FolderIcon />
+                            </IconButton>
+                          </Tooltip>
                         </div>
                         {draftErrors.path !== undefined ? (
                           <span
@@ -282,27 +296,18 @@ export function SettingsPage({ client }: SettingsPageProps): JSX.Element {
                           </span>
                         ) : null}
                       </div>
-                      <div className="cr-field">
-                        <label className="cr-label" htmlFor={`repo-${draft.key}-target`}>
-                          Default target branch
-                        </label>
-                        <input
-                          id={`repo-${draft.key}-target`}
-                          className="cr-input cr-mono"
-                          value={draft.defaultTarget ?? ''}
-                          disabled={saving}
-                          onChange={(event) =>
-                            update(draft.key, { defaultTarget: event.target.value })
-                          }
-                          placeholder="main"
-                          autoComplete="off"
-                          spellCheck={false}
-                        />
-                        <span className="cr-hint">Preselected when starting a review.</span>
-                      </div>
+                      <RepositoryBranchSelect
+                        client={client}
+                        id={`repo-${draft.key}-target`}
+                        path={draft.path}
+                        value={draft.defaultTarget ?? ''}
+                        disabled={saving}
+                        onChange={(value) => update(draft.key, { defaultTarget: value })}
+                      />
                     </div>
                     <Button
                       type="button"
+                      className="cr-repo-remove"
                       variant="secondary"
                       onClick={() => removeRepository(draft.key)}
                       disabled={saving}
