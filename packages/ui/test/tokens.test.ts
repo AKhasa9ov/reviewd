@@ -101,8 +101,10 @@ describe('design tokens', () => {
     expect(token('dark', 'warning')).toBe('#e3b341');
     expect(token('dark', 'info')).toBe('#79c0ff');
 
-    expect(token('light', 'bg')).toBe('#ffffff');
-    expect(token('light', 'surface')).toBe('#f6f8fa');
+    expect(token('light', 'bg')).toBe('#f4f6f8');
+    expect(token('light', 'surface')).toBe('#fbfcfd');
+    expect(token('light', 'surface-raised')).toBe('#eaeef2');
+    expect(token('light', 'border')).toBe('#7d8590');
     expect(token('light', 'text')).toBe('#1f2328');
     expect(token('light', 'text-muted')).toBe('#57606a');
     expect(token('light', 'primary')).toBe('#0969da');
