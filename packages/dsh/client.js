@@ -86,7 +86,7 @@ window.__ModuleLoader__.load({
         .cr-button{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);border-radius:var(--dsw-radius-md,12px);padding:8px 14px;font:inherit;font-size:13px;cursor:pointer;min-height:36px}
         .cr-button:hover{background:var(--dsw-alias-interactive-bg-hover)}
         .cr-button:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}
-        .cr-button.primary{background:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary);color:#fff}
+        .cr-button.primary{background:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-primary-foreground)}
         .cr-button:disabled{opacity:.55;cursor:default}
         .cr-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
         .cr-row{display:flex;align-items:center;gap:12px;border:1px solid var(--dsw-alias-border-l2);border-radius:var(--dsw-radius-lg,16px);padding:12px 14px;background:var(--dsw-alias-bg-layer-1)}
