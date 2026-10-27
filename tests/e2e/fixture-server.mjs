@@ -80,6 +80,12 @@ async function main() {
     "export const config = {\n  retries: 3,\n  timeoutMs: 500,\n  label: 'config',\n  region: 'eu',\n  tracing: false,\n  cache: true,\n  fallback: 'none',\n  queue: 10,\n  batch: 25,\n};\n",
   );
   await writeFile(join(repo, 'src', 'feature.ts'), "export const feature = 'ready';\n");
+  // A long, deterministic file so the full-file dialog body overflows its scroll container.
+  const longLines = Array.from({ length: 140 }, (_, index) => {
+    const no = String(index + 1).padStart(3, '0');
+    return `export const row${no} = 'line ${no}';`;
+  });
+  await writeFile(join(repo, 'src', 'long.ts'), `${longLines.join('\n')}\n`);
   await git('add', '-A');
   await git('commit', '-m', 'feature work');
 

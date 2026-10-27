@@ -58,6 +58,33 @@ describe('ApiClient', () => {
     });
   });
 
+  it('calls the review and comment CRUD endpoints', async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse({ ok: true }));
+    const client = clientWith(fetchImpl as unknown as typeof fetch);
+
+    await client.updateReview('rev/1', {
+      title: 'Corrected',
+      scope: { kind: 'range', baseRef: 'main', headRef: 'next' },
+    });
+    await client.deleteReview('rev/1', 'duplicate');
+    await client.editComment('rev/1', 'cmt/1', 'Corrected body');
+    await client.deleteComment('rev/1', 'cmt/1');
+
+    const calls = fetchImpl.mock.calls as unknown as Array<[string, RequestInit]>;
+    expect(calls.map(([url, init]) => [init.method, url])).toEqual([
+      ['PATCH', '/api/reviews/rev%2F1'],
+      ['DELETE', '/api/reviews/rev%2F1'],
+      ['PATCH', '/api/reviews/rev%2F1/comments/cmt%2F1'],
+      ['DELETE', '/api/reviews/rev%2F1/comments/cmt%2F1'],
+    ]);
+    expect(JSON.parse(String(calls[0]?.[1].body))).toMatchObject({
+      title: 'Corrected',
+      scope: { kind: 'range', baseRef: 'main', headRef: 'next' },
+    });
+    expect(JSON.parse(String(calls[1]?.[1].body))).toEqual({ reason: 'duplicate' });
+    expect(JSON.parse(String(calls[2]?.[1].body))).toEqual({ body: 'Corrected body' });
+  });
+
   it('calls onUnauthorized with the current deep link and throws a typed error', async () => {
     const fetchImpl = vi.fn(async () => jsonResponse({ error: { code: 'unauthorized' } }, 401));
     const onUnauthorized = vi.fn();

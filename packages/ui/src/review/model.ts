@@ -182,23 +182,35 @@ export function fixCounts(review: ReviewState): Record<FixGroup, number> {
     outdated: 0,
     'needs-decision': 0,
   };
-  for (const comment of review.comments) counts[fixStatus(review, comment)] += 1;
+  for (const comment of review.comments) {
+    if (comment.deletedAt !== undefined) continue;
+    counts[fixStatus(review, comment)] += 1;
+  }
   return counts;
 }
 
 export function filterComments(review: ReviewState, filter: FixFilter): Comment[] {
-  if (filter === 'all') return review.comments;
-  return review.comments.filter((comment) => fixStatus(review, comment) === filter);
+  if (filter === 'all') {
+    return review.comments.filter(
+      (comment) => comment.deletedAt === undefined || comment.replies.length > 0,
+    );
+  }
+  return review.comments.filter(
+    (comment) => comment.deletedAt === undefined && fixStatus(review, comment) === filter,
+  );
 }
 
 export function roundCommentCount(review: ReviewState, round: number): number {
-  return review.comments.filter((comment) =>
-    comment.anchors.some((anchor) => anchor.round === round),
+  return review.comments.filter(
+    (comment) =>
+      comment.deletedAt === undefined && comment.anchors.some((anchor) => anchor.round === round),
   ).length;
 }
 
 export function unresolvedComments(review: ReviewState): Comment[] {
-  return review.comments.filter((comment) => comment.state === 'open');
+  return review.comments.filter(
+    (comment) => comment.deletedAt === undefined && comment.state === 'open',
+  );
 }
 
 export function latestVerdict(review: ReviewState): string {

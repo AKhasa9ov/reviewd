@@ -9,6 +9,7 @@ import { AuthPage } from './pages/AuthPage.js';
 import { HealthPage } from './pages/HealthPage.js';
 import { SettingsPage } from './pages/SettingsPage.js';
 import { ReviewDetailPage } from './pages/ReviewDetailPage.js';
+import { EditReviewPage } from './pages/EditReviewPage.js';
 import { NotFoundPage } from './pages/NotFoundPage.js';
 
 export interface AppProps {
@@ -39,6 +40,9 @@ export function App({ client }: AppProps = {}): JSX.Element {
           {route.name === 'settings' ? <SettingsPage client={activeClient} /> : null}
           {route.name === 'review' ? (
             <ReviewDetailPage client={activeClient} id={route.id} />
+          ) : null}
+          {route.name === 'edit-review' ? (
+            <EditReviewPage client={activeClient} id={route.id} />
           ) : null}
           {route.name === 'not-found' ? <NotFoundPage path={route.path} /> : null}
         </Shell>

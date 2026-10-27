@@ -23,9 +23,10 @@ import { ArrowLeftIcon, GitBranchIcon } from '../icons.js';
 import { CommentComposer } from './CommentComposer.js';
 import { CommentThread } from './CommentThread.js';
 import { DiffViewer } from './DiffViewer.js';
+import type { FullFileController } from './FullFileDialog.js';
 import { clearDraft, readDraft, writeDraft, type StoredCommentDraft } from './drafts.js';
 import { FixStatusBoard } from './FixStatusBoard.js';
-import { FindingDecisionDialog } from './FindingDecisionDialog.js';
+import type { FindingDecisionError } from './FindingDecisionControls.js';
 import { ReportPanel } from './ReportPanel.js';
 import { SignalsPanel } from './SignalsPanel.js';
 import { SubmitDialog } from './SubmitDialog.js';
@@ -71,11 +72,6 @@ type SelectionState = {
   side: Side;
   lineStart: number;
   lineEnd: number;
-};
-
-type DecisionTarget = {
-  finding: Finding;
-  state: FindingDecisionState;
 };
 
 type ActionError = {
@@ -205,9 +201,10 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
   const [commentSubmitting, setCommentSubmitting] = useState(false);
   const [commentError, setCommentError] = useState<string | null>(null);
   const [pendingCommentId, setPendingCommentId] = useState<string | undefined>();
-  const [decisionTarget, setDecisionTarget] = useState<DecisionTarget | null>(null);
-  const [decisionPending, setDecisionPending] = useState(false);
-  const [decisionError, setDecisionError] = useState<string | null>(null);
+  const [decidingFindingId, setDecidingFindingId] = useState<string | undefined>(undefined);
+  const [findingDecisionError, setFindingDecisionError] = useState<FindingDecisionError | null>(
+    null,
+  );
   const [submitOpen, setSubmitOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -219,9 +216,13 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
   const [feedback, setFeedback] = useState<LatestFeedbackView | null>(null);
   const [delivery, setDelivery] = useState<SubmissionDelivery | null>(null);
   const [cancelPending, setCancelPending] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deletePending, setDeletePending] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [scrollRestore, setScrollRestore] = useState<number | null>(null);
   const pendingJump = useRef<{ path: string; line?: number; side?: Side } | null>(null);
   const goRef = useRef(0);
+  const fullFileControllerRef = useRef<FullFileController | null>(null);
 
   const go = useCallback(
     (to: string, options: { replace?: boolean } = {}) => {
@@ -610,6 +611,11 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
   }
 
   function openComposerAtSelection(): void {
+    const fullFileController = fullFileControllerRef.current;
+    if (fullFileController !== null) {
+      fullFileController.commentAtSelection();
+      return;
+    }
     if (snapshot === null) return;
     if (selection !== null) {
       const file = snapshot.files.find((item) => item.path === selection.path);
@@ -691,29 +697,69 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
     }
   }
 
-  function openFindingDecision(finding: Finding, state: FindingDecisionState): void {
-    setDecisionError(null);
-    setDecisionTarget({ finding, state });
+  async function editComment(comment: Comment, body: string): Promise<void> {
+    setPendingCommentId(comment.id);
+    try {
+      await client.editComment(id, comment.id, body);
+      toast('Comment updated');
+      void refreshView();
+    } finally {
+      setPendingCommentId(undefined);
+    }
   }
 
-  async function submitFindingDecision(state: FindingDecisionState, note: string): Promise<void> {
-    if (decisionTarget === null) return;
-    setDecisionPending(true);
-    setDecisionError(null);
+  async function deleteComment(comment: Comment): Promise<void> {
+    setPendingCommentId(comment.id);
     try {
-      await client.decideFinding(id, decisionTarget.finding.id, {
+      await client.deleteComment(id, comment.id);
+      toast('Comment deleted');
+      void refreshView();
+    } catch (error) {
+      setActionError(actionErrorFor(error));
+    } finally {
+      setPendingCommentId(undefined);
+    }
+  }
+
+  async function deleteReview(): Promise<void> {
+    setDeletePending(true);
+    setDeleteError(null);
+    try {
+      await client.deleteReview(id);
+      toast('Review deleted');
+      setDeleteOpen(false);
+      go('/');
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : 'Could not delete the review.');
+    } finally {
+      setDeletePending(false);
+    }
+  }
+
+  async function submitFindingDecision(
+    finding: Finding,
+    state: FindingDecisionState,
+    note: string | undefined,
+  ): Promise<boolean> {
+    if (view === null || report === null || report.round !== selectedRound) return false;
+    setDecidingFindingId(finding.id);
+    setFindingDecisionError(null);
+    try {
+      await client.decideFinding(id, finding.id, {
         state,
-        ...(note === '' ? {} : { note }),
+        ...(note === undefined || note === '' ? {} : { note }),
       });
-      setDecisionTarget(null);
       toast(state === 'accepted' ? 'Finding accepted' : 'Finding dismissed');
       reloadReview();
+      return true;
     } catch (error) {
-      setDecisionError(
-        error instanceof Error ? error.message : 'Could not save the finding decision.',
-      );
+      setFindingDecisionError({
+        findingId: finding.id,
+        message: error instanceof Error ? error.message : 'Could not save the finding decision.',
+      });
+      return false;
     } finally {
-      setDecisionPending(false);
+      setDecidingFindingId(undefined);
     }
   }
 
@@ -977,8 +1023,10 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
   ) : (
     <DiffViewer
       snapshot={snapshot}
-      comments={filteredComments}
-      allComments={view?.review.comments ?? []}
+      comments={filteredComments.filter((comment) => comment.deletedAt === undefined)}
+      allComments={(view?.review.comments ?? []).filter(
+        (comment) => comment.deletedAt === undefined,
+      )}
       round={selectedRound ?? 1}
       delta={effectiveDelta}
       canDelta={canDelta}
@@ -989,7 +1037,9 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
       findingDecisions={
         report !== null && report.round === selectedRound ? findingDecisions : undefined
       }
-      onDecideFinding={canDecideFinding ? openFindingDecision : undefined}
+      onDecideFinding={canDecideFinding ? submitFindingDecision : undefined}
+      decidingFindingId={decidingFindingId}
+      findingDecisionError={findingDecisionError}
       activeFile={activeFile}
       activeLine={activeLine}
       activeCommentId={activeCommentId}
@@ -997,6 +1047,7 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
       fullFileComposer={composer?.surface === 'full' ? composer : null}
       fullFileJump={fullFileJump}
       onFullFileJumpHandled={() => setFullFileJump(null)}
+      fullFileControllerRef={fullFileControllerRef}
       onCancelComposer={cancelComposer}
       onDeltaChange={setDelta}
       onJump={jumpTo}
@@ -1125,6 +1176,17 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
             title={agentRunning ? 'Wait for the reviewer to finish' : undefined}
           >
             Refresh
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => go(`/review/${encodeURIComponent(id)}/edit`)}
+            disabled={readOnly}
+            title={readOnly ? 'Closed reviews cannot be edited' : undefined}
+          >
+            Edit
+          </Button>
+          <Button variant="ghost" onClick={() => setDeleteOpen(true)} disabled={deletePending}>
+            Delete
           </Button>
           <Button onClick={() => setSubmitOpen(true)} disabled={readOnly}>
             Submit
@@ -1270,6 +1332,8 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
                           pending={pendingCommentId === comment.id}
                           onReply={reply}
                           onState={setCommentState}
+                          onEdit={editComment}
+                          onDelete={deleteComment}
                           onJump={jumpToComment}
                           onFocus={(item) => setActiveCommentId(item.id)}
                         />
@@ -1285,7 +1349,9 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
                 report={report}
                 decisions={findingDecisions}
                 canDecide={canDecideFinding}
-                onDecide={openFindingDecision}
+                onDecide={submitFindingDecision}
+                decidingFindingId={decidingFindingId}
+                findingDecisionError={findingDecisionError}
                 onJump={jumpToLocation}
                 onJumpComment={(commentId) => {
                   const comment = review.comments.find((item) => item.id === commentId);
@@ -1325,7 +1391,10 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
                 {report?.summary ?? 'The reviewer has not produced a summary for this round yet.'}
               </p>
               <div className="cr-rail-meta">
-                <span>{review.comments.length} comments</span>
+                <span>
+                  {review.comments.filter((comment) => comment.deletedAt === undefined).length}{' '}
+                  comments
+                </span>
                 <span>{unresolvedComments(review).length} open</span>
                 <span>{review.rounds.length} rounds</span>
               </div>
@@ -1543,6 +1612,35 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
       </Dialog>
 
       <Dialog
+        open={deleteOpen}
+        title="Delete this review?"
+        description="The review disappears from the list and its active reviewer is cancelled. Events stay in the audit log."
+        onClose={() => {
+          if (!deletePending) setDeleteOpen(false);
+        }}
+        actions={
+          <>
+            <Button variant="ghost" onClick={() => setDeleteOpen(false)} disabled={deletePending}>
+              Cancel
+            </Button>
+            <Button variant="danger" loading={deletePending} onClick={() => void deleteReview()}>
+              Delete review
+            </Button>
+          </>
+        }
+      >
+        <p>
+          Delete <strong>{review.title}</strong> ({review.id})? This removes it from the review
+          list, but the append-only event log keeps the audit trail.
+        </p>
+        {deleteError !== null ? (
+          <p className="cr-error" role="alert">
+            {deleteError}
+          </p>
+        ) : null}
+      </Dialog>
+
+      <Dialog
         open={helpOpen}
         title="Keyboard shortcuts"
         description="Shortcuts are disabled while typing and can be turned off with data-shortcuts-off."
@@ -1560,24 +1658,6 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
           ))}
         </dl>
       </Dialog>
-
-      {decisionTarget !== null ? (
-        <FindingDecisionDialog
-          key={`${decisionTarget.finding.id}:${decisionTarget.state}:${decisionTarget.finding.lineStart}`}
-          finding={decisionTarget.finding}
-          state={decisionTarget.state}
-          decision={findingDecisions.get(decisionTarget.finding.id)}
-          pending={decisionPending}
-          error={decisionError}
-          onClose={() => {
-            if (!decisionPending) {
-              setDecisionTarget(null);
-              setDecisionError(null);
-            }
-          }}
-          onSubmit={(state, note) => void submitFindingDecision(state, note)}
-        />
-      ) : null}
     </div>
   );
 }

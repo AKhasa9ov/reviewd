@@ -94,6 +94,12 @@ export interface Comment {
   replies: Reply[];
   anchors: Anchor[];
   outcomes: Outcome[];
+  /** Last edit metadata; absent when the body has never been edited. */
+  editedAt?: string;
+  editedBy?: Actor;
+  /** Soft-deletion marker. Deleted comments are hidden from feedback and visible only as tombstones. */
+  deletedAt?: string;
+  deletedBy?: Actor;
 }
 
 export interface Round {
@@ -153,6 +159,12 @@ export interface ReviewState {
   fixClaims?: FixClaimRecord[];
   /** Human triage of reviewer findings, in append order. Latest per finding wins. */
   findingDecisions?: FindingDecision[];
+  /** Last metadata edit; absent when the review has never been edited. */
+  updatedAt?: string;
+  updatedBy?: Actor;
+  /** Soft-deletion marker. Deleted reviews are hidden from lists and lookups. */
+  deletedAt?: string;
+  deletedBy?: Actor;
 }
 
 export interface ReviewSummary {

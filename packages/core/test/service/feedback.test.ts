@@ -203,6 +203,31 @@ describe('buildFeedback', () => {
     expect(first.json.acceptedSuggestions).toHaveLength(1);
   });
 
+  it('excludes soft-deleted comments and their suggestions from feedback', () => {
+    const feedback = buildFeedback(
+      input({
+        comments: [
+          comment({
+            id: 'cmt_deleted',
+            state: 'resolved',
+            deletedAt: at,
+            deletedBy: human,
+            suggestion: { original: 'two', replacement: 'TWO' },
+          }),
+          comment({ id: 'cmt_open', body: 'Edited body', editedAt: at }),
+        ],
+      }),
+    );
+
+    expect(feedback.markdown).not.toContain('Please fix');
+    expect(feedback.markdown).toContain('Edited body');
+    expect(feedback.json.humanComments).toEqual([
+      expect.objectContaining({ commentId: 'cmt_open', body: 'Edited body' }),
+    ]);
+    expect(feedback.json.resolved).toEqual({ count: 0, commentIds: [] });
+    expect(feedback.json.acceptedSuggestions).toEqual([]);
+  });
+
   it('excludes nit findings and closed human comments by default', () => {
     const feedback = buildFeedback(
       input({

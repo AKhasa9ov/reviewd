@@ -1,13 +1,12 @@
 import { useState } from 'react';
-import type {
-  AgentReport,
-  Finding,
-  FindingDecision,
-  FindingDecisionState,
-} from '@dsh-code-review/core';
+import type { AgentReport, Finding, FindingDecision } from '@dsh-code-review/core';
 import { Badge, EmptyState } from '../primitives/Feedback.js';
 import { Select } from '../primitives/Field.js';
 import { FindingDecisionControls } from './FindingDecisionControls.js';
+import type {
+  FindingDecisionControlsProps,
+  FindingDecisionError,
+} from './FindingDecisionControls.js';
 import { findingCounts, filterFindings } from './model.js';
 
 const SEVERITIES: Array<Finding['severity'] | 'all'> = ['all', 'blocker', 'major', 'minor', 'nit'];
@@ -44,7 +43,9 @@ export interface ReportPanelProps {
   onJumpComment?: (commentId: string) => void;
   decisions?: ReadonlyMap<string, FindingDecision>;
   canDecide?: boolean;
-  onDecide?: (finding: Finding, state: FindingDecisionState) => void;
+  onDecide?: FindingDecisionControlsProps['onDecide'];
+  decidingFindingId?: string | undefined;
+  findingDecisionError?: FindingDecisionError | null;
 }
 
 const EMPTY_DECISIONS = new Map<string, FindingDecision>();
@@ -56,6 +57,8 @@ export function ReportPanel({
   decisions = EMPTY_DECISIONS,
   canDecide = false,
   onDecide,
+  decidingFindingId,
+  findingDecisionError,
 }: ReportPanelProps): JSX.Element {
   const [severity, setSeverity] = useState<Finding['severity'] | 'all'>('all');
   const [category, setCategory] = useState<Finding['category'] | 'all'>('all');
@@ -203,7 +206,13 @@ export function ReportPanel({
                 finding={finding}
                 decision={decisions.get(finding.id)}
                 readOnly={!canDecide || onDecide === undefined}
-                onDecide={onDecide ?? (() => undefined)}
+                pending={decidingFindingId === finding.id}
+                error={
+                  findingDecisionError?.findingId === finding.id
+                    ? findingDecisionError.message
+                    : null
+                }
+                onDecide={onDecide ?? (async () => false)}
               />
             </li>
           ))}

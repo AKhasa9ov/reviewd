@@ -29,6 +29,10 @@ function fakeClient(overrides: Partial<Record<keyof ApiClient, unknown>> = {}): 
     addComment: vi.fn(async () => ({ comment: reviewView.review.comments[0] })),
     reply: vi.fn(async () => ({ comment: reviewView.review.comments[0] })),
     setCommentState: vi.fn(async () => ({ comment: reviewView.review.comments[0] })),
+    updateReview: vi.fn(async () => reviewView),
+    deleteReview: vi.fn(async () => undefined),
+    editComment: vi.fn(async () => ({ comment: reviewView.review.comments[0] })),
+    deleteComment: vi.fn(async () => ({ comment: reviewView.review.comments[0] })),
     decideFinding: vi.fn(async (_id: string, findingId: string, input: { state: string }) => ({
       decision: {
         findingId,
@@ -45,6 +49,7 @@ function fakeClient(overrides: Partial<Record<keyof ApiClient, unknown>> = {}): 
     authenticate: vi.fn(async () => undefined),
     logout: vi.fn(async () => undefined),
     cancelAgent: vi.fn(async () => undefined),
+    listBranches: vi.fn(async () => ({ repoRoot: '/srv/repo', branches: [] })),
     ...overrides,
   } as unknown as ApiClient;
 }
@@ -76,6 +81,50 @@ describe('review detail', () => {
     expect(screen.getByRole('button', { name: '2 Addressed' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '1 Outdated' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '0 Needs decision' })).toBeInTheDocument();
+  });
+
+  it('navigates to the edit page and deletes the review after confirmation', async () => {
+    const user = userEvent.setup();
+    go('/review/rev_01');
+    const deleteReview = vi.fn(async () => undefined);
+    render(<App client={fakeClient({ deleteReview })} />);
+    await screen.findByRole('heading', { name: 'Billing retry semantics' });
+
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(window.location.pathname).toBe('/review/rev_01/edit');
+
+    go('/review/rev_01');
+    render(<App client={fakeClient({ deleteReview })} />);
+    await screen.findByRole('heading', { name: 'Billing retry semantics' });
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Delete this review?' });
+    await user.click(within(dialog).getByRole('button', { name: 'Delete review' }));
+
+    expect(deleteReview).toHaveBeenCalledWith('rev_01');
+    await waitFor(() => expect(window.location.pathname).toBe('/'));
+  });
+
+  it('edits and deletes a comment from the conversation', async () => {
+    const user = userEvent.setup();
+    go('/review/rev_01?tab=conversation');
+    const editComment = vi.fn(async () => ({ comment: reviewView.review.comments[0] }));
+    const deleteComment = vi.fn(async () => ({ comment: reviewView.review.comments[0] }));
+    render(<App client={fakeClient({ editComment, deleteComment })} />);
+    await screen.findByRole('heading', { name: 'Billing retry semantics' });
+
+    const thread = await screen.findByTestId('comment-c1');
+    await user.click(within(thread).getByRole('button', { name: 'Edit' }));
+    const input = within(thread).getByLabelText('Edit comment');
+    await user.clear(input);
+    await user.type(input, 'Corrected comment');
+    await user.click(within(thread).getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(editComment).toHaveBeenCalledWith('rev_01', 'c1', 'Corrected comment'),
+    );
+
+    await user.click(within(thread).getByRole('button', { name: 'Delete' }));
+    await user.click(within(thread).getByRole('button', { name: 'Confirm delete' }));
+    await waitFor(() => expect(deleteComment).toHaveBeenCalledWith('rev_01', 'c1'));
   });
 
   it('switches rounds and keeps the selected file deep link', async () => {
@@ -197,6 +246,39 @@ describe('review detail', () => {
     expect(
       within(dialog).queryByRole('form', { name: 'Comment on lines 2–4' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('routes c to the open full file dialog and posts a line comment inline', async () => {
+    const user = userEvent.setup();
+    go('/review/rev_01?round=2&tab=files#file=src%2Fauth.ts&line=11');
+    const addComment = vi.fn(async () => ({ comment: reviewView.review.comments[0] }));
+    render(<App client={fakeClient({ addComment })} />);
+    await screen.findByRole('heading', { name: 'Billing retry semantics' });
+    await screen.findByRole('row', { name: /line 11, added:/ });
+
+    await user.click(screen.getByRole('button', { name: 'View full file for src/auth.ts' }));
+    const dialog = await screen.findByRole('dialog', { name: 'src/auth.ts' });
+    await user.click(within(dialog).getByRole('row', { name: /Line 12, added:/ }));
+    await user.keyboard('c');
+
+    const composer = await within(dialog).findByRole('form', { name: 'Comment on line 12' });
+    expect(document.querySelector('.cr-inline-composer')).toBeNull();
+
+    await user.type(within(composer).getByLabelText('Comment'), 'Retry twice needs a comment.');
+    await user.click(within(composer).getByRole('button', { name: 'Post comment' }));
+
+    await waitFor(() =>
+      expect(addComment).toHaveBeenCalledWith(
+        'rev_01',
+        expect.objectContaining({
+          path: 'src/auth.ts',
+          side: 'new',
+          lineStart: 12,
+          lineEnd: 12,
+        }),
+      ),
+    );
+    expect(screen.getByRole('dialog', { name: 'src/auth.ts' })).toBeInTheDocument();
   });
 
   it('shows comments anchored to base lines inside the full file', async () => {
@@ -412,12 +494,13 @@ describe('review detail', () => {
     const inline = await screen.findByLabelText('major finding: Retry budget is hard-coded');
     await user.click(within(inline).getByRole('button', { name: 'Accept' }));
 
-    const dialog = await screen.findByRole('dialog', { name: 'Accept finding' });
+    const form = await within(inline).findByRole('form', { name: 'Accept finding' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     await user.type(
-      within(dialog).getByLabelText('Note for the agent (optional)'),
+      within(form).getByLabelText('Note for the agent (optional)'),
       'Please fix this before merge.',
     );
-    await user.click(within(dialog).getByRole('button', { name: 'Accept finding' }));
+    await user.click(within(form).getByRole('button', { name: 'Accept finding' }));
 
     await waitFor(() =>
       expect(decideFinding).toHaveBeenCalledWith('rev_01', 'f1', {
@@ -426,8 +509,11 @@ describe('review detail', () => {
       }),
     );
     await waitFor(() =>
-      expect(screen.queryByRole('dialog', { name: 'Accept finding' })).not.toBeInTheDocument(),
+      expect(
+        within(inline).queryByRole('form', { name: 'Accept finding' }),
+      ).not.toBeInTheDocument(),
     );
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.getByText('Finding accepted')).toBeInTheDocument();
   });
 

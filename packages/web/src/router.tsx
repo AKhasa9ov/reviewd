@@ -37,6 +37,7 @@ export function useLocation(): string {
 export type Route =
   | { name: 'list' }
   | { name: 'review'; id: string }
+  | { name: 'edit-review'; id: string }
   | { name: 'new' }
   | { name: 'auth' }
   | { name: 'health' }
@@ -51,6 +52,16 @@ export function parseRoute(location: string): Route {
   if (pathname === '/auth') return { name: 'auth' };
   if (pathname === '/health') return { name: 'health' };
   if (pathname === '/settings') return { name: 'settings' };
+  const editMatch = /^\/review\/([^/]+)\/edit$/.exec(pathname);
+  if (editMatch?.[1] !== undefined) {
+    let id = editMatch[1];
+    try {
+      id = decodeURIComponent(editMatch[1]);
+    } catch {
+      // Keep a malformed percent escape as-is instead of crashing the shell.
+    }
+    return { name: 'edit-review', id };
+  }
   const match = /^\/review\/([^/]+)$/.exec(pathname);
   if (match?.[1] !== undefined) {
     let id = match[1];

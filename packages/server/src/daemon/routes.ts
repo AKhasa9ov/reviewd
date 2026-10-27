@@ -370,6 +370,35 @@ export async function handle(
       sendJson(res, 200, await ctx.service.get(reviewId));
       return;
     }
+    if (rest.length === 0 && method === 'PATCH') {
+      const body = await readJson(req, ctx.config.maxBodyBytes);
+      const input = {
+        ...(body.title === undefined ? {} : { title: str(body.title, 'title') }),
+        ...(body.reviewer === undefined
+          ? {}
+          : { reviewer: object(body.reviewer, 'reviewer') as unknown as ReviewerConfig }),
+        ...(body.scope === undefined
+          ? {}
+          : { scope: object(body.scope, 'scope') as unknown as DiffScope }),
+      };
+      const before = body.scope === undefined ? null : await ctx.service.get(reviewId);
+      const view = await ctx.service.updateReview(reviewId, input, ctxFor(req, options.auth));
+      if (before !== null && view.review.rounds.length > before.review.rounds.length) {
+        await enqueueWorkerJob(ctx, reviewId);
+      }
+      await ctx.hub.sync(reviewId);
+      sendJson(res, 200, view);
+      return;
+    }
+    if (rest.length === 0 && method === 'DELETE') {
+      const body = await readJson(req, ctx.config.maxBodyBytes);
+      const reason = body.reason === undefined ? undefined : str(body.reason, 'reason');
+      await ctx.service.deleteReview(reviewId, ctxFor(req, options.auth), reason);
+      ctx.jobs.cancelReview(reviewId);
+      await ctx.hub.sync(reviewId);
+      sendJson(res, 200, { ok: true });
+      return;
+    }
     if (rest[0] === 'snapshot' && method === 'GET') {
       const round = Number(url.searchParams.get('round'));
       if (!Number.isInteger(round) || round <= 0)
@@ -466,14 +495,45 @@ export async function handle(
       method === 'PATCH'
     ) {
       const body = await readJson(req, ctx.config.maxBodyBytes);
-      const state = body.state;
-      if (state !== 'open' && state !== 'resolved' && state !== 'dismissed') {
-        throw new ApiError('validation', 'state must be open, resolved or dismissed');
+      const hasBody = body.body !== undefined;
+      const hasState = body.state !== undefined;
+      if (hasBody === hasState) {
+        throw new ApiError('validation', 'provide exactly one of body or state');
       }
-      const view = await ctx.service.setCommentState(
+      const commentId = decodeURIComponent(rest[1]);
+      let view;
+      if (hasBody) {
+        view = await ctx.service.editComment(
+          reviewId,
+          commentId,
+          { body: str(body.body, 'body') },
+          ctxFor(req, options.auth),
+        );
+      } else {
+        const state = body.state;
+        if (state !== 'open' && state !== 'resolved' && state !== 'dismissed') {
+          throw new ApiError('validation', 'state must be open, resolved or dismissed');
+        }
+        view = await ctx.service.setCommentState(
+          reviewId,
+          commentId,
+          state as CommentState,
+          ctxFor(req, options.auth),
+        );
+      }
+      await ctx.hub.sync(reviewId);
+      sendJson(res, 200, view);
+      return;
+    }
+    if (
+      rest[0] === 'comments' &&
+      rest[1] !== undefined &&
+      rest.length === 2 &&
+      method === 'DELETE'
+    ) {
+      const view = await ctx.service.deleteComment(
         reviewId,
         decodeURIComponent(rest[1]),
-        state as CommentState,
         ctxFor(req, options.auth),
       );
       await ctx.hub.sync(reviewId);

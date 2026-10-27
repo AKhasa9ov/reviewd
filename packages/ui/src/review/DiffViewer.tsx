@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import type { MouseEvent as ReactMouseEvent } from 'react';
+import type { MouseEvent as ReactMouseEvent, MutableRefObject } from 'react';
 import type {
   Comment,
   CommentState,
   FileDiff,
   Finding,
   FindingDecision,
-  FindingDecisionState,
   Side,
   Snapshot,
 } from '@dsh-code-review/core';
@@ -16,7 +15,11 @@ import { Input } from '../primitives/Field.js';
 import { FileIcon } from '../icons.js';
 import { CommentThread } from './CommentThread.js';
 import { FindingDecisionControls } from './FindingDecisionControls.js';
-import { FullFileDialog } from './FullFileDialog.js';
+import type {
+  FindingDecisionControlsProps,
+  FindingDecisionError,
+} from './FindingDecisionControls.js';
+import { FullFileDialog, type FullFileController } from './FullFileDialog.js';
 import {
   buildDiffRows,
   commentsAtLine,
@@ -39,7 +42,9 @@ export interface DiffViewerProps {
   changedPaths: ReadonlySet<string>;
   findings?: readonly Finding[];
   findingDecisions?: ReadonlyMap<string, FindingDecision>;
-  onDecideFinding?: (finding: Finding, state: FindingDecisionState) => void;
+  onDecideFinding?: FindingDecisionControlsProps['onDecide'];
+  decidingFindingId?: string | undefined;
+  findingDecisionError?: FindingDecisionError | null;
   activeFile?: string | undefined;
   activeLine?: number | undefined;
   activeCommentId?: string | undefined;
@@ -47,6 +52,7 @@ export interface DiffViewerProps {
   fullFileComposer?: { path: string; side: Side; lineStart: number; lineEnd: number } | null;
   fullFileJump?: { path: string; side: Side; line: number } | null;
   onFullFileJumpHandled?: (() => void) | undefined;
+  fullFileControllerRef?: MutableRefObject<FullFileController | null> | undefined;
   onCancelComposer?: (() => void) | undefined;
   onDeltaChange: (value: boolean) => void;
   onJump: (path: string, line?: number, side?: Side) => void;
@@ -137,7 +143,9 @@ interface InlineFindingProps {
   finding: Finding;
   decision?: FindingDecision | undefined;
   readOnly?: boolean;
-  onDecide?: ((finding: Finding, state: FindingDecisionState) => void) | undefined;
+  pending?: boolean;
+  error?: string | null;
+  onDecide?: FindingDecisionControlsProps['onDecide'];
   onOpenFinding?: ((finding: Finding) => void) | undefined;
 }
 
@@ -145,6 +153,8 @@ function InlineFinding({
   finding,
   decision,
   readOnly = false,
+  pending = false,
+  error,
   onDecide,
   onOpenFinding,
 }: InlineFindingProps): JSX.Element {
@@ -196,6 +206,8 @@ function InlineFinding({
             finding={finding}
             decision={decision}
             readOnly={readOnly}
+            pending={pending}
+            error={error ?? null}
             onDecide={onDecide}
           />
         ) : null}
@@ -283,6 +295,8 @@ function DiffFileSection({
   findings,
   findingDecisions,
   onDecideFinding,
+  decidingFindingId,
+  findingDecisionError,
   onJump,
   onViewFullFile,
   onSelectLine,
@@ -309,6 +323,8 @@ function DiffFileSection({
   findings: readonly Finding[];
   findingDecisions: ReadonlyMap<string, FindingDecision>;
   onDecideFinding?: DiffViewerProps['onDecideFinding'];
+  decidingFindingId?: string | undefined;
+  findingDecisionError?: FindingDecisionError | null;
   onJump: DiffViewerProps['onJump'];
   onViewFullFile: (file: FileDiff) => void;
   onSelectLine: DiffViewerProps['onSelectLine'];
@@ -469,6 +485,8 @@ function DiffFileSection({
                       findings={findings}
                       findingDecisions={findingDecisions}
                       onDecideFinding={onDecideFinding}
+                      decidingFindingId={decidingFindingId}
+                      findingDecisionError={findingDecisionError}
                       onSelectLine={onSelectLine}
                       onLineDragStart={onLineDragStart}
                       onLineDragEnter={onLineDragEnter}
@@ -522,6 +540,8 @@ function DiffLineRow({
   findings,
   findingDecisions,
   onDecideFinding,
+  decidingFindingId,
+  findingDecisionError,
   onSelectLine,
   onLineDragStart,
   onLineDragEnter,
@@ -546,6 +566,8 @@ function DiffLineRow({
   findings: readonly Finding[];
   findingDecisions: ReadonlyMap<string, FindingDecision>;
   onDecideFinding?: DiffViewerProps['onDecideFinding'];
+  decidingFindingId?: string | undefined;
+  findingDecisionError?: FindingDecisionError | null;
   onSelectLine: DiffViewerProps['onSelectLine'];
   onLineDragStart: (file: FileDiff, side: Side, line: number, event: ReactMouseEvent) => void;
   onLineDragEnter: (file: FileDiff, side: Side, line: number) => void;
@@ -683,6 +705,10 @@ function DiffLineRow({
               finding={finding}
               decision={findingDecisions.get(finding.id)}
               readOnly={readOnly}
+              pending={decidingFindingId === finding.id}
+              error={
+                findingDecisionError?.findingId === finding.id ? findingDecisionError.message : null
+              }
               onDecide={onDecideFinding}
               onOpenFinding={onOpenFinding}
             />
@@ -734,6 +760,8 @@ export function DiffViewer({
   findings = [],
   findingDecisions = EMPTY_FINDING_DECISIONS,
   onDecideFinding,
+  decidingFindingId,
+  findingDecisionError,
   activeFile,
   activeLine,
   activeCommentId,
@@ -741,6 +769,7 @@ export function DiffViewer({
   fullFileComposer,
   fullFileJump,
   onFullFileJumpHandled,
+  fullFileControllerRef,
   onCancelComposer,
   onDeltaChange,
   onJump,
@@ -1122,6 +1151,8 @@ export function DiffViewer({
                 findings={findings}
                 findingDecisions={findingDecisions}
                 onDecideFinding={onDecideFinding}
+                decidingFindingId={decidingFindingId}
+                findingDecisionError={findingDecisionError}
                 onJump={onJump}
                 onViewFullFile={(file) => setFullFile({ file })}
                 onSelectLine={onSelectLine}
@@ -1162,6 +1193,7 @@ export function DiffViewer({
           }
           activeCommentId={activeCommentId}
           readOnly={readOnly}
+          controllerRef={fullFileControllerRef}
           onClose={() => setFullFile(null)}
           onOpenComposer={(side, start, end) =>
             onOpenComposer(fullFile.file, side, start, end, 'full')

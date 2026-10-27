@@ -408,9 +408,13 @@ interface Submission {
 | `comment/added` | comment |
 | `comment/replied` | commentId, reply |
 | `comment/state` | commentId, state, by |
+| `comment/edited` | commentId, body, by |
+| `comment/deleted` | commentId, by |
 | `comment/anchor` | commentId, anchor, round, state |
 | `suggestion/state` | commentId, state, meta |
 | `suggestion/applied` | commentId, round, sha, result |
+| `review/updated` | title?, reviewer?, by |
+| `review/deleted` | by, reason? |
 | `review/submitted` | submission + deliveryKey |
 | `delivery/pending` | delivery |
 | `delivery/acked` | deliveryId, by, at |
@@ -429,10 +433,20 @@ interface Submission {
 
 1. Daemon — единственный писатель store (файловый lock с pid/port в `<store>/lock`).
 2. Раунды и снапшоты неизменяемы; правки только новыми событиями.
-3. Комментарий никогда не удаляется физически; `dismissed` — мягкое состояние.
+3. Комментарий и review никогда не удаляются физически: удаление — мягкое (`deletedAt`), события сохраняются для аудита. `dismissed` — отдельное мягкое состояние комментария.
 4. Все мутации review сериализуются per-review mutex.
 5. Секреты (token, Authorization) никогда не попадают в event log, логи и артефакты.
 6. Ни один путь из запроса не может выйти за `repo.root` (realpath-проверка, запрет симлинков наружу).
+
+### 6.5 Правка и удаление
+
+- Открытый review можно переименовать и сменить reviewer через `review/updated`; заголовок не может быть пустым.
+- `scope` меняется только созданием нового раунда: сервис собирает новый immutable snapshot, вызывает re-anchor комментариев и ставит задачу reviewer'у, если backend — `worker`. Неизменившийся scope раунд не создаёт. Смена scope запрещена при активном reviewer (`409`), правка метаданных — разрешена.
+- Закрытый review нельзя править; удалять можно и открытый, и закрытый.
+- Удаление review (`review/deleted`) скрывает его из списков и lookup'ов (`404` на `GET /api/reviews/:id`), отменяет активного/ожидающего reviewer'а и сохраняет JSONL для аудита.
+- У комментария редактируется только `body` (`comment/edited`), якоря и suggestion не меняются; правка недоступна для закрытого review и удалённого комментария.
+- Удалённый комментарий (`comment/deleted`) исключается из diff, feedback, fix signals и счётчиков. Если у него есть ответы, UI показывает tombstone «Comment deleted» и сохраняет ответы.
+- Повторное удаление идемпотентно; удаление комментария разрешено и в закрытом review.
 
 ---
 
@@ -504,7 +518,7 @@ Outcome — предположение с confidence; финальный ста�
 
 ### 8.4 Новый раунд
 
-- Триггеры: `review_refresh` (tool), кнопка «Re-review», CLI `review refresh`.
+- Триггеры: `review_refresh` (tool), кнопка «Re-review», CLI `review refresh`, смена `scope` через `PATCH /api/reviews/:id`.
 - Запрещён при `agent.status ∈ {queued,running}` (409).
 - Для rN+1 reviewer получает: предыдущий unresolved-фидбек, delta rN→rN+1, полный снапшот (кратко), задачу верификации.
 - Комментарии, созданные до submit, переносятся; resolved по умолчанию не отправляются повторно (конфиг `includeResolved`).
@@ -962,9 +976,9 @@ interface Config {
 - Diff: длинные строки переносятся по умолчанию (тумблер Wrap lines), чтобы не было горизонтального скролла; inline-карточки findings и треды комментариев рендерятся сразу под строкой; file tree следует за вертикальным скроллом через `aria-current`. Кнопка «Full file» открывает модалку полного файла с комментариями и выбором строк, не ломая inline-треды и выбор строк в diff.
 - Settings: у каждого репозитория компактная иконка папки открывает локальный просмотр папок с хлебными крошками, переходом вверх и пометкой git-репозиториев; выбор папки заполняет Path on daemon и загружает ветки через `GET /api/repos/branches`, после чего Default target branch выбирается из выпадающего списка. Смена пути сбрасывает выбранную ветку; сохранённое значение вне списка остаётся доступным как `<ref> (saved)`.
 - Round pills показывают counts; дефолт rN — дельта с rN-1, тумблер «Full diff to base». Delta доступна только с r2: на r1 кнопка disabled, рядом объяснение «Delta compares this round with the previous one» и CTA «Create the next round», открывающий существующий refresh-диалог. Если предыдущий снапшот раунда недоступен, показывается причина вместо молчаливо неработающего тумблера.
-- У каждого файла в diff есть кнопка «Full file»: модалка полного файла с номерами строк и подсветкой добавленных/удалённых строк. Для modified/renamed доступен переключатель Current/Base; для added/untracked — Current, для deleted — Base. Строки выбираются кликом, Shift-click или Shift+↑/↓, а Enter или кнопка «Comment on line N» открывают composer; диапазон можно выбрать и на Base, в том числе вне хунков diff. Существующие треды и новые комментарии рендерятся inline на обеих версиях, независимо от фильтра fix status; после отправки модалка остаётся открытой. Файлы длиннее 2000 строк рендерятся порциями с кнопкой «Show all N lines». Для binary/oversized/truncated/unreadable показывается явное объяснение вместо пустого экрана.
+- У каждого файла в diff есть кнопка «Full file»: модалка полного файла с номерами строк и подсветкой добавленных/удалённых строк. Для modified/renamed доступен переключатель Current/Base; для added/untracked — Current, для deleted — Base. Строки выбираются кликом, Shift-click или Shift+↑/↓; Enter, `c` или кнопка `+` на строке (доступное имя «Comment on line N») открывают composer, а кнопка в тулбаре — выбранный диапазон; диапазон можно выбрать и на Base, в том числе вне хунков diff. `c` при открытой модалке адресуется её выбору, а не diff за ней. Существующие треды и новые комментарии рендерятся inline на обеих версиях, независимо от фильтра fix status; после отправки модалка остаётся открытой, а её скролл не прокручивает страницу за границами (`overscroll-behavior: contain`). Файлы длиннее 2000 строк рендерятся порциями с кнопкой «Show all N lines». Для binary/oversized/truncated/unreadable показывается явное объяснение вместо пустого экрана.
 - Anchor, которого нет в diff (например, старая строка вне хунка), из Conversation открывает Full file сразу на нужной версии и строке.
-- Findings: в Report и inline-карточках есть Accept/Dismiss; решение открывает диалог с необязательной заметкой, persisted-статус и заметка видны на карточке. Менять решение можно до закрытия ревью; закрытое ревью показывает решения read-only. Praise не получает действий, а решения принимаются только для последнего раунда отчёта.
+- Findings: в Report и inline-карточках есть Accept/Dismiss; выбор разворачивает inline-форму с необязательной заметкой прямо в карточке (без модалки), persisted-статус и заметка видны на карточке. Менять решение можно до закрытия ревью; закрытое ревью показывает решения read-only. Praise не получает действий, а решения принимаются только для последнего раунда отчёта.
 - Fix status board: Addressed / Not fixed / Outdated / Needs decision; клик фильтрует треды; у каждого пункта jump-to-line.
 - Тред: цитата кода, anchor history («line 42 → 57»), статусы, ответы, markdown preview.
 - Suggestion: «было/стало», Apply/Decline; Apply только при совпадении head/worktree, иначе disabled + причина + «Send to agent».

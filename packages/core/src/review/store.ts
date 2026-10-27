@@ -18,6 +18,7 @@ import type { ReviewEvent } from './events.js';
 import { fold } from './fold.js';
 import type { Snapshot } from '../types.js';
 import type {
+  Actor,
   Comment,
   FindingDecision,
   ReviewId,
@@ -100,6 +101,14 @@ function isTimestamp(value: unknown): value is string {
 
 const REVIEW_STATUSES = new Set<ReviewStatus>(['open', 'closed']);
 
+function isActor(value: unknown): value is Actor {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.name === 'string' &&
+    (value.kind === 'human' || value.kind === 'agent' || value.kind === 'system')
+  );
+}
+
 function isComment(value: unknown): value is Comment {
   if (!isRecord(value)) return false;
   return (
@@ -110,7 +119,11 @@ function isComment(value: unknown): value is Comment {
     (value.state === 'open' || value.state === 'resolved' || value.state === 'dismissed') &&
     Array.isArray(value.replies) &&
     Array.isArray(value.anchors) &&
-    Array.isArray(value.outcomes)
+    Array.isArray(value.outcomes) &&
+    (value.editedAt === undefined || isTimestamp(value.editedAt)) &&
+    (value.editedBy === undefined || isActor(value.editedBy)) &&
+    (value.deletedAt === undefined || isTimestamp(value.deletedAt)) &&
+    (value.deletedBy === undefined || isActor(value.deletedBy))
   );
 }
 
@@ -140,6 +153,10 @@ function isReviewState(value: unknown): value is ReviewState {
     REVIEW_STATUSES.has(value.status as ReviewStatus) &&
     isTimestamp(value.createdAt) &&
     (value.closedAt === undefined || isTimestamp(value.closedAt)) &&
+    (value.updatedAt === undefined || isTimestamp(value.updatedAt)) &&
+    (value.updatedBy === undefined || isActor(value.updatedBy)) &&
+    (value.deletedAt === undefined || isTimestamp(value.deletedAt)) &&
+    (value.deletedBy === undefined || isActor(value.deletedBy)) &&
     Array.isArray(value.rounds) &&
     Array.isArray(value.comments) &&
     value.comments.every(isComment) &&
@@ -306,6 +323,7 @@ function shortSha(sha: string | null): string {
 
 function summary(state: ReviewState): ReviewSummary {
   const latest = state.rounds.at(-1);
+  const comments = state.comments.filter((comment) => comment.deletedAt === undefined);
   const latestClaims = new Map<string, string>();
   for (const claim of state.fixClaims ?? []) latestClaims.set(claim.commentId, claim.status);
   return {
@@ -314,8 +332,8 @@ function summary(state: ReviewState): ReviewSummary {
     status: state.status,
     createdAt: state.createdAt,
     roundCount: state.rounds.length,
-    commentCount: state.comments.length,
-    openCommentCount: state.comments.filter((comment) => comment.state === 'open').length,
+    commentCount: comments.length,
+    openCommentCount: comments.filter((comment) => comment.state === 'open').length,
     ...(latest === undefined
       ? { scope: 'no rounds' }
       : { scope: `${shortSha(latest.baseSha)} → ${shortSha(latest.headSha)}` }),
@@ -493,7 +511,7 @@ export class ReviewStore {
         (await stat(join(this.reviewDir(id), 'events.jsonl')).catch(() => null))?.size ===
           cache.eventBytes;
       if (cache !== null && cacheFresh) {
-        summaries.push(summary(cache.state));
+        if (cache.state.deletedAt === undefined) summaries.push(summary(cache.state));
         continue;
       }
       // A missing or corrupt cache must not hide the review: replay its JSONL
@@ -501,7 +519,7 @@ export class ReviewStore {
       const rebuilt = await this.readEntry(id).catch(() => null);
       if (rebuilt === null || rebuilt.state.id !== id) continue;
       this.entries.set(id, rebuilt);
-      summaries.push(summary(rebuilt.state));
+      if (rebuilt.state.deletedAt === undefined) summaries.push(summary(rebuilt.state));
     }
     summaries.sort((left, right) => {
       if (left.createdAt !== right.createdAt) return left.createdAt < right.createdAt ? -1 : 1;

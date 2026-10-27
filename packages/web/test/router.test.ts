@@ -16,6 +16,7 @@ describe('parseRoute', () => {
       id: 'rev_01J9K',
     });
     expect(parseRoute('/review/rev%2F1')).toEqual({ name: 'review', id: 'rev/1' });
+    expect(parseRoute('/review/rev%2F1/edit')).toEqual({ name: 'edit-review', id: 'rev/1' });
   });
 
   it('keeps malformed escapes and unknown paths in the shell', () => {

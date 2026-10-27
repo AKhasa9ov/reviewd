@@ -19,6 +19,7 @@ import type {
   Round,
 } from './types.js';
 import type { Snapshot } from '../types.js';
+import type { ReviewerConfig } from '../reviewer/types.js';
 
 export type ReviewLifecycleErrorCode =
   | 'not-found'
@@ -247,7 +248,13 @@ export class ReviewLifecycle {
 
   async reply(reviewId: ReviewId, commentId: string, body: string, actor: Actor): Promise<Comment> {
     const state = await this.requireOpen(reviewId);
-    findComment(state, commentId);
+    const target = findComment(state, commentId);
+    if (target.deletedAt !== undefined) {
+      throw new ReviewLifecycleError('comment-not-found', `unknown comment: ${commentId}`, {
+        reviewId,
+        commentId,
+      });
+    }
     if (body.trim() === '') {
       throw new ReviewLifecycleError('invalid-input', 'reply body must be non-empty', { reviewId });
     }
@@ -271,6 +278,60 @@ export class ReviewLifecycle {
     return this.findComment(await this.get(reviewId), commentId);
   }
 
+  async editComment(
+    reviewId: ReviewId,
+    commentId: string,
+    body: string,
+    actor: Actor,
+  ): Promise<Comment> {
+    const state = await this.requireOpen(reviewId);
+    const comment = findComment(state, commentId);
+    if (comment.deletedAt !== undefined) {
+      throw new ReviewLifecycleError('comment-not-found', `unknown comment: ${commentId}`, {
+        reviewId,
+        commentId,
+      });
+    }
+    const text = body.trim();
+    if (text === '') {
+      throw new ReviewLifecycleError('invalid-input', 'comment body must be non-empty', {
+        reviewId,
+        commentId,
+      });
+    }
+    await this.store.append(
+      reviewId,
+      createEvent({
+        reviewId,
+        type: 'comment/edited',
+        actor,
+        data: { commentId, body: text },
+        now: this.now,
+      }),
+    );
+    return findComment(await this.get(reviewId), commentId);
+  }
+
+  async deleteComment(reviewId: ReviewId, commentId: string, actor: Actor): Promise<Comment> {
+    const state = await this.get(reviewId);
+    if (state.deletedAt !== undefined) {
+      throw new ReviewLifecycleError('not-found', `review not found: ${reviewId}`, { reviewId });
+    }
+    const comment = findComment(state, commentId);
+    if (comment.deletedAt !== undefined) return comment;
+    await this.store.append(
+      reviewId,
+      createEvent({
+        reviewId,
+        type: 'comment/deleted',
+        actor,
+        data: { commentId },
+        now: this.now,
+      }),
+    );
+    return findComment(await this.get(reviewId), commentId);
+  }
+
   async setCommentState(
     reviewId: ReviewId,
     commentId: string,
@@ -278,7 +339,13 @@ export class ReviewLifecycle {
     actor: Actor,
   ): Promise<Comment> {
     const review = await this.requireOpen(reviewId);
-    findComment(review, commentId);
+    const comment = findComment(review, commentId);
+    if (comment.deletedAt !== undefined) {
+      throw new ReviewLifecycleError('comment-not-found', `unknown comment: ${commentId}`, {
+        reviewId,
+        commentId,
+      });
+    }
     await this.store.append(
       reviewId,
       createEvent({
@@ -359,12 +426,67 @@ export class ReviewLifecycle {
     return decision;
   }
 
+  async updateReview(
+    reviewId: ReviewId,
+    input: { title?: string; reviewer?: ReviewerConfig },
+    actor: Actor,
+  ): Promise<ReviewState> {
+    await this.requireOpen(reviewId);
+    const title = input.title?.trim();
+    if (title === undefined && input.reviewer === undefined) {
+      throw new ReviewLifecycleError('invalid-input', 'review update is empty', { reviewId });
+    }
+    if (title !== undefined && title === '') {
+      throw new ReviewLifecycleError('invalid-input', 'review title must be non-empty', {
+        reviewId,
+      });
+    }
+    await this.store.append(
+      reviewId,
+      createEvent({
+        reviewId,
+        type: 'review/updated',
+        actor,
+        data: {
+          ...(title === undefined ? {} : { title }),
+          ...(input.reviewer === undefined ? {} : { reviewer: input.reviewer }),
+        },
+        now: this.now,
+      }),
+    );
+    return this.get(reviewId);
+  }
+
+  async deleteReview(reviewId: ReviewId, actor: Actor, reason?: string): Promise<ReviewState> {
+    const state = await this.get(reviewId);
+    if (state.deletedAt !== undefined) return state;
+    if (reason !== undefined && typeof reason !== 'string') {
+      throw new ReviewLifecycleError('invalid-input', 'delete reason must be a string', {
+        reviewId,
+      });
+    }
+    await this.store.append(
+      reviewId,
+      createEvent({
+        reviewId,
+        type: 'review/deleted',
+        actor,
+        data: reason === undefined || reason.trim() === '' ? {} : { reason: reason.trim() },
+        now: this.now,
+      }),
+    );
+    return this.get(reviewId);
+  }
+
   async close(
     reviewId: ReviewId,
     verdict: 'approved' | 'closed',
     actor: Actor,
   ): Promise<ReviewState> {
     const state = await this.get(reviewId);
+    if (state.deletedAt !== undefined) {
+      throw new ReviewLifecycleError('not-found', `review not found: ${reviewId}`, { reviewId });
+    }
     if (state.status === 'closed') {
       throw new ReviewLifecycleError('closed', `review is already closed: ${reviewId}`, {
         reviewId,
@@ -420,6 +542,9 @@ export class ReviewLifecycle {
 
   private async requireOpen(reviewId: ReviewId): Promise<ReviewState> {
     const state = await this.get(reviewId);
+    if (state.deletedAt !== undefined) {
+      throw new ReviewLifecycleError('not-found', `review not found: ${reviewId}`, { reviewId });
+    }
     if (state.status === 'closed') {
       throw new ReviewLifecycleError('closed', `review is closed: ${reviewId}`, { reviewId });
     }

@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from 'react';
+import type {
+  KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
+  MutableRefObject,
+} from 'react';
 import type { Comment, CommentState, FileDiff, Side } from '@dsh-code-review/core';
 import { Button } from '../primitives/Button.js';
 import { Dialog } from '../primitives/Dialog.js';
@@ -15,6 +19,11 @@ interface FullFileComposer {
   lineEnd: number;
 }
 
+/** Lets the review detail route the `c` shortcut into the open full-file dialog. */
+export interface FullFileController {
+  commentAtSelection(): void;
+}
+
 interface FullFileDialogProps {
   file: FileDiff;
   comments?: readonly Comment[];
@@ -24,6 +33,7 @@ interface FullFileDialogProps {
   composer?: FullFileComposer | null;
   activeCommentId?: string | undefined;
   readOnly?: boolean;
+  controllerRef?: MutableRefObject<FullFileController | null> | undefined;
   onClose: () => void;
   onOpenComposer?: (side: Side, lineStart: number, lineEnd: number) => void;
   onCancelComposer?: () => void;
@@ -80,6 +90,7 @@ export function FullFileDialog({
   composer = null,
   activeCommentId,
   readOnly = false,
+  controllerRef,
   onClose,
   onOpenComposer,
   onCancelComposer,
@@ -104,6 +115,7 @@ export function FullFileDialog({
     initialLine === undefined ? null : { start: initialLine, end: initialLine },
   );
   const activeSideRef = useRef<Side | null>(null);
+  const commentAtSelectionRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     setShowAll(false);
@@ -144,6 +156,35 @@ export function FullFileDialog({
       ? 'Full file content is unavailable.'
       : `${sideLabel(activeSide)} version · ${numberFormat.format(lines.length)} lines · ${numberFormat.format(changed.size)} changed`;
   const focusLine = selection?.end ?? anchor;
+
+  function commentAtSelection(): void {
+    if (readOnly || onOpenComposer === undefined) return;
+    if (lines === undefined || lines.length === 0) return;
+    const target = selection ?? { start: anchor, end: anchor };
+    if (selection === null) setSelection(target);
+    onOpenComposer(activeSide, target.start, target.end);
+  }
+
+  // Refresh the controller closure every render so the route never reads a stale selection.
+  commentAtSelectionRef.current = commentAtSelection;
+
+  useEffect(() => {
+    if (controllerRef === undefined) return;
+    const controller: FullFileController = {
+      commentAtSelection: () => commentAtSelectionRef.current(),
+    };
+    controllerRef.current = controller;
+    return () => {
+      if (controllerRef.current === controller) controllerRef.current = null;
+    };
+  }, [controllerRef]);
+
+  function commentOnLine(no: number): void {
+    if (onOpenComposer === undefined) return;
+    setAnchor(no);
+    setSelection({ start: no, end: no });
+    onOpenComposer(activeSide, no, no);
+  }
 
   function focusLineNumber(no: number): void {
     window.requestAnimationFrame(() => {
@@ -207,7 +248,7 @@ export function FullFileDialog({
     if (items.length === 0 || onReply === undefined || onState === undefined) return null;
     return (
       <div className="cr-full-file-thread" role="row">
-        <div className="cr-full-file-thread-cell" role="cell" aria-colspan={3}>
+        <div className="cr-full-file-thread-cell" role="cell" aria-colspan={4}>
           {items.map((comment) => (
             <CommentThread
               key={comment.id}
@@ -280,6 +321,7 @@ export function FullFileDialog({
                 </span>
                 <span role="columnheader" aria-hidden="true" />
                 <span role="columnheader">content</span>
+                <span role="columnheader" aria-hidden="true" />
               </div>
               {shown.map((text, index) => {
                 const no = index + 1;
@@ -319,6 +361,21 @@ export function FullFileDialog({
                       <code className="cr-full-file-code" role="cell">
                         {text === '' ? ' ' : text}
                       </code>
+                      <span className="cr-full-file-actions-cell" role="cell">
+                        {!readOnly && onOpenComposer !== undefined ? (
+                          <button
+                            type="button"
+                            className="cr-full-file-comment"
+                            aria-label={`Comment on line ${no}`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              commentOnLine(no);
+                            }}
+                          >
+                            +
+                          </button>
+                        ) : null}
+                      </span>
                     </div>
                     {threadFor(no)}
                     {composer !== null &&
@@ -326,7 +383,7 @@ export function FullFileDialog({
                     composer.lineEnd === no &&
                     renderComposer !== undefined ? (
                       <div className="cr-full-file-composer" role="row">
-                        <div className="cr-full-file-composer-cell" role="cell" aria-colspan={3}>
+                        <div className="cr-full-file-composer-cell" role="cell" aria-colspan={4}>
                           {renderComposer(activeSide, composer.lineStart, composer.lineEnd)}
                         </div>
                       </div>

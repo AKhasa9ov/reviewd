@@ -238,6 +238,23 @@ export class ApiClient {
     return this.request<ReviewView>(`/api/reviews/${encodeURIComponent(id)}`);
   }
 
+  async updateReview(
+    id: string,
+    input: { title?: string; reviewer?: { backend: string }; scope?: DiffScope },
+  ): Promise<ReviewView> {
+    return this.request<ReviewView>(`/api/reviews/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: input,
+    });
+  }
+
+  async deleteReview(id: string, reason?: string): Promise<void> {
+    await this.request<{ ok: boolean }>(`/api/reviews/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      body: reason === undefined ? {} : { reason },
+    });
+  }
+
   async getSnapshot(id: string, round: number, file?: string): Promise<ServiceSnapshotView> {
     const params = new URLSearchParams({ round: String(round) });
     if (file !== undefined) params.set('file', file);
@@ -267,6 +284,20 @@ export class ApiClient {
     return this.request<CommentView>(
       `/api/reviews/${encodeURIComponent(id)}/comments/${encodeURIComponent(commentId)}/replies`,
       { method: 'POST', body: { body } },
+    );
+  }
+
+  async editComment(id: string, commentId: string, body: string): Promise<CommentView> {
+    return this.request<CommentView>(
+      `/api/reviews/${encodeURIComponent(id)}/comments/${encodeURIComponent(commentId)}`,
+      { method: 'PATCH', body: { body } },
+    );
+  }
+
+  async deleteComment(id: string, commentId: string): Promise<CommentView> {
+    return this.request<CommentView>(
+      `/api/reviews/${encodeURIComponent(id)}/comments/${encodeURIComponent(commentId)}`,
+      { method: 'DELETE' },
     );
   }
 

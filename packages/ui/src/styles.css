@@ -852,6 +852,7 @@ body.cr-selecting-lines {
   width: min(520px, 100%);
   max-height: min(80vh, 720px);
   overflow: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--cr-border);
   border-radius: var(--cr-radius-card);
   background: var(--cr-surface);
@@ -884,6 +885,7 @@ body.cr-selecting-lines {
   display: grid;
   gap: var(--cr-space-4);
   padding: 0 var(--cr-space-5) var(--cr-space-5);
+  overscroll-behavior: contain;
 }
 
 .cr-dialog-actions {
@@ -1793,6 +1795,29 @@ body.cr-selecting-lines {
   background: var(--cr-bg);
 }
 
+.cr-thread-deleted {
+  border-style: dashed;
+  background: var(--cr-bg);
+}
+
+.cr-thread-tombstone {
+  color: var(--cr-text-muted);
+  font-size: var(--cr-text-control);
+  font-style: italic;
+}
+
+.cr-thread-delete-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--cr-space-2);
+  margin-top: var(--cr-space-3);
+  padding-top: var(--cr-space-3);
+  border-top: 1px solid var(--cr-border);
+  color: var(--cr-text-muted);
+  font-size: var(--cr-text-control);
+}
+
 .cr-thread-head {
   display: flex;
   flex-wrap: wrap;
@@ -2162,6 +2187,7 @@ body.cr-selecting-lines {
 .cr-dialog:has(.cr-file-view) .cr-dialog-body {
   min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .cr-file-view {
@@ -2186,7 +2212,7 @@ body.cr-selecting-lines {
 .cr-full-file-head,
 .cr-full-file-line {
   display: grid;
-  grid-template-columns: 58px 20px minmax(0, 1fr);
+  grid-template-columns: 58px 20px minmax(0, 1fr) 26px;
   min-width: 0;
   align-items: stretch;
 }
@@ -2292,6 +2318,46 @@ body.cr-selecting-lines {
   overflow-wrap: anywhere;
   tab-size: 2;
   white-space: pre-wrap;
+}
+
+.cr-full-file-actions-cell {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.cr-full-file-comment {
+  display: none;
+  width: 20px;
+  min-height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: var(--cr-surface-raised);
+  color: var(--cr-primary);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cr-full-file-line:hover .cr-full-file-comment,
+.cr-full-file-line:focus-within .cr-full-file-comment,
+.cr-full-file-line-selected .cr-full-file-comment {
+  display: inline-block;
+}
+
+@media (pointer: coarse) {
+  .cr-full-file-head,
+  .cr-full-file-line {
+    grid-template-columns: 58px 20px minmax(0, 1fr) 40px;
+  }
+
+  .cr-full-file-comment {
+    display: inline-block;
+    width: 36px;
+    min-height: 36px;
+  }
 }
 
 .cr-full-file-more {
@@ -2881,6 +2947,33 @@ body.cr-selecting-lines {
   border-color: var(--cr-primary);
   color: var(--cr-primary);
   box-shadow: inset 0 0 0 1px var(--cr-primary);
+}
+
+.cr-finding-decision-editor {
+  display: grid;
+  flex: 1 1 100%;
+  gap: var(--cr-space-2);
+  margin-top: var(--cr-space-2);
+}
+
+.cr-finding-decision-editor .cr-field {
+  margin: 0;
+}
+
+.cr-finding-decision-editor .cr-textarea {
+  min-height: 84px;
+}
+
+.cr-finding-decision-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cr-space-2);
+}
+
+.cr-finding-decision-error {
+  color: var(--cr-danger);
+  font-size: var(--cr-text-meta);
+  margin: 0;
 }
 
 .cr-diff-empty,

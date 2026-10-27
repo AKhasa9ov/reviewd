@@ -60,10 +60,13 @@ Codes: `unauthorized`, `forbidden`, `not-found`, `validation`, `conflict`, `stal
 | POST   | `/api/reviews`                              | `{repoRoot,title,scope,reviewer}`; returns `{review,url,warnings}`      |
 | GET    | `/api/reviews`                              | `status`, `limit`, `offset`                                             |
 | GET    | `/api/reviews/:id`                          | `{review,latestSnapshot,report}`                                        |
+| PATCH  | `/api/reviews/:id`                          | `{title?,reviewer?,scope?}`; scope change appends a round               |
+| DELETE | `/api/reviews/:id`                          | optional `{reason}`; soft-deletes and cancels a reviewer                |
 | GET    | `/api/reviews/:id/snapshot?round=&file=`    | round diff; `file` lazily selects one file                              |
 | POST   | `/api/reviews/:id/comments`                 | body, path, side, lineStart/lineEnd, optional suggestion                |
 | POST   | `/api/reviews/:id/comments/:cid/replies`    | `{body}`                                                                |
-| PATCH  | `/api/reviews/:id/comments/:cid`            | `{state: open\|resolved\|dismissed}`                                    |
+| PATCH  | `/api/reviews/:id/comments/:cid`            | exactly one of `{body}` or `{state: open\|resolved\|dismissed}`         |
+| DELETE | `/api/reviews/:id/comments/:cid`            | soft-deletes; replies stay as a tombstone                               |
 | POST   | `/api/reviews/:id/comments/:cid/suggestion` | `{action: accept\|decline\|apply}`                                      |
 | POST   | `/api/reviews/:id/findings/:fid/decision`   | `{state: accepted\|dismissed, note?}`; latest report round only         |
 | POST   | `/api/reviews/:id/refresh`                  | optional `{scope}`; appends a round                                     |
@@ -93,6 +96,25 @@ report. The latest decision for a `(round, findingId)` wins; notes are trimmed a
 dismissed one is excluded and its note is listed under “Отклонено человеком (не повторять)”.
 Closed reviews reject decisions. The event is `finding/decision` and is folded into
 `review.findingDecisions`.
+
+### Editing and deleting
+
+`PATCH /api/reviews/:id` accepts `{title?, reviewer?, scope?}`. Metadata edits are
+rejected on closed reviews. A scope change builds a new snapshot and appends round
+N+1, then queues a reviewer job when the review uses the `worker` backend; an
+unchanged scope does not create a round. Scope changes are rejected with `409` while
+a reviewer is queued or running. The repository path is immutable.
+
+`DELETE /api/reviews/:id` soft-deletes the review: it disappears from `GET /api/reviews`
+and `GET /api/reviews/:id` returns `404`, an active or queued reviewer is cancelled, and
+the append-only event log is retained for audit. Deleting an already deleted review is
+idempotent. Closed reviews may be deleted.
+
+`PATCH /api/reviews/:id/comments/:cid` with `{body}` edits the text only; anchors and
+suggestions are unchanged. Edits are rejected on closed reviews and on deleted comments.
+`DELETE /api/reviews/:id/comments/:cid` soft-deletes the comment: it leaves diffs, feedback, fix signals and
+counts, while any replies remain visible under a “Comment deleted” tombstone. Both
+review and comment deletes are append-only events; nothing is physically removed.
 
 ### Curl example
 

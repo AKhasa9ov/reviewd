@@ -14,6 +14,8 @@ export interface CommentThreadProps {
   pending?: boolean;
   onReply: (comment: Comment, body: string) => Promise<void>;
   onState: (comment: Comment, state: CommentState) => Promise<void>;
+  onEdit?: (comment: Comment, body: string) => Promise<void>;
+  onDelete?: (comment: Comment) => Promise<void>;
   onJump: (comment: Comment) => void;
   onFocus?: (comment: Comment) => void;
 }
@@ -32,12 +34,18 @@ export function CommentThread({
   pending = false,
   onReply,
   onState,
+  onEdit,
+  onDelete,
   onJump,
   onFocus,
 }: CommentThreadProps): JSX.Element {
   const [replyOpen, setReplyOpen] = useState(false);
   const [reply, setReply] = useState('');
   const [replyError, setReplyError] = useState<string | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editBody, setEditBody] = useState(comment.body);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const history = anchorHistory(comment);
   const quoteLines = history.to?.quote.split('\n') ?? [];
@@ -71,6 +79,76 @@ export function CommentThread({
     }
   }
 
+  if (comment.deletedAt !== undefined) {
+    return (
+      <article
+        id={`comment-${comment.id}`}
+        className={['cr-thread', 'cr-thread-deleted', compact ? 'cr-thread-compact' : '']
+          .filter(Boolean)
+          .join(' ')}
+        aria-label={`Deleted comment by ${comment.author.name}`}
+        data-testid={`comment-${comment.id}`}
+      >
+        <header className="cr-thread-head">
+          <span className="cr-avatar" aria-hidden="true">
+            {comment.author.name.slice(0, 1).toUpperCase()}
+          </span>
+          <span className="cr-thread-author">{comment.author.name}</span>
+          <time className="cr-meta" dateTime={comment.createdAt} title={comment.createdAt}>
+            {formatAge(comment.createdAt)}
+          </time>
+          <Badge tone="neutral">deleted</Badge>
+        </header>
+        <div className="cr-thread-tombstone">Comment deleted</div>
+        {comment.replies.length > 0 ? (
+          <ol className="cr-replies" aria-label="Replies">
+            {comment.replies.map((item) => (
+              <li className="cr-reply" key={item.id}>
+                <div className="cr-reply-head">
+                  <strong>{item.author.name}</strong>
+                  <time className="cr-meta" dateTime={item.createdAt}>
+                    {formatAge(item.createdAt)}
+                  </time>
+                </div>
+                <div className="cr-reply-body">{item.body}</div>
+              </li>
+            ))}
+          </ol>
+        ) : null}
+      </article>
+    );
+  }
+
+  async function submitEdit(): Promise<void> {
+    const body = editBody.trim();
+    if (body === '') {
+      setEditError('Write a comment before saving.');
+      return;
+    }
+    if (onEdit === undefined) return;
+    setBusy(true);
+    setEditError(null);
+    try {
+      await onEdit(comment, body);
+      setEditOpen(false);
+    } catch (error) {
+      setEditError(error instanceof Error ? error.message : 'Could not save the comment.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmDelete(): Promise<void> {
+    if (onDelete === undefined) return;
+    setBusy(true);
+    try {
+      await onDelete(comment);
+      setDeleteConfirm(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <article
       id={`comment-${comment.id}`}
@@ -90,6 +168,11 @@ export function CommentThread({
         <time className="cr-meta" dateTime={comment.createdAt} title={comment.createdAt}>
           {formatAge(comment.createdAt)}
         </time>
+        {comment.editedAt !== undefined ? (
+          <span className="cr-meta" title={comment.editedAt}>
+            edited {formatAge(comment.editedAt)}
+          </span>
+        ) : null}
         <Badge tone={stateTone(comment.state)}>{comment.state}</Badge>
       </header>
 
@@ -205,6 +288,29 @@ export function CommentThread({
           >
             Reply
           </Button>
+          {onEdit !== undefined ? (
+            <Button
+              size="small"
+              variant="ghost"
+              onClick={() => {
+                setEditBody(comment.body);
+                setEditError(null);
+                setEditOpen(true);
+              }}
+            >
+              Edit
+            </Button>
+          ) : null}
+          {onDelete !== undefined ? (
+            <Button
+              size="small"
+              variant="ghost"
+              onClick={() => setDeleteConfirm(true)}
+              disabled={deleteConfirm}
+            >
+              Delete
+            </Button>
+          ) : null}
           {anchor !== undefined ? (
             <Button size="small" variant="ghost" onClick={() => onJump(comment)}>
               Jump to line
@@ -239,6 +345,50 @@ export function CommentThread({
               Cancel
             </Button>
           </div>
+        </div>
+      ) : null}
+
+      {editOpen && !readOnly ? (
+        <div className="cr-reply-form">
+          <Textarea
+            label="Edit comment"
+            value={editBody}
+            onChange={(event) => setEditBody(event.target.value)}
+            rows={4}
+            error={editError ?? undefined}
+          />
+          <div className="cr-inline-actions">
+            <Button size="small" loading={busy} onClick={() => void submitEdit()}>
+              Save
+            </Button>
+            <Button
+              size="small"
+              variant="ghost"
+              onClick={() => {
+                setEditOpen(false);
+                setEditError(null);
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {deleteConfirm && !readOnly ? (
+        <div className="cr-thread-delete-confirm" role="group" aria-label="Delete comment">
+          <span>Delete this comment?</span>
+          <Button size="small" variant="danger" loading={busy} onClick={() => void confirmDelete()}>
+            Confirm delete
+          </Button>
+          <Button
+            size="small"
+            variant="ghost"
+            onClick={() => setDeleteConfirm(false)}
+            disabled={busy}
+          >
+            Cancel
+          </Button>
         </div>
       ) : null}
     </article>

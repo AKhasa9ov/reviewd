@@ -197,10 +197,11 @@ function truncateUtf8(value: string, maxBytes: number): string {
 /** Deterministic feedback package for one submission. */
 export function buildFeedback(input: BuildFeedbackInput): FeedbackPackage {
   const { review, snapshot, report, round, verdict, deliveryKey } = input;
-  const openComments = review.comments.filter(
+  const activeComments = review.comments.filter((comment) => comment.deletedAt === undefined);
+  const openComments = activeComments.filter(
     (comment) => comment.author.kind === 'human' && comment.state === 'open',
   );
-  const resolved = review.comments.filter((comment) => comment.state === 'resolved');
+  const resolved = activeComments.filter((comment) => comment.state === 'resolved');
 
   const reportFindings = report?.findings ?? [];
   const decisions = new Map<string, FindingDecision>();
@@ -227,7 +228,7 @@ export function buildFeedback(input: BuildFeedbackInput): FeedbackPackage {
       else accepted.push(suggestion);
     }
   }
-  for (const comment of review.comments) {
+  for (const comment of activeComments) {
     if (comment.author.kind === 'human' && isApplied(comment)) {
       const suggestion = suggestionOf(comment);
       if (suggestion !== null && !applied.some((item) => item.commentId === suggestion.commentId)) {

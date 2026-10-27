@@ -56,6 +56,17 @@ export interface ServiceCreateInput {
   initiator?: Initiator;
 }
 
+export interface ReviewUpdateInput {
+  title?: string;
+  reviewer?: ReviewerConfig;
+  /** A changed scope creates a new round; repoRoot is never editable. */
+  scope?: DiffScope;
+}
+
+export interface CommentEditInput {
+  body: string;
+}
+
 export interface ReviewView {
   review: ReviewState;
   latestSnapshot: Snapshot | null;
@@ -201,10 +212,19 @@ export interface ServiceSnapshotView {
 
 export interface ReviewService {
   create(input: ServiceCreateInput, ctx: CallContext): Promise<ReviewView>;
+  updateReview(id: ReviewId, input: ReviewUpdateInput, ctx: CallContext): Promise<ReviewView>;
+  deleteReview(id: ReviewId, ctx: CallContext, reason?: string): Promise<void>;
   list(filter?: ReviewFilter): Promise<Page<ReviewSummary>>;
   get(id: ReviewId): Promise<ReviewView>;
   snapshot(id: ReviewId, round: RoundNo, file?: string): Promise<ServiceSnapshotView>;
   addComment(id: ReviewId, input: AddCommentInput, ctx: CallContext): Promise<CommentView>;
+  editComment(
+    id: ReviewId,
+    commentId: string,
+    input: CommentEditInput,
+    ctx: CallContext,
+  ): Promise<CommentView>;
+  deleteComment(id: ReviewId, commentId: string, ctx: CallContext): Promise<CommentView>;
   reply(id: ReviewId, commentId: string, input: ReplyInput, ctx: CallContext): Promise<CommentView>;
   setCommentState(
     id: ReviewId,

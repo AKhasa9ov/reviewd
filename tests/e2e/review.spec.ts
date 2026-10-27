@@ -168,6 +168,110 @@ test('keeps the full file dialog inside a 320px viewport', async ({ page }) => {
   await expectNoPageOverflow(page);
 });
 
+test('contains wheel scroll chaining inside the full file dialog body', async ({ page }) => {
+  await openReview(page);
+  await page.getByRole('tab', { name: /Files changed/ }).click();
+  await page.getByRole('button', { name: 'Full diff to base' }).click();
+  await expect(
+    page.getByRole('tabpanel', { name: 'Files changed' }).getByText('base → head'),
+  ).toBeVisible();
+
+  await page.getByRole('button', { name: 'View full file for src/long.ts' }).click();
+  const dialog = page.getByRole('dialog', { name: 'src/long.ts' });
+  const body = dialog.locator('.cr-dialog-body');
+  await expect(dialog).toBeVisible();
+  await expect
+    .poll(() => body.evaluate((element) => element.scrollHeight - element.clientHeight))
+    .toBeGreaterThan(0);
+
+  const pageOverflow = await page.evaluate(
+    () => document.documentElement.scrollHeight - window.innerHeight,
+  );
+  expect(
+    pageOverflow,
+    'the page needs room to scroll for chaining to be observable',
+  ).toBeGreaterThan(200);
+
+  await page.evaluate(() => window.scrollTo(0, 120));
+  const pageScroll = await page.evaluate(() => window.scrollY);
+  expect(pageScroll).toBeGreaterThan(0);
+  expect(pageScroll).toBeLessThan(pageOverflow);
+
+  const box = await body.boundingBox();
+  if (box === null) throw new Error('the dialog body has no bounding box');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+
+  await body.evaluate((element) => {
+    element.scrollTop = 0;
+  });
+
+  // A wheel at the body's top belongs to the dialog, not to the page behind it.
+  await page.mouse.wheel(0, -600);
+  await page.waitForTimeout(300);
+  expect(
+    await page.evaluate(() => window.scrollY),
+    'wheel up at the dialog body top scrolled the page',
+  ).toBe(pageScroll);
+
+  // The dialog body itself still scrolls.
+  await page.mouse.wheel(0, 600);
+  await expect.poll(() => body.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+
+  await body.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect
+    .poll(() =>
+      body.evaluate((element) => element.scrollHeight - element.scrollTop - element.clientHeight),
+    )
+    .toBeLessThanOrEqual(1);
+
+  // A wheel at the body's bottom belongs to the dialog too.
+  await page.mouse.wheel(0, 600);
+  await page.waitForTimeout(300);
+  expect(
+    await page.evaluate(() => window.scrollY),
+    'wheel down at the dialog body bottom scrolled the page',
+  ).toBe(pageScroll);
+  await expect
+    .poll(() =>
+      body.evaluate((element) => element.scrollHeight - element.scrollTop - element.clientHeight),
+    )
+    .toBeLessThanOrEqual(1);
+});
+
+test('full-file line action and c open one composer inside the dialog', async ({ page }) => {
+  await openReview(page);
+  await page.getByRole('tab', { name: /Files changed/ }).click();
+  await page.getByRole('button', { name: 'Full diff to base' }).click();
+  await expect(
+    page.getByRole('tabpanel', { name: 'Files changed' }).getByText('base → head'),
+  ).toBeVisible();
+
+  await page.getByRole('button', { name: 'View full file for src/config.ts' }).click();
+  const dialog = page.getByRole('dialog', { name: 'src/config.ts' });
+  await expect(dialog).toBeVisible();
+
+  const line7 = dialog.getByRole('row', { name: /Line 7, unchanged: cache: true,/ });
+  await line7.click();
+  await line7.getByRole('button', { name: 'Comment on line 7' }).click();
+  const composer = dialog.getByRole('form', { name: 'Comment on line 7' });
+  await expect(composer).toBeVisible();
+  const body = 'E2E: comment from the full-file line action.';
+  await composer.getByRole('textbox', { name: 'Comment', exact: true }).fill(body);
+  await composer.getByRole('button', { name: 'Post comment' }).click();
+
+  await expect(page.getByText('Comment posted')).toBeVisible();
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText(body)).toBeVisible();
+
+  const line8 = dialog.getByRole('row', { name: /Line 8, unchanged: fallback: 'none',/ });
+  await line8.click();
+  await page.keyboard.press('c');
+  await expect(dialog.getByRole('form', { name: 'Comment on line 8' })).toBeVisible();
+  await expect(page.locator('.cr-inline-composer')).toHaveCount(0);
+});
+
 test('tracks the file in view while the diff scrolls', async ({ page }) => {
   await page.setViewportSize({ width: 1200, height: 520 });
   await openReview(page);
@@ -182,7 +286,8 @@ test('tracks the file in view while the diff scrolls', async ({ page }) => {
   await expect(current).toContainText('app.ts');
 
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-  await expect(current).toContainText('util.ts');
+  // The long fixture dominates the viewport at the page bottom, so it is the file in view there.
+  await expect(current).toContainText('long.ts');
 
   await page.evaluate(() => window.scrollTo(0, 0));
   await expect(current).toContainText('app.ts');
@@ -255,4 +360,85 @@ test('selects a comment range by dragging across diff lines', async ({ page }) =
   await page.mouse.move(endBox.x + 60, endBox.y + endBox.height / 2, { steps: 6 });
   await page.mouse.up();
   await expect(page.getByRole('form', { name: /Comment on lines 1–2/ })).toBeVisible();
+});
+
+test('edits and deletes its own review and comment from the browser', async ({ page }) => {
+  const fx = await login(page);
+  const headers = {
+    authorization: `Bearer ${fx.token}`,
+    'content-type': 'application/json',
+  };
+
+  const createdResponse = await page.request.post(`${fx.baseUrl}/api/reviews`, {
+    headers,
+    data: {
+      repoRoot: fx.repoRoot,
+      title: 'E2E editable review',
+      scope: { kind: 'range', baseRef: 'main', headRef: 'feature' },
+      reviewer: { backend: 'none' },
+    },
+  });
+  // The daemon answers 201 Created for a new review, not 200.
+  expect(createdResponse.status()).toBe(201);
+  const created = (await createdResponse.json()) as { review: { review: { id: string } } };
+  const reviewId = created.review.review.id;
+
+  await page.goto(`${fx.baseUrl}/review/${encodeURIComponent(reviewId)}`);
+  await expect(page.getByTestId('review-detail')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'E2E editable review' })).toBeVisible();
+
+  const actions = page.locator('.cr-detail-actions');
+  await actions.getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Edit the request' })).toBeVisible();
+  await page.getByLabel('Title').fill('E2E edited review');
+  await page.getByRole('button', { name: 'Save changes' }).click();
+  await expect(page.getByText('Review updated')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'E2E edited review' })).toBeVisible();
+
+  const commentResponse = await page.request.post(
+    `${fx.baseUrl}/api/reviews/${encodeURIComponent(reviewId)}/comments`,
+    { headers, data: { path: 'src/app.ts', lineStart: 2, body: 'E2E edit me' } },
+  );
+  expect(commentResponse.status()).toBe(201);
+  const comment = (await commentResponse.json()) as { comment: { id: string } };
+  const commentId = comment.comment.id;
+  // A deleted comment keeps its tombstone only while it has replies.
+  const replyResponse = await page.request.post(
+    `${fx.baseUrl}/api/reviews/${encodeURIComponent(reviewId)}/comments/${encodeURIComponent(
+      commentId,
+    )}/replies`,
+    { headers, data: { body: 'E2E reply kept under the tombstone' } },
+  );
+  expect(replyResponse.status()).toBe(201);
+
+  await actions.getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Edit the request' })).toBeVisible();
+  await page.getByLabel('Source branch').fill('base');
+  await expect(page.getByTestId('scope-warning')).toContainText('round 2');
+  await page.getByRole('button', { name: 'Save changes' }).click();
+  await expect(page.getByRole('heading', { name: 'E2E edited review' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^r2 / })).toBeVisible();
+
+  await page.getByRole('tab', { name: /Conversation/ }).click();
+  const thread = page.getByTestId(`comment-${commentId}`);
+  await expect(thread).toContainText('E2E edit me');
+  await thread.getByRole('button', { name: 'Edit', exact: true }).click();
+  await thread.getByRole('textbox', { name: 'Edit comment' }).fill('E2E edited comment');
+  await thread.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(thread.getByText('E2E edited comment')).toBeVisible();
+  await expect(thread.locator('.cr-thread-head').getByText(/edited /)).toBeVisible();
+
+  await thread.getByRole('button', { name: 'Delete', exact: true }).click();
+  await thread.getByRole('button', { name: 'Confirm delete' }).click();
+  await expect(thread.getByText('Comment deleted')).toBeVisible();
+  await expect(thread.getByText('E2E edited comment')).toHaveCount(0);
+
+  await actions.getByRole('button', { name: 'Delete', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Delete this review?' });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: 'Delete review' }).click();
+  await expect(page).toHaveURL(`${fx.baseUrl}/`);
+  await expect(page.getByRole('heading', { name: 'Reviews', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: /E2E edited review/ })).toHaveCount(0);
+  await expect(page.getByText('E2E edited review')).toHaveCount(0);
 });

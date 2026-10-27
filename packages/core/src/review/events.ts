@@ -1,4 +1,9 @@
-import type { AgentReport, Finding, ReviewerBackendKind } from '../reviewer/types.js';
+import type {
+  AgentReport,
+  Finding,
+  ReviewerBackendKind,
+  ReviewerConfig,
+} from '../reviewer/types.js';
 import type {
   Actor,
   ActorKind,
@@ -38,6 +43,25 @@ export interface CommentRepliedData {
 export interface CommentStateData {
   commentId: string;
   state: CommentState;
+}
+
+export interface CommentEditedData {
+  commentId: string;
+  body: string;
+}
+
+export interface CommentDeletedData {
+  commentId: string;
+}
+
+export interface ReviewUpdatedData {
+  title?: string;
+  reviewer?: ReviewerConfig;
+}
+
+export interface ReviewDeletedData {
+  /** Optional human-readable reason retained in the audit log. */
+  reason?: string;
 }
 
 export interface CommentAnchorData {
@@ -105,11 +129,15 @@ export interface ReviewEventDataMap {
   'comment/added': CommentAddedData;
   'comment/replied': CommentRepliedData;
   'comment/state': CommentStateData;
+  'comment/edited': CommentEditedData;
+  'comment/deleted': CommentDeletedData;
   'comment/anchor': CommentAnchorData;
   'suggestion/state': SuggestionStateData;
   'suggestion/applied': SuggestionAppliedData;
   'fix/claim': FixClaimData;
   'finding/decision': FindingDecisionData;
+  'review/updated': ReviewUpdatedData;
+  'review/deleted': ReviewDeletedData;
   'review/closed': ReviewClosedData;
   'review/submitted': ReviewSubmittedData;
   'agent/started': AgentStartedData;
@@ -126,11 +154,15 @@ export const REVIEW_EVENT_TYPES: readonly ReviewEventType[] = [
   'comment/added',
   'comment/replied',
   'comment/state',
+  'comment/edited',
+  'comment/deleted',
   'comment/anchor',
   'suggestion/state',
   'suggestion/applied',
   'fix/claim',
   'finding/decision',
+  'review/updated',
+  'review/deleted',
   'review/closed',
   'review/submitted',
   'agent/started',

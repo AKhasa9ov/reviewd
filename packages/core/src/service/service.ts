@@ -31,6 +31,7 @@ import { buildFeedback } from './feedback.js';
 import { ReviewError } from './types.js';
 import type {
   CallContext,
+  CommentEditInput,
   CommentView,
   FindingDecisionInput,
   FindingDecisionView,
@@ -38,6 +39,7 @@ import type {
   ReviewFilter,
   ReviewServiceImplDeps,
   ReviewService,
+  ReviewUpdateInput,
   ReviewView,
   ServiceCreateInput,
   ServiceSnapshotView,
@@ -75,6 +77,15 @@ function scopeFromSnapshot(snapshot: Snapshot): DiffScope {
     baseRef: scope.baseSha,
     headRef: scope.headRef ?? scope.headSha ?? 'HEAD',
   };
+}
+
+function scopeKey(scope: DiffScope): string {
+  if (scope.kind === 'range') {
+    return `range:${scope.baseRef}\u0000${scope.headRef}\u0000${scope.twoDot === true}`;
+  }
+  if (scope.kind === 'worktree') return `worktree:${scope.baseRef}`;
+  if (scope.kind === 'commit') return `commit:${scope.sha}`;
+  return `commits:${scope.shas.join('\u0000')}`;
 }
 
 function assertContext(ctx: CallContext): void {
@@ -212,12 +223,113 @@ export class ReviewServiceImpl implements ReviewService {
     );
   }
 
+  async updateReview(
+    id: ReviewId,
+    input: ReviewUpdateInput,
+    ctx: CallContext,
+  ): Promise<ReviewView> {
+    assertContext(ctx);
+    return await this.idempotent(
+      async () => {
+        if (
+          input.title === undefined &&
+          input.reviewer === undefined &&
+          input.scope === undefined
+        ) {
+          throw new ReviewError('validation', 'review update is empty');
+        }
+        if (input.title !== undefined && typeof input.title !== 'string') {
+          throw new ReviewError('validation', 'title must be a string');
+        }
+        if (input.title !== undefined && input.title.trim() === '') {
+          throw new ReviewError('validation', 'title must be non-empty');
+        }
+        if (input.reviewer !== undefined) validateReviewer(input.reviewer);
+        const review = await this.requireReview(id);
+        if (review.status === 'closed') {
+          throw new ReviewError('conflict', `review is closed: ${id}`, { id });
+        }
+
+        let snapshot: Snapshot | undefined;
+        if (input.scope !== undefined) {
+          if (this.running.has(id) || agentIsActive(review)) {
+            throw new ReviewError('agent-busy', `a reviewer is active for ${id}`, { id });
+          }
+          const latest = await this.latestSnapshotOrThrow(review);
+          if (scopeKey(input.scope) !== scopeKey(scopeFromSnapshot(latest))) {
+            try {
+              snapshot = await this.snapshots.build({
+                repoRoot: review.repoRoot,
+                scope: input.scope,
+              });
+            } catch (error) {
+              throw this.translate(error);
+            }
+          }
+        }
+
+        if (input.title !== undefined || input.reviewer !== undefined) {
+          try {
+            await this.lifecycle.updateReview(
+              id,
+              {
+                ...(input.title === undefined ? {} : { title: input.title }),
+                ...(input.reviewer === undefined ? {} : { reviewer: input.reviewer }),
+              },
+              ctx.actor,
+            );
+          } catch (error) {
+            throw this.translate(error);
+          }
+        }
+        if (snapshot !== undefined) {
+          try {
+            await this.lifecycle.refresh(id, snapshot, ctx.actor);
+          } catch (error) {
+            throw this.translate(error);
+          }
+        }
+        return await this.get(id);
+      },
+      `review.update:${id}`,
+      ctx.requestId,
+    );
+  }
+
+  async deleteReview(id: ReviewId, ctx: CallContext, reason?: string): Promise<void> {
+    assertContext(ctx);
+    await this.idempotent(
+      async () => {
+        let review: ReviewState;
+        try {
+          review = await this.lifecycle.get(id);
+        } catch (error) {
+          throw this.translate(error);
+        }
+        if (review.deletedAt !== undefined) return;
+        const active = this.active.get(id);
+        active?.controller.abort();
+        active?.backend?.cancel?.();
+        try {
+          await this.lifecycle.deleteReview(id, ctx.actor, reason);
+        } catch (error) {
+          throw this.translate(error);
+        }
+      },
+      `review.delete:${id}`,
+      ctx.requestId,
+    );
+  }
+
   async get(id: ReviewId): Promise<ReviewView> {
     let review: ReviewState;
     try {
       review = await this.lifecycle.get(id);
     } catch (error) {
       throw this.translate(error);
+    }
+    if (review.deletedAt !== undefined) {
+      throw new ReviewError('not-found', `review not found: ${id}`, { id });
     }
     const latestSnapshot = await this.readLatestSnapshot(review);
     return {
@@ -296,6 +408,46 @@ export class ReviewServiceImpl implements ReviewService {
     );
   }
 
+  async editComment(
+    id: ReviewId,
+    commentId: string,
+    input: CommentEditInput,
+    ctx: CallContext,
+  ): Promise<CommentView> {
+    assertContext(ctx);
+    return await this.idempotent(
+      async () => {
+        if (typeof input.body !== 'string' || input.body.trim() === '') {
+          throw new ReviewError('validation', 'comment body must be non-empty');
+        }
+        try {
+          const comment = await this.lifecycle.editComment(id, commentId, input.body, ctx.actor);
+          return { comment };
+        } catch (error) {
+          throw this.translate(error);
+        }
+      },
+      `comment.edit:${id}:${commentId}`,
+      ctx.requestId,
+    );
+  }
+
+  async deleteComment(id: ReviewId, commentId: string, ctx: CallContext): Promise<CommentView> {
+    assertContext(ctx);
+    return await this.idempotent(
+      async () => {
+        try {
+          const comment = await this.lifecycle.deleteComment(id, commentId, ctx.actor);
+          return { comment };
+        } catch (error) {
+          throw this.translate(error);
+        }
+      },
+      `comment.delete:${id}:${commentId}`,
+      ctx.requestId,
+    );
+  }
+
   async reply(
     id: ReviewId,
     commentId: string,
@@ -369,6 +521,9 @@ export class ReviewServiceImpl implements ReviewService {
     if (!Number.isInteger(after) || after < 0) {
       throw new ReviewError('validation', 'after must be a non-negative integer');
     }
+    // The event log outlives soft deletion: the SSE hub replays the delete event,
+    // and GET /api/events guards visibility at the route level. latestFeedback()
+    // still calls requireReview() to hide deleted reviews.
     try {
       return await this.store.events(id, after);
     } catch (error) {
@@ -544,6 +699,7 @@ export class ReviewServiceImpl implements ReviewService {
   }
 
   async latestFeedback(id: ReviewId): Promise<LatestFeedbackView | null> {
+    await this.requireReview(id);
     const events = await this.events(id, 0);
     for (let index = events.length - 1; index >= 0; index -= 1) {
       const event = events[index];
@@ -896,7 +1052,11 @@ export class ReviewServiceImpl implements ReviewService {
 
   private async requireReview(id: ReviewId): Promise<ReviewState> {
     try {
-      return await this.lifecycle.get(id);
+      const review = await this.lifecycle.get(id);
+      if (review.deletedAt !== undefined) {
+        throw new ReviewError('not-found', `review not found: ${id}`, { id });
+      }
+      return review;
     } catch (error) {
       throw this.translate(error);
     }

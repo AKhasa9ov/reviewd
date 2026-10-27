@@ -1166,6 +1166,238 @@ describe('worker heartbeat', () => {
   });
 });
 
+describe('review and comment CRUD routes', () => {
+  it('enqueues a reviewer job only when a patch creates a round', async () => {
+    const { daemonUrl } = await running({ longPollMs: 50 });
+    const checkout = await repo();
+    const created = await createReview(daemonUrl, { backend: 'worker' }, checkout.root);
+    const reviewId = created.body.review.review.id as string;
+
+    const registered = await read(
+      await fetch(`${daemonUrl}/api/workers/register`, {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ name: 'worker-1', harness: 'cli' }),
+      }),
+    );
+    const lease = await read(
+      await fetch(`${daemonUrl}/api/jobs/next?workerId=${registered.id}&wait=2`, {
+        headers: headers(),
+      }),
+    );
+    expect(lease.job.round).toBe(1);
+    const report = {
+      schemaVersion: 1,
+      summary: 'ok',
+      riskLevel: 'low',
+      findings: [],
+      questions: [],
+      tests: { ran: false, commands: [] },
+      verification: [],
+    };
+    const reported = await fetch(`${daemonUrl}/api/jobs/${lease.job.id}/report`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ attemptId: lease.job.attemptId, report }),
+    });
+    expect(reported.status).toBe(200);
+
+    const titleOnly = await fetch(`${daemonUrl}/api/reviews/${reviewId}`, {
+      method: 'PATCH',
+      headers: headers(),
+      body: JSON.stringify({ title: 'Renamed review' }),
+    });
+    expect(titleOnly.status).toBe(200);
+    expect((await read(titleOnly)).review.rounds).toHaveLength(1);
+    const noJob = await fetch(`${daemonUrl}/api/jobs/next?workerId=${registered.id}&wait=0`, {
+      headers: headers(),
+    });
+    expect(noJob.status).toBe(204);
+
+    const scopeChange = await fetch(`${daemonUrl}/api/reviews/${reviewId}`, {
+      method: 'PATCH',
+      headers: headers(),
+      body: JSON.stringify({ scope: { kind: 'range', baseRef: 'main', headRef: 'HEAD~1' } }),
+    });
+    expect(scopeChange.status).toBe(200);
+    const updated = await read(scopeChange);
+    expect(updated.review.rounds).toHaveLength(2);
+    expect(updated.review.rounds.at(-1).no).toBe(2);
+
+    const next = await read(
+      await fetch(`${daemonUrl}/api/jobs/next?workerId=${registered.id}&wait=2`, {
+        headers: headers(),
+      }),
+    );
+    expect(next.job.round).toBe(2);
+    expect(next.job.kind).toBe('verify');
+  });
+
+  it('deletes a review through the route and hides it afterwards', async () => {
+    const { daemonUrl } = await running();
+    const checkout = await repo();
+    const created = await createReview(daemonUrl, { backend: 'none' }, checkout.root);
+    expect(created.response.status).toBe(201);
+    const reviewId = created.body.review.review.id as string;
+
+    const deleted = await fetch(`${daemonUrl}/api/reviews/${reviewId}`, {
+      method: 'DELETE',
+      headers: headers(),
+      body: JSON.stringify({}),
+    });
+    expect(deleted.status).toBe(200);
+    await expect(read(deleted)).resolves.toEqual({ ok: true });
+
+    const get = await fetch(`${daemonUrl}/api/reviews/${reviewId}`, { headers: headers() });
+    expect(get.status).toBe(404);
+    const list = await read(await fetch(`${daemonUrl}/api/reviews`, { headers: headers() }));
+    expect(list.items.map((item: { id: string }) => item.id)).not.toContain(reviewId);
+  });
+
+  it('routes a review patch with metadata and scope', async () => {
+    const calls: unknown[] = [];
+    const service = {
+      async updateReview(id: string, input: unknown) {
+        calls.push({ id, input });
+        return { review: { id, title: 'Corrected', reviewer: { backend: 'none' }, rounds: [] } };
+      },
+      async get(id: string) {
+        return { review: { id, reviewer: { backend: 'none' }, rounds: [] } };
+      },
+      async events() {
+        return [];
+      },
+      async list() {
+        return { items: [], total: 0, limit: 50, offset: 0 };
+      },
+    } as unknown as ReviewService;
+    const { daemonUrl } = await running({}, { service });
+
+    const response = await fetch(`${daemonUrl}/api/reviews/rev_1`, {
+      method: 'PATCH',
+      headers: headers(),
+      body: JSON.stringify({
+        title: 'Corrected',
+        reviewer: { backend: 'worker' },
+        scope: { kind: 'range', baseRef: 'main', headRef: 'next' },
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(await read(response)).toMatchObject({ review: { title: 'Corrected' } });
+    expect(calls).toEqual([
+      {
+        id: 'rev_1',
+        input: {
+          title: 'Corrected',
+          reviewer: { backend: 'worker' },
+          scope: { kind: 'range', baseRef: 'main', headRef: 'next' },
+        },
+      },
+    ]);
+  });
+
+  it('routes a review delete with an optional reason', async () => {
+    const calls: unknown[] = [];
+    const service = {
+      async deleteReview(id: string, ctx: unknown, reason?: string) {
+        calls.push({ id, ctx, reason });
+      },
+      async events() {
+        return [];
+      },
+      async list() {
+        return { items: [], total: 0, limit: 50, offset: 0 };
+      },
+    } as unknown as ReviewService;
+    const { daemonUrl } = await running({}, { service });
+
+    const response = await fetch(`${daemonUrl}/api/reviews/rev_1`, {
+      method: 'DELETE',
+      headers: headers(),
+      body: JSON.stringify({ reason: 'duplicate' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(await read(response)).toEqual({ ok: true });
+    expect(calls).toEqual([
+      {
+        id: 'rev_1',
+        ctx: { actor: { name: 'api', kind: 'human' } },
+        reason: 'duplicate',
+      },
+    ]);
+  });
+
+  it('routes comment body edits and deletes', async () => {
+    const calls: unknown[] = [];
+    const service = {
+      async editComment(id: string, commentId: string, input: { body: string }) {
+        calls.push({ method: 'edit', id, commentId, input });
+        return { comment: { id: commentId, body: input.body } };
+      },
+      async deleteComment(id: string, commentId: string) {
+        calls.push({ method: 'delete', id, commentId });
+        return { comment: { id: commentId, deletedAt: '2026-10-27T12:00:00.000Z' } };
+      },
+      async events() {
+        return [];
+      },
+      async list() {
+        return { items: [], total: 0, limit: 50, offset: 0 };
+      },
+    } as unknown as ReviewService;
+    const { daemonUrl } = await running({}, { service });
+
+    const edited = await fetch(`${daemonUrl}/api/reviews/rev_1/comments/cmt%201`, {
+      method: 'PATCH',
+      headers: headers(),
+      body: JSON.stringify({ body: 'Corrected' }),
+    });
+    expect(edited.status).toBe(200);
+    expect(await read(edited)).toMatchObject({ comment: { body: 'Corrected' } });
+
+    const deleted = await fetch(`${daemonUrl}/api/reviews/rev_1/comments/cmt%201`, {
+      method: 'DELETE',
+      headers: headers(),
+    });
+    expect(deleted.status).toBe(200);
+    expect(await read(deleted)).toMatchObject({ comment: { deletedAt: expect.any(String) } });
+    expect(calls).toEqual([
+      { method: 'edit', id: 'rev_1', commentId: 'cmt 1', input: { body: 'Corrected' } },
+      { method: 'delete', id: 'rev_1', commentId: 'cmt 1' },
+    ]);
+  });
+
+  it('rejects a comment patch that mixes body and state', async () => {
+    let called = false;
+    const service = {
+      async editComment() {
+        called = true;
+      },
+      async setCommentState() {
+        called = true;
+      },
+      async events() {
+        return [];
+      },
+      async list() {
+        return { items: [], total: 0, limit: 50, offset: 0 };
+      },
+    } as unknown as ReviewService;
+    const { daemonUrl } = await running({}, { service });
+
+    const response = await fetch(`${daemonUrl}/api/reviews/rev_1/comments/cmt_1`, {
+      method: 'PATCH',
+      headers: headers(),
+      body: JSON.stringify({ body: 'Text', state: 'resolved' }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(called).toBe(false);
+  });
+});
+
 describe('review finding decisions', () => {
   it('routes a decision with an optional note to the service', async () => {
     const calls: unknown[] = [];

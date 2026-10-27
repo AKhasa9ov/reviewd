@@ -97,11 +97,11 @@ review health
 | ------------------------------------------------ | ----------------------------------------------------- |
 | ![Review list](docs/images/review-list-dark.png) | ![Review detail](docs/images/review-detail-light.png) |
 
-The standalone UI supports real git diffs, file and line comments (including full-file
-comments on current or base lines outside the diff), suggestions, rounds, delta/full views,
-finding accept/dismiss decisions with notes, deep links, keyboard navigation, 320px layouts
-and light/dark themes. The browser suite runs axe WCAG 2.1 A/AA checks and fails on serious
-or critical findings.
+The standalone UI supports real git diffs, file and line comments (including per-line
+full-file comments on current or base lines outside the diff), suggestions, rounds,
+delta/full views, finding accept/dismiss decisions with inline notes, review and comment
+editing/deletion, deep links, keyboard navigation, 320px layouts and light/dark themes.
+The browser suite runs axe WCAG 2.1 A/AA checks and fails on serious or critical findings.
 
 ## What it does
 
@@ -110,8 +110,10 @@ or critical findings.
 - **Human control.** Comments are anchored to a file/side/line or range with a quote,
   context and content hash. They survive force-pushes and renames by re-anchoring; the
   previous and current locations are both shown. Reviewers can accept or dismiss agent
-  findings; the latest decision and its optional note are persisted and shape the next
-  feedback package.
+  findings; the latest decision and its optional inline note are persisted and shape the
+  next feedback package. Mistaken review metadata or comment text can be corrected while the
+  review is open; changing the scope starts a new immutable round. Reviews and comments
+  can be soft-deleted without erasing their audit events.
 - **Fix tracking.** Every refresh creates an immutable round. Deterministic rules classify
   comments as `applied`, `addressed`, `unchanged`, `outdated` or `moved`; agent claims and
   reviewer verification are separate signals, not silent truth.

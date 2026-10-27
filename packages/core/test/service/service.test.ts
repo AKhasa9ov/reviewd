@@ -772,6 +772,164 @@ describe('ReviewServiceImpl', () => {
     );
   });
 
+  it('updates review metadata, then hides a soft-deleted review', async () => {
+    const h = await harness();
+    const view = await h.service.create(
+      { repoRoot: '/tmp/repo', title: 'Wrong title', scope: h.scope },
+      { actor },
+    );
+
+    const updated = await h.service.updateReview(
+      view.review.id,
+      { title: '  Corrected  ', reviewer: { backend: 'worker' } },
+      { actor },
+    );
+    expect(updated.review).toMatchObject({
+      title: 'Corrected',
+      reviewer: { backend: 'worker' },
+      updatedBy: actor,
+    });
+
+    await h.service.deleteReview(view.review.id, { actor }, 'duplicate');
+    await expectError(h.service.get(view.review.id), 'not-found');
+    expect(await h.service.list()).toEqual({ items: [], total: 0, limit: 50, offset: 0 });
+  });
+
+  it('adds a round when the review scope changes', async () => {
+    const h = await harness();
+    const view = await h.service.create(
+      { repoRoot: '/tmp/repo', title: 'Scope', scope: h.scope },
+      { actor },
+    );
+    const nextScope: DiffScope = { kind: 'range', baseRef: 'main', headRef: 'next' };
+
+    const updated = await h.service.updateReview(view.review.id, { scope: nextScope }, { actor });
+
+    expect(updated.review.rounds).toHaveLength(2);
+    expect(updated.review.rounds.at(-1)?.no).toBe(2);
+  });
+
+  it('re-anchors comments when the review scope changes', async () => {
+    const h = await harness();
+    const view = await h.service.create(
+      { repoRoot: '/tmp/repo', title: 'Scope anchors', scope: h.scope },
+      { actor },
+    );
+    const created = await h.service.addComment(
+      view.review.id,
+      { body: 'Keep this line', path: 'src/a.ts', side: 'new', lineStart: 2 },
+      { actor },
+    );
+
+    const updated = await h.service.updateReview(
+      view.review.id,
+      { scope: { kind: 'range', baseRef: 'main', headRef: 'next' } },
+      { actor },
+    );
+
+    const comment = updated.review.comments.find((item) => item.id === created.comment.id);
+    expect(comment?.anchors.map((anchor) => anchor.round)).toEqual([1, 2]);
+    expect(comment?.outcomes).toHaveLength(1);
+  });
+
+  it('edits and soft-deletes comments through the service', async () => {
+    const h = await harness();
+    const view = await h.service.create(
+      { repoRoot: '/tmp/repo', title: 'Comments', scope: h.scope },
+      { actor },
+    );
+    const created = await h.service.addComment(
+      view.review.id,
+      { body: 'Original', path: 'src/a.ts', side: 'new', lineStart: 2 },
+      { actor },
+    );
+
+    const edited = await h.service.editComment(
+      view.review.id,
+      created.comment.id,
+      { body: 'Corrected' },
+      { actor },
+    );
+    expect(edited.comment).toMatchObject({ body: 'Corrected', editedBy: actor });
+
+    const deleted = await h.service.deleteComment(view.review.id, created.comment.id, { actor });
+    expect(deleted.comment.deletedAt).toBeDefined();
+    expect((await h.service.get(view.review.id)).review.comments[0]?.deletedAt).toBeDefined();
+  });
+
+  it('soft-deletes the review, cancels the active reviewer and hides feedback', async () => {
+    const backend: ReviewerBackend = {
+      kind: 'fake',
+      async run(_job, _sink, signal) {
+        await new Promise((_resolve, reject) => {
+          if (signal.aborted) {
+            reject(new Error('aborted'));
+            return;
+          }
+          signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+        });
+        return report([]);
+      },
+    };
+    const h = await harness({ backend });
+    const view = await h.service.create(
+      { repoRoot: '/tmp/repo', title: 'Delete me', scope: h.scope, reviewer: { backend: 'fake' } },
+      { actor },
+    );
+    const run = h.service.runReviewer(view.review.id, { actor }).catch((error: unknown) => error);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    await h.service.deleteReview(view.review.id, { actor }, 'duplicate');
+    expect(await run).toMatchObject({ name: 'ReviewError', code: 'conflict' });
+    await expectError(h.service.get(view.review.id), 'not-found');
+    await expectError(h.service.latestFeedback(view.review.id), 'not-found');
+    await expectError(
+      h.service.claimFixStatus(
+        view.review.id,
+        { items: [{ commentId: 'c1', status: 'fixed' }] },
+        { actor },
+      ),
+      'not-found',
+    );
+
+    const state = await h.store.load(view.review.id);
+    expect(state.deletedAt).toBeDefined();
+    expect(state.deletedBy).toEqual(actor);
+    await h.service.deleteReview(view.review.id, { actor });
+  });
+
+  it('rejects a scope change while a reviewer is active', async () => {
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const backend: ReviewerBackend = {
+      kind: 'fake',
+      async run() {
+        await gate;
+        return report([]);
+      },
+    };
+    const h = await harness({ backend });
+    const view = await h.service.create(
+      { repoRoot: '/tmp/repo', title: 'Busy scope', scope: h.scope, reviewer: { backend: 'fake' } },
+      { actor },
+    );
+    const run = h.service.runReviewer(view.review.id, { actor });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    await expectError(
+      h.service.updateReview(
+        view.review.id,
+        { scope: { kind: 'range', baseRef: 'main', headRef: 'other' } },
+        { actor },
+      ),
+      'agent-busy',
+    );
+    release?.();
+    await run;
+  });
+
   it('rejects a reviewer while another run is active', async () => {
     let release: (() => void) | undefined;
     const gate = new Promise<void>((resolve) => {

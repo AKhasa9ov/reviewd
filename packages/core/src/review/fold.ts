@@ -71,6 +71,19 @@ export function fold(state: ReviewState, event: ReviewEvent): ReviewState {
       findComment(next, event.data.commentId).state = event.data.state;
       break;
     }
+    case 'comment/edited': {
+      const comment = findComment(next, event.data.commentId);
+      comment.body = event.data.body;
+      comment.editedAt = event.at;
+      comment.editedBy = structuredClone(event.actor);
+      break;
+    }
+    case 'comment/deleted': {
+      const comment = findComment(next, event.data.commentId);
+      comment.deletedAt = event.at;
+      comment.deletedBy = structuredClone(event.actor);
+      break;
+    }
     case 'comment/anchor': {
       const comment = findComment(next, event.data.commentId);
       const anchor = structuredClone(event.data.anchor);
@@ -94,6 +107,20 @@ export function fold(state: ReviewState, event: ReviewEvent): ReviewState {
     case 'finding/decision': {
       next.findingDecisions ??= [];
       next.findingDecisions.push(structuredClone(event.data.decision));
+      break;
+    }
+    case 'review/updated': {
+      if (event.data.title !== undefined) next.title = event.data.title;
+      if (event.data.reviewer !== undefined) {
+        next.reviewer = structuredClone(event.data.reviewer);
+      }
+      next.updatedAt = event.at;
+      next.updatedBy = structuredClone(event.actor);
+      break;
+    }
+    case 'review/deleted': {
+      next.deletedAt = event.at;
+      next.deletedBy = structuredClone(event.actor);
       break;
     }
     case 'suggestion/applied': {

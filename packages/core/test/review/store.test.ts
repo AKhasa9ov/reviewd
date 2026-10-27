@@ -506,6 +506,60 @@ describe('fold', () => {
     expect(withRound.comments).toHaveLength(0);
   });
 
+  it('folds review metadata edits and preserves the immutable fields', () => {
+    let state = fold(baseReview(), created());
+    state = fold(
+      state,
+      event(
+        'review/updated',
+        { title: 'Corrected title', reviewer: { backend: 'worker' } },
+        'evt_updated',
+      ),
+    );
+
+    expect(state.title).toBe('Corrected title');
+    expect(state.reviewer).toEqual({ backend: 'worker' });
+    expect(state.repoRoot).toBe('/tmp/repo');
+    expect(state.updatedAt).toBe(at);
+    expect(state.updatedBy).toEqual(actor);
+    expect(state.version).toBe(2);
+  });
+
+  it('folds review soft deletion', () => {
+    let state = fold(baseReview(), created());
+    state = fold(state, event('review/deleted', { reason: 'duplicate' }, 'evt_deleted'));
+
+    expect(state.deletedAt).toBe(at);
+    expect(state.deletedBy).toEqual(actor);
+    expect(state.status).toBe('open');
+  });
+
+  it('folds comment edits and soft deletion', () => {
+    let state = fold(baseReview(), created());
+    state = fold(state, event('comment/added', { comment: comment() }, 'evt_comment'));
+    state = fold(
+      state,
+      event('comment/edited', { commentId: 'cmt_1', body: 'Corrected body.' }, 'evt_edit'),
+    );
+
+    expect(state.comments[0]).toMatchObject({
+      body: 'Corrected body.',
+      editedAt: at,
+      editedBy: actor,
+    });
+
+    state = fold(state, event('comment/deleted', { commentId: 'cmt_1' }, 'evt_delete'));
+    expect(state.comments[0]).toMatchObject({ deletedAt: at, deletedBy: actor });
+    expect(state.comments[0]?.body).toBe('Corrected body.');
+  });
+
+  it('rejects edits of unknown comments', () => {
+    const state = fold(baseReview(), created());
+    expect(() =>
+      fold(state, event('comment/edited', { commentId: 'cmt_missing', body: 'x' }, 'evt_edit')),
+    ).toThrow(/unknown comment/i);
+  });
+
   it('rejects a created event whose payload belongs to another review', () => {
     const mismatched = {
       ...created(),

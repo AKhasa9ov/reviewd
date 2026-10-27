@@ -6,6 +6,8 @@ export default tseslint.config(
     ignores: [
       '**/dist/**',
       '**/node_modules/**',
+      '**/playwright-report/**',
+      '**/test-results/**',
       'coverage/**',
       'packages/dsh/index.js',
       '.superpowers/**',

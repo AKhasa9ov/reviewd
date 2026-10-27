@@ -192,6 +192,34 @@ describe('review model anchors and status', () => {
     expect(roundCommentCount(r, 2)).toBe(1);
     expect(filterComments(r, 'all')).toHaveLength(2);
   });
+
+  it('hides deleted comments from counts and keeps reply tombstones in the full list', () => {
+    const deleted = comment('c1', [anchor(1, 1)], {
+      deletedAt: '2026-10-27T12:00:00.000Z',
+      replies: [
+        {
+          id: 'r1',
+          author: { name: 'Bob', kind: 'human' },
+          body: 'Reply',
+          createdAt: '2026-10-27T12:00:00.000Z',
+        },
+      ],
+    });
+    const deletedWithoutReplies = comment('c2', [anchor(1, 2)], {
+      deletedAt: '2026-10-27T12:00:00.000Z',
+    });
+    const active = comment('c3', [anchor(1, 3)]);
+    const r = review([deleted, deletedWithoutReplies, active]);
+
+    expect(fixCounts(r)).toEqual({
+      addressed: 0,
+      'not-fixed': 0,
+      outdated: 0,
+      'needs-decision': 1,
+    });
+    expect(roundCommentCount(r, 1)).toBe(1);
+    expect(filterComments(r, 'all').map((item) => item.id)).toEqual(['c1', 'c3']);
+  });
 });
 
 describe('diff model', () => {
