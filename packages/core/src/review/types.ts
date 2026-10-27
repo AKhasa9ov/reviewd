@@ -26,7 +26,19 @@ export type AnchorState = 'active' | 'ambiguous' | 'outdated';
 export type OutcomeStatus = 'applied' | 'addressed' | 'unchanged' | 'outdated' | 'moved';
 export type SuggestionState = 'proposed' | 'accepted' | 'declined' | 'applied';
 export type FixStatus = 'fixed' | 'not-fixed' | 'unclear';
+export type FindingDecisionState = 'accepted' | 'dismissed';
 export type Confidence = 'high' | 'medium' | 'low';
+
+/** Human triage of one reviewer finding. The latest decision for a finding wins. */
+export interface FindingDecision {
+  findingId: string;
+  round: RoundNo;
+  state: FindingDecisionState;
+  /** Optional message passed to the agent with the next feedback package. */
+  note?: string;
+  by: Actor;
+  at: string;
+}
 
 export interface AnchorPosition {
   round: RoundNo;
@@ -139,6 +151,8 @@ export interface ReviewState {
   submissions?: SubmissionRecord[];
   /** Agent/harness claims after a fix round; independent from reviewer verification. */
   fixClaims?: FixClaimRecord[];
+  /** Human triage of reviewer findings, in append order. Latest per finding wins. */
+  findingDecisions?: FindingDecision[];
 }
 
 export interface ReviewSummary {

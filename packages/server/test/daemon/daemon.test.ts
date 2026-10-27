@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { startDaemon } from '../../src/daemon/server.js';
-import type { ReviewDaemon } from '../../src/daemon/types.js';
+import type { DaemonDeps, ReviewDaemon } from '../../src/daemon/types.js';
+import type { ReviewService } from '@dsh-code-review/core';
 import { makeRepo } from '../../../core/test/helpers/repo.js';
 
 const TOKEN = 'test-token-0123456789abcdef0123456789';
@@ -23,19 +24,23 @@ interface Running {
 
 async function running(
   overrides: Partial<Parameters<typeof startDaemon>[0]> = {},
+  deps: DaemonDeps = {},
 ): Promise<Running> {
   const storeDir = await mkdtemp(join(tmpdir(), 'reviewd-store-'));
-  const daemon = await startDaemon({
-    host: '127.0.0.1',
-    port: 0,
-    storeDir,
-    token: TOKEN,
-    longPollMs: 120,
-    heartbeatMs: 50,
-    jobLeaseMs: 200,
-    rateLimit: { mutations: 100, reads: 1000, windowMs: 60_000 },
-    ...overrides,
-  });
+  const daemon = await startDaemon(
+    {
+      host: '127.0.0.1',
+      port: 0,
+      storeDir,
+      token: TOKEN,
+      longPollMs: 120,
+      heartbeatMs: 50,
+      jobLeaseMs: 200,
+      rateLimit: { mutations: 100, reads: 1000, windowMs: 60_000 },
+      ...overrides,
+    },
+    deps,
+  );
   cleanups.push(async () => {
     await daemon.close();
     await rm(storeDir, { recursive: true, force: true });
@@ -1158,5 +1163,85 @@ describe('worker heartbeat', () => {
       }),
     });
     expect(report.status).toBe(200);
+  });
+});
+
+describe('review finding decisions', () => {
+  it('routes a decision with an optional note to the service', async () => {
+    const calls: unknown[] = [];
+    const service = {
+      async decideFinding(
+        id: string,
+        findingId: string,
+        input: { state: string; note?: string },
+      ) {
+        calls.push({ id, findingId, input });
+        return {
+          decision: {
+            findingId,
+            round: 1,
+            state: input.state,
+            ...(input.note === undefined ? {} : { note: input.note }),
+            by: { name: 'reviewd', kind: 'human' },
+            at: '2026-10-27T12:00:00.000Z',
+          },
+        };
+      },
+      async events() {
+        return [];
+      },
+      async list() {
+        return { items: [], total: 0, limit: 50, offset: 0 };
+      },
+    } as unknown as ReviewService;
+    const { daemonUrl } = await running({}, { service });
+
+    const response = await fetch(
+      `${daemonUrl}/api/reviews/rev_1/findings/f%201/decision`,
+      {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ state: 'accepted', note: '  Fix before merge  ' }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(await read(response)).toMatchObject({
+      decision: { findingId: 'f 1', state: 'accepted', note: '  Fix before merge  ' },
+    });
+    expect(calls).toEqual([
+      {
+        id: 'rev_1',
+        findingId: 'f 1',
+        input: { state: 'accepted', note: '  Fix before merge  ' },
+      },
+    ]);
+  });
+
+  it('rejects an unknown decision state before calling the service', async () => {
+    let called = false;
+    const service = {
+      async decideFinding() {
+        called = true;
+        return {};
+      },
+      async events() {
+        return [];
+      },
+      async list() {
+        return { items: [], total: 0, limit: 50, offset: 0 };
+      },
+    } as unknown as ReviewService;
+    const { daemonUrl } = await running({}, { service });
+
+    const response = await fetch(`${daemonUrl}/api/reviews/rev_1/findings/f1/decision`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ state: 'maybe' }),
+    });
+
+    expect(response.status).toBe(400);
+    expect((await read(response)).error.code).toBe('validation');
+    expect(called).toBe(false);
   });
 });

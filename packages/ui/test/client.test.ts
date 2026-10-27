@@ -157,6 +157,18 @@ describe('ApiClient', () => {
     expect(nextInit.signal).toBe(controller.signal);
   });
 
+  it('posts finding decisions with an optional note', async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({ decision: { findingId: 'f1', state: 'accepted' } }),
+    );
+    const client = clientWith(fetchImpl as unknown as typeof fetch);
+    await client.decideFinding('rev/1', 'f 1', { state: 'accepted', note: 'Fix this' });
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('/api/reviews/rev%2F1/findings/f%201/decision');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(String(init.body))).toEqual({ state: 'accepted', note: 'Fix this' });
+  });
+
   it('supports auth, health, snapshot and events shapes', async () => {
     const fetchImpl = vi.fn(async (url: RequestInfo | URL) => {
       const value = String(url);

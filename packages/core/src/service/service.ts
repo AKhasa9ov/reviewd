@@ -32,6 +32,8 @@ import { ReviewError } from './types.js';
 import type {
   CallContext,
   CommentView,
+  FindingDecisionInput,
+  FindingDecisionView,
   Page,
   ReviewFilter,
   ReviewServiceImplDeps,
@@ -121,6 +123,7 @@ function mapLifecycleCode(code: ReviewLifecycleError['code']): ReviewError['code
   switch (code) {
     case 'not-found':
     case 'comment-not-found':
+    case 'finding-not-found':
       return 'not-found';
     case 'closed':
     case 'duplicate-round':
@@ -337,6 +340,27 @@ export class ReviewServiceImpl implements ReviewService {
         }
       },
       `comment.state:${id}:${commentId}`,
+      ctx.requestId,
+    );
+  }
+
+  async decideFinding(
+    id: ReviewId,
+    findingId: string,
+    input: FindingDecisionInput,
+    ctx: CallContext,
+  ): Promise<FindingDecisionView> {
+    assertContext(ctx);
+    return await this.idempotent(
+      async () => {
+        try {
+          const decision = await this.lifecycle.decideFinding(id, findingId, input, ctx.actor);
+          return { decision };
+        } catch (error) {
+          throw this.translate(error);
+        }
+      },
+      `finding.decision:${id}:${findingId}`,
       ctx.requestId,
     );
   }

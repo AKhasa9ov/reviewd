@@ -480,6 +480,32 @@ export async function handle(
       sendJson(res, 200, view);
       return;
     }
+    if (
+      rest[0] === 'findings' &&
+      rest[1] !== undefined &&
+      rest[2] === 'decision' &&
+      rest.length === 3 &&
+      method === 'POST'
+    ) {
+      const body = await readJson(req, ctx.config.maxBodyBytes);
+      const state = body.state;
+      if (state !== 'accepted' && state !== 'dismissed') {
+        throw new ApiError('validation', 'state must be accepted or dismissed');
+      }
+      if (body.note !== undefined && typeof body.note !== 'string') {
+        throw new ApiError('validation', 'note must be a string');
+      }
+      const note = typeof body.note === 'string' ? body.note : undefined;
+      const view = await ctx.service.decideFinding(
+        reviewId,
+        decodeURIComponent(rest[1]),
+        { state, ...(note === undefined ? {} : { note }) },
+        ctxFor(req, options.auth),
+      );
+      await ctx.hub.sync(reviewId);
+      sendJson(res, 200, view);
+      return;
+    }
     if (rest[0] === 'refresh' && method === 'POST') {
       const body = await readJson(req, ctx.config.maxBodyBytes);
       const scope =

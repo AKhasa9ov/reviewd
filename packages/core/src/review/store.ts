@@ -17,7 +17,14 @@ import { isReviewEvent, ReviewEventError } from './events.js';
 import type { ReviewEvent } from './events.js';
 import { fold } from './fold.js';
 import type { Snapshot } from '../types.js';
-import type { Comment, ReviewId, ReviewState, ReviewStatus, ReviewSummary } from './types.js';
+import type {
+  Comment,
+  FindingDecision,
+  ReviewId,
+  ReviewState,
+  ReviewStatus,
+  ReviewSummary,
+} from './types.js';
 
 export interface ReviewStoreOptions {
   now?: () => Date;
@@ -107,6 +114,22 @@ function isComment(value: unknown): value is Comment {
   );
 }
 
+function isFindingDecision(value: unknown): value is FindingDecision {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.findingId === 'string' &&
+    typeof value.round === 'number' &&
+    Number.isInteger(value.round) &&
+    value.round > 0 &&
+    (value.state === 'accepted' || value.state === 'dismissed') &&
+    (value.note === undefined || typeof value.note === 'string') &&
+    isRecord(value.by) &&
+    typeof value.by.name === 'string' &&
+    (value.by.kind === 'human' || value.by.kind === 'agent' || value.by.kind === 'system') &&
+    isTimestamp(value.at)
+  );
+}
+
 function isReviewState(value: unknown): value is ReviewState {
   if (!isRecord(value)) return false;
   return (
@@ -120,6 +143,9 @@ function isReviewState(value: unknown): value is ReviewState {
     Array.isArray(value.rounds) &&
     Array.isArray(value.comments) &&
     value.comments.every(isComment) &&
+    (value.findingDecisions === undefined ||
+      (Array.isArray(value.findingDecisions) &&
+        value.findingDecisions.every(isFindingDecision))) &&
     typeof value.version === 'number' &&
     Number.isInteger(value.version) &&
     value.version >= 0 &&

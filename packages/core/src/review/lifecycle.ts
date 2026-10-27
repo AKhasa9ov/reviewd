@@ -11,6 +11,8 @@ import type {
   Comment,
   CommentState,
   CreateReviewInput,
+  FindingDecision,
+  FindingDecisionState,
   ReviewId,
   ReviewState,
   ReviewSummary,
@@ -25,6 +27,7 @@ export type ReviewLifecycleErrorCode =
   | 'duplicate-round'
   | 'round-order'
   | 'comment-not-found'
+  | 'finding-not-found'
   | 'snapshot-mismatch'
   | 'invalid-input';
 
@@ -32,17 +35,19 @@ export class ReviewLifecycleError extends Error {
   readonly code: ReviewLifecycleErrorCode;
   readonly reviewId?: ReviewId;
   readonly commentId?: string;
+  readonly findingId?: string;
 
   constructor(
     code: ReviewLifecycleErrorCode,
     message: string,
-    details: { reviewId?: ReviewId; commentId?: string } = {},
+    details: { reviewId?: ReviewId; commentId?: string; findingId?: string } = {},
   ) {
     super(message);
     this.name = 'ReviewLifecycleError';
     this.code = code;
     if (details.reviewId !== undefined) this.reviewId = details.reviewId;
     if (details.commentId !== undefined) this.commentId = details.commentId;
+    if (details.findingId !== undefined) this.findingId = details.findingId;
   }
 }
 
@@ -285,6 +290,73 @@ export class ReviewLifecycle {
       }),
     );
     return this.findComment(await this.get(reviewId), commentId);
+  }
+
+  async decideFinding(
+    reviewId: ReviewId,
+    findingId: string,
+    input: { state: FindingDecisionState; note?: string },
+    actor: Actor,
+  ): Promise<FindingDecision> {
+    if (input.state !== 'accepted' && input.state !== 'dismissed') {
+      throw new ReviewLifecycleError('invalid-input', `unknown finding decision: ${input.state}`, {
+        reviewId,
+      });
+    }
+    if (input.note !== undefined && typeof input.note !== 'string') {
+      throw new ReviewLifecycleError('invalid-input', 'finding decision note must be a string', {
+        reviewId,
+      });
+    }
+    const note = input.note?.trim();
+    if (note !== undefined && note.length > 4000) {
+      throw new ReviewLifecycleError('invalid-input', 'finding decision note is too long', {
+        reviewId,
+      });
+    }
+
+    const state = await this.requireOpen(reviewId);
+    const latestRound = state.rounds.at(-1);
+    if (state.report === undefined || latestRound === undefined) {
+      throw new ReviewLifecycleError(
+        'invalid-input',
+        `review has no reviewer report: ${reviewId}`,
+        { reviewId },
+      );
+    }
+    if (state.report.round !== latestRound.no) {
+      throw new ReviewLifecycleError(
+        'invalid-input',
+        `reviewer report is from round ${state.report.round}, latest is ${latestRound.no}`,
+        { reviewId },
+      );
+    }
+    if (!state.report.findings.some((finding) => finding.id === findingId)) {
+      throw new ReviewLifecycleError('finding-not-found', `unknown finding: ${findingId}`, {
+        reviewId,
+        findingId,
+      });
+    }
+
+    const decision: FindingDecision = {
+      findingId,
+      round: state.report.round,
+      state: input.state,
+      ...(note === undefined || note === '' ? {} : { note }),
+      by: actor,
+      at: this.now().toISOString(),
+    };
+    await this.store.append(
+      reviewId,
+      createEvent({
+        reviewId,
+        type: 'finding/decision',
+        actor,
+        data: { decision },
+        now: this.now,
+      }),
+    );
+    return decision;
   }
 
   async close(

@@ -5,6 +5,7 @@ import type {
   AgentReport,
   Comment,
   Finding,
+  FindingDecision,
   Snapshot,
   ReviewState,
 } from '../../src/index.js';
@@ -115,7 +116,7 @@ function report(overrides: Partial<AgentReport> = {}): AgentReport {
   };
 }
 
-function review(comments: Comment[]): ReviewState {
+function review(comments: Comment[], decisions: FindingDecision[] = []): ReviewState {
   return {
     id: 'rev_1',
     title: 'Demo review',
@@ -134,18 +135,38 @@ function review(comments: Comment[]): ReviewState {
     ],
     comments,
     version: 2,
+    ...(decisions.length === 0 ? {} : { findingDecisions: decisions }),
   };
 }
 
-function input(overrides: { comments?: Comment[]; report?: AgentReport | null } = {}) {
+function input(
+  overrides: {
+    comments?: Comment[];
+    report?: AgentReport | null;
+    decisions?: FindingDecision[];
+  } = {},
+) {
   return {
-    review: review(overrides.comments ?? []),
+    review: review(overrides.comments ?? [], overrides.decisions ?? []),
     snapshot: snapshot(),
     report: overrides.report === undefined ? report() : overrides.report,
     round: 1,
     verdict: 'request-changes' as const,
     deliveryKey: 'rev_1:1:sub_1',
     summary: 'Please address these.',
+  };
+}
+
+function decision(
+  overrides: Partial<FindingDecision> = {},
+): FindingDecision {
+  return {
+    findingId: 'f1',
+    round: 1,
+    state: 'accepted',
+    by: human,
+    at,
+    ...overrides,
   };
 }
 
@@ -168,7 +189,7 @@ describe('buildFeedback', () => {
     expect(first.markdown).toBe(second.markdown);
     expect(first.json).toEqual(second.json);
     expect(first.markdown).toContain('## Ревью «Demo review» — changes requested (round 1)');
-    expect(first.markdown).toContain('### Блокеры и major (агент)');
+    expect(first.markdown).toContain('### Замечания агента (к исправлению)');
     expect(first.markdown).toContain('[blocker][src/a.ts:2] Bad loop');
     expect(first.markdown).toContain('### Комментарии человека (open)');
     expect(first.markdown).toContain('### Принятые suggested правки');
@@ -194,6 +215,68 @@ describe('buildFeedback', () => {
     expect(feedback.markdown).not.toContain('Bad loop');
     expect(feedback.json.humanComments).toHaveLength(0);
     expect(feedback.json.resolved.count).toBe(0);
+  });
+
+  it('includes an accepted minor finding with its human note', () => {
+    const feedback = buildFeedback(
+      input({
+        report: report({ findings: [finding({ severity: 'minor', title: 'Tighten the type' })] }),
+        decisions: [
+          decision({ state: 'accepted', note: 'Please do this, it affects callers.' }),
+        ],
+      }),
+    );
+
+    expect(feedback.markdown).toContain('[accepted][minor][src/a.ts:2] Tighten the type');
+    expect(feedback.markdown).toContain('Please do this, it affects callers.');
+    expect(feedback.json.findings).toEqual([
+      expect.objectContaining({
+        id: 'f1',
+        severity: 'minor',
+        decision: 'accepted',
+        note: 'Please do this, it affects callers.',
+      }),
+    ]);
+    expect(feedback.json.dismissedFindings).toEqual([]);
+  });
+
+  it('excludes a dismissed finding and tells the agent not to repeat a noted one', () => {
+    const feedback = buildFeedback(
+      input({
+        decisions: [decision({ state: 'dismissed', note: 'This is intentional.' })],
+      }),
+    );
+
+    expect(feedback.markdown).not.toContain('[blocker][src/a.ts:2] Bad loop');
+    expect(feedback.markdown).toContain('### Отклонено человеком');
+    expect(feedback.markdown).toContain('This is intentional.');
+    expect(feedback.json.findings).toEqual([]);
+    expect(feedback.json.dismissedFindings).toEqual([
+      expect.objectContaining({ id: 'f1', decision: 'dismissed', note: 'This is intentional.' }),
+    ]);
+  });
+
+  it('keeps the latest decision and ignores decisions from another round', () => {
+    const dismissed = buildFeedback(
+      input({
+        decisions: [
+          decision({ state: 'accepted', note: 'First note' }),
+          decision({ state: 'dismissed', note: 'Second note' }),
+        ],
+      }),
+    );
+    expect(dismissed.markdown).not.toContain('[accepted]');
+    expect(dismissed.markdown).toContain('Second note');
+    expect(dismissed.markdown).not.toContain('First note');
+
+    const stale = buildFeedback(
+      input({
+        decisions: [decision({ round: 2, state: 'dismissed', note: 'From next round' })],
+      }),
+    );
+    expect(stale.markdown).toContain('[blocker][src/a.ts:2] Bad loop');
+    expect(stale.markdown).not.toContain('From next round');
+    expect(stale.json.dismissedFindings).toEqual([]);
   });
 
   it('caps markdown at 100 KiB with a deterministic notice', () => {

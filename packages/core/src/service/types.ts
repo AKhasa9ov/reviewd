@@ -9,6 +9,8 @@ import type {
   Actor,
   AddCommentInput,
   Comment,
+  FindingDecision,
+  FindingDecisionState,
   FixClaimRecord,
   CommentState,
   ReviewId,
@@ -81,6 +83,15 @@ export interface ReplyInput {
   body: string;
 }
 
+export interface FindingDecisionInput {
+  state: FindingDecisionState;
+  note?: string;
+}
+
+export interface FindingDecisionView {
+  decision: FindingDecision;
+}
+
 export interface SubmitInput {
   verdict: 'approve' | 'request-changes' | 'comment';
   summary?: string;
@@ -96,6 +107,10 @@ export interface FeedbackFinding {
   title: string;
   rationale: string;
   evidence: string;
+  /** Present only when a human accepted or dismissed this finding. */
+  decision?: FindingDecisionState;
+  /** Human note attached to the decision. */
+  note?: string;
 }
 
 export interface FeedbackComment {
@@ -130,6 +145,8 @@ export interface FeedbackJson {
   deliveryKey: string;
   summary?: string;
   findings: FeedbackFinding[];
+  /** Findings a human dismissed; notes are omitted when the human left none. */
+  dismissedFindings: FeedbackFinding[];
   humanComments: FeedbackComment[];
   appliedSuggestions: FeedbackSuggestion[];
   acceptedSuggestions: FeedbackSuggestion[];
@@ -195,6 +212,12 @@ export interface ReviewService {
     state: CommentState,
     ctx: CallContext,
   ): Promise<CommentView>;
+  decideFinding(
+    id: ReviewId,
+    findingId: string,
+    input: FindingDecisionInput,
+    ctx: CallContext,
+  ): Promise<FindingDecisionView>;
   events(id: ReviewId, after?: number): Promise<ReviewEvent[]>;
   suggestionAction(
     id: ReviewId,

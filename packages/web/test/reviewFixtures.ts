@@ -332,6 +332,7 @@ export const latestFeedback: LatestFeedbackView = {
       scope: { baseSha: 'base', headSha: 'head', label: 'main → feature/billing' },
       deliveryKey: 'delivery-key',
       findings: [],
+      dismissedFindings: [],
       humanComments: [],
       appliedSuggestions: [],
       acceptedSuggestions: [],

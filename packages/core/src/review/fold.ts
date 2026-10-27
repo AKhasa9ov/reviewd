@@ -91,6 +91,11 @@ export function fold(state: ReviewState, event: ReviewEvent): ReviewState {
       next.fixClaims.push(...structuredClone(event.data.claims));
       break;
     }
+    case 'finding/decision': {
+      next.findingDecisions ??= [];
+      next.findingDecisions.push(structuredClone(event.data.decision));
+      break;
+    }
     case 'suggestion/applied': {
       const comment = findComment(next, event.data.commentId);
       const alreadyApplied = comment.outcomes.some(

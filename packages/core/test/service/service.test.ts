@@ -459,7 +459,7 @@ describe('ReviewServiceImpl', () => {
     expect(first.deliveryKey).toBe(
       `${view.review.id}:1:${first.feedback.deliveryKey.split(':')[2]}`,
     );
-    expect(first.feedback.markdown).toContain('### Блокеры и major (агент)');
+    expect(first.feedback.markdown).toContain('### Замечания агента (к исправлению)');
     expect(first.feedback.markdown).toContain('### Комментарии человека (open)');
     expect(first.feedback.markdown).toContain('применено человеком (не применять повторно)');
     expect(first.feedback.markdown).toContain('принято, но не применено');
@@ -656,6 +656,71 @@ describe('ReviewServiceImpl', () => {
         { actor },
       ),
       'conflict',
+    );
+  });
+
+  it('decides the latest reviewer finding and replays it', async () => {
+    const h = await harness({ report: report() });
+    const view = await h.service.create(
+      {
+        repoRoot: '/tmp/repo',
+        title: 'Decisions',
+        scope: h.scope,
+        reviewer: { backend: 'fake' },
+      },
+      { actor },
+    );
+    await h.service.runReviewer(view.review.id, { actor });
+
+    const first = await h.service.decideFinding(
+      view.review.id,
+      'f1',
+      { state: 'accepted', note: '  Fix before merge  ' },
+      { actor, requestId: 'decision-1' },
+    );
+    expect(first.decision).toMatchObject({
+      findingId: 'f1',
+      round: 1,
+      state: 'accepted',
+      note: 'Fix before merge',
+    });
+    const replay = await h.service.decideFinding(
+      view.review.id,
+      'f1',
+      { state: 'dismissed' },
+      { actor, requestId: 'decision-1' },
+    );
+    expect(replay).toEqual(first);
+
+    const loaded = await h.service.get(view.review.id);
+    expect(loaded.review.findingDecisions).toEqual([first.decision]);
+  });
+
+  it('rejects unknown findings and invalid decision notes through the service', async () => {
+    const h = await harness({ report: report() });
+    const view = await h.service.create(
+      {
+        repoRoot: '/tmp/repo',
+        title: 'Bad decisions',
+        scope: h.scope,
+        reviewer: { backend: 'fake' },
+      },
+      { actor },
+    );
+    await h.service.runReviewer(view.review.id, { actor });
+
+    await expectError(
+      h.service.decideFinding(view.review.id, 'missing', { state: 'accepted' }, { actor }),
+      'not-found',
+    );
+    await expectError(
+      h.service.decideFinding(
+        view.review.id,
+        'f1',
+        { state: 'accepted', note: 'x'.repeat(4001) },
+        { actor },
+      ),
+      'validation',
     );
   });
 

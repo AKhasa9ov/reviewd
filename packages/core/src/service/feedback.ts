@@ -1,6 +1,6 @@
 import type { Snapshot } from '../types.js';
-import type { AgentReport } from '../reviewer/types.js';
-import type { Comment, ReviewState, RoundNo } from '../review/types.js';
+import type { AgentReport, Finding } from '../reviewer/types.js';
+import type { Comment, FindingDecision, ReviewState, RoundNo } from '../review/types.js';
 import type {
   FeedbackComment,
   FeedbackFinding,
@@ -63,7 +63,20 @@ function humanComment(
   return item;
 }
 
-function findingItem(finding: AgentReport['findings'][number]): FeedbackFinding {
+function latestDecision(
+  review: ReviewState,
+  findingId: string,
+  round: RoundNo,
+): FindingDecision | undefined {
+  const decisions = review.findingDecisions ?? [];
+  for (let index = decisions.length - 1; index >= 0; index -= 1) {
+    const decision = decisions[index];
+    if (decision?.findingId === findingId && decision.round === round) return decision;
+  }
+  return undefined;
+}
+
+function findingItem(finding: Finding, decision?: FindingDecision): FeedbackFinding {
   return {
     id: finding.id,
     severity: finding.severity,
@@ -73,7 +86,35 @@ function findingItem(finding: AgentReport['findings'][number]): FeedbackFinding 
     title: finding.title,
     rationale: finding.rationale,
     evidence: finding.evidence,
+    ...(decision === undefined ? {} : { decision: decision.state }),
+    ...(decision?.note === undefined ? {} : { note: decision.note }),
   };
+}
+
+function findingLabel(finding: Finding, decision?: FindingDecision): string {
+  if (decision?.state === 'accepted') {
+    return `[accepted][${finding.severity}]`;
+  }
+  return `[${finding.severity}]`;
+}
+
+function findingLines(finding: Finding, decision?: FindingDecision): string[] {
+  return [
+    `- ${findingLabel(finding, decision)}[${finding.file}:${finding.lineStart}] ${finding.title}`,
+    `  ${finding.rationale}`,
+    `  > ${finding.evidence.replace(/\n/g, '\n  > ')}`,
+    ...(decision?.note === undefined ? [] : [`  Комментарий человека: ${decision.note}`]),
+  ];
+}
+
+function actionableFinding(
+  finding: Finding,
+  decision: FindingDecision | undefined,
+): boolean {
+  if (finding.kind === 'praise') return false;
+  if (decision?.state === 'dismissed') return false;
+  if (decision?.state === 'accepted') return true;
+  return finding.severity === 'blocker' || finding.severity === 'major';
 }
 
 function verdictLabel(verdict: SubmitInput['verdict']): string {
@@ -111,6 +152,7 @@ function capFeedbackJson(input: FeedbackJson): FeedbackJson {
     keyof Pick<
       FeedbackJson,
       | 'findings'
+      | 'dismissedFindings'
       | 'questions'
       | 'acceptedSuggestions'
       | 'appliedSuggestions'
@@ -119,6 +161,7 @@ function capFeedbackJson(input: FeedbackJson): FeedbackJson {
     >
   > = [
     'findings',
+    'dismissedFindings',
     'questions',
     'acceptedSuggestions',
     'appliedSuggestions',
@@ -136,6 +179,7 @@ function capFeedbackJson(input: FeedbackJson): FeedbackJson {
   }
   if (jsonBytes(json) > FEEDBACK_BYTE_LIMIT) {
     json.findings = [];
+    json.dismissedFindings = [];
     json.questions = [];
     json.acceptedSuggestions = [];
     json.appliedSuggestions = [];
@@ -161,9 +205,17 @@ export function buildFeedback(input: BuildFeedbackInput): FeedbackPackage {
   );
   const resolved = review.comments.filter((comment) => comment.state === 'resolved');
 
-  const findings = (report?.findings ?? []).filter(
-    (finding) =>
-      (finding.severity === 'blocker' || finding.severity === 'major') && finding.kind !== 'praise',
+  const reportFindings = report?.findings ?? [];
+  const decisions = new Map<string, FindingDecision>();
+  for (const finding of reportFindings) {
+    const decision = latestDecision(review, finding.id, round);
+    if (decision !== undefined) decisions.set(finding.id, decision);
+  }
+  const findings = reportFindings.filter((finding) =>
+    actionableFinding(finding, decisions.get(finding.id)),
+  );
+  const dismissed = reportFindings.filter(
+    (finding) => decisions.get(finding.id)?.state === 'dismissed',
   );
   const humanComments: FeedbackComment[] = [];
   const accepted: FeedbackSuggestion[] = [];
@@ -199,7 +251,8 @@ export function buildFeedback(input: BuildFeedbackInput): FeedbackPackage {
       label: snapshot.scope.label,
     },
     deliveryKey,
-    findings: findings.map(findingItem),
+    findings: findings.map((finding) => findingItem(finding, decisions.get(finding.id))),
+    dismissedFindings: dismissed.map((finding) => findingItem(finding, decisions.get(finding.id))),
     humanComments,
     appliedSuggestions: applied,
     acceptedSuggestions: accepted,
@@ -222,12 +275,20 @@ export function buildFeedback(input: BuildFeedbackInput): FeedbackPackage {
 
   section(
     lines,
-    'Блокеры и major (агент)',
-    findings.flatMap((finding) => [
-      `- [${finding.severity}][${finding.file}:${finding.lineStart}] ${finding.title}`,
-      `  ${finding.rationale}`,
-      `  > ${finding.evidence.replace(/\n/g, '\n  > ')}`,
-    ]),
+    'Замечания агента (к исправлению)',
+    findings.flatMap((finding) => findingLines(finding, decisions.get(finding.id))),
+  );
+
+  section(
+    lines,
+    'Отклонено человеком (не повторять)',
+    dismissed.flatMap((finding) => {
+      const decision = decisions.get(finding.id);
+      if (decision?.note === undefined) return [];
+      return [
+        `- [${finding.file}:${finding.lineStart}] ${finding.title} — ${decision.note}`,
+      ];
+    }),
   );
 
   section(

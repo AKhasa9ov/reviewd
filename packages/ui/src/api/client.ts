@@ -5,6 +5,8 @@ import type {
   CreateReviewRequest,
   CreateReviewResponse,
   DirectoryListing,
+  FindingDecisionInput,
+  FindingDecisionView,
   HealthResponse,
   LatestFeedbackView,
   Page,
@@ -272,6 +274,17 @@ export class ApiClient {
     return this.request<CommentView>(
       `/api/reviews/${encodeURIComponent(id)}/comments/${encodeURIComponent(commentId)}`,
       { method: 'PATCH', body: { state } },
+    );
+  }
+
+  async decideFinding(
+    id: string,
+    findingId: string,
+    input: FindingDecisionInput,
+  ): Promise<FindingDecisionView> {
+    return this.request<FindingDecisionView>(
+      `/api/reviews/${encodeURIComponent(id)}/findings/${encodeURIComponent(findingId)}/decision`,
+      { method: 'POST', body: input },
     );
   }
 
