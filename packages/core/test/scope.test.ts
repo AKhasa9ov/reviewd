@@ -62,6 +62,52 @@ describe('resolveScope', () => {
     expect(scope.headSha).toBe(repo.featureSha);
   });
 
+  it('resolves a selected commit set to its parent..tip boundary', async () => {
+    const repo = await repoWithFeature();
+    await repo.write('src/a.ts', 'one\ntwo changed\nthree\nfour\n');
+    const second = await repo.commit('second feature commit');
+
+    const scope = await resolveScope({
+      repoRoot: repo.root,
+      scope: { kind: 'commits', shas: [repo.featureSha, second] },
+    });
+
+    expect(scope.kind).toBe('commits');
+    expect(scope.baseSha).toBe(repo.baseSha);
+    expect(scope.headSha).toBe(second);
+    expect(scope.shas).toEqual([repo.featureSha, second]);
+    expect(scope.label).toMatch(/^2 commits: [0-9a-f]{8}\.\.[0-9a-f]{8}$/);
+  });
+
+  it('rejects a selected commit set in newest-first order', async () => {
+    const repo = await repoWithFeature();
+    await repo.write('src/a.ts', 'one\ntwo changed\nthree\nfour\n');
+    const second = await repo.commit('second feature commit');
+
+    await expect(
+      resolveScope({
+        repoRoot: repo.root,
+        scope: { kind: 'commits', shas: [second, repo.featureSha] },
+      }),
+    ).rejects.toMatchObject({ code: 'git-failed', message: expect.stringContaining('oldest') });
+  });
+
+  it('rejects an empty selected commit set', async () => {
+    const repo = await repoWithFeature();
+    await expect(
+      resolveScope({ repoRoot: repo.root, scope: { kind: 'commits', shas: [] } }),
+    ).rejects.toBeInstanceOf(GitError);
+  });
+
+  it('labels a single selected commit by its SHA', async () => {
+    const repo = await repoWithFeature();
+    const scope = await resolveScope({
+      repoRoot: repo.root,
+      scope: { kind: 'commits', shas: [repo.featureSha] },
+    });
+    expect(scope.label).toBe(`commit ${repo.featureSha.slice(0, 8)}`);
+  });
+
   it('uses the empty tree for a root commit', async () => {
     const repo = await makeRepo();
     cleanups.push(repo.cleanup);

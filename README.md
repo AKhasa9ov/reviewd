@@ -454,9 +454,22 @@ add warnings.
 untracked files; `--no-untracked` excludes untracked files). `--commit <sha>` diffs a commit
 against its first parent; a root commit uses the empty tree, while a commit whose parent is
 missing (for example a shallow boundary) fails with a fetch/unshallow error instead of
-silently pretending every file was added. `--two-dot`, `--max-files`, `--max-lines` and
-`--ignore <glob>` are available for large repositories. `--max-files` caps reviewable files;
-ignored entries remain visible and never consume that cap.
+silently pretending every file was added. A selected commit set is a `commits` scope with
+`shas` ordered oldest to newest; it diffs the newest commit against the first parent of the
+oldest, so commits between the endpoints are included. `--two-dot`, `--max-files`,
+`--max-lines` and `--ignore <glob>` are available for large repositories. `--max-files`
+caps reviewable files; ignored entries remain visible and never consume that cap.
+
+### Repository settings and merge requests
+
+`/settings` in the web UI stores named local checkouts and an optional default target
+branch. The daemon persists them in `<store>/repositories.json` (mode `0600`) and exposes
+them at `GET/PUT /api/settings/repositories`; every path is resolved as a git checkout
+before it is saved. `/new` then starts a merge-request review by choosing a saved
+repository, a source branch, a target branch, and either all commits on the source side of
+the merge base or an inclusive set of commits. reviewd records that boundary only: it
+never merges, checks out, or rewrites the target branch. `GET /api/repos/commits` returns
+the commits between the target and source branches for that picker.
 
 Limits: 2 MiB of diff text, 500 files, 20 000 lines per file, 1 MiB of content per file and
 64 MiB of content per snapshot, and untracked path listings at 8 MiB. `totals.truncated`

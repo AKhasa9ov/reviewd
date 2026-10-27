@@ -65,6 +65,9 @@ function scopeFromSnapshot(snapshot: Snapshot): DiffScope {
   if (scope.kind === 'commit') {
     return { kind: 'commit', sha: scope.headSha ?? scope.baseSha };
   }
+  if (scope.kind === 'commits') {
+    return { kind: 'commits', shas: scope.shas ?? [] };
+  }
   return {
     kind: 'range',
     baseRef: scope.baseSha,

@@ -53,6 +53,9 @@ Codes: `unauthorized`, `forbidden`, `not-found`, `validation`, `conflict`, `stal
 | POST   | `/api/auth/logout`                          | clears cookie                                                           |
 | GET    | `/api/config/public`                        | public URL, limits, default base                                        |
 | GET    | `/api/repos/branches?path=`                 | validates the repo and returns branch names                             |
+| GET    | `/api/repos/commits?path=&base=&head=`      | merge base and commits between two branches, oldest first               |
+| GET    | `/api/settings/repositories`                | saved repositories and default target branches                          |
+| PUT    | `/api/settings/repositories`                | validates and persists `{repositories:[{name,path,defaultTarget?}]}`    |
 | POST   | `/api/reviews`                              | `{repoRoot,title,scope,reviewer}`; returns `{review,url,warnings}`      |
 | GET    | `/api/reviews`                              | `status`, `limit`, `offset`                                             |
 | GET    | `/api/reviews/:id`                          | `{review,latestSnapshot,report}`                                        |

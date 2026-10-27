@@ -51,8 +51,13 @@ a:hover {
 }
 
 ::selection {
-  background: var(--cr-primary);
-  color: var(--cr-on-primary);
+  background: var(--cr-selection);
+  color: var(--cr-on-selection);
+}
+
+body.cr-selecting-lines {
+  cursor: row-resize;
+  user-select: none;
 }
 
 .cr-visually-hidden {
@@ -1967,7 +1972,7 @@ a:hover {
 
 .cr-tree-file {
   display: grid;
-  grid-template-columns: 16px minmax(0, 1fr) auto auto;
+  grid-template-columns: 16px minmax(0, 1fr) auto auto auto;
   gap: 6px;
   align-items: center;
   width: 100%;
@@ -2203,7 +2208,7 @@ a:hover {
 
 .cr-diff-gutter-head {
   display: grid;
-  grid-template-columns: 48px 48px minmax(0, 1fr);
+  grid-template-columns: 48px 48px 20px 22px minmax(0, 1fr);
   min-width: 560px;
   padding: 3px var(--cr-space-2);
   border-bottom: 1px solid var(--cr-border);
@@ -2239,7 +2244,7 @@ a:hover {
 .cr-diff-line {
   position: relative;
   display: grid;
-  grid-template-columns: 48px 48px 20px minmax(0, 1fr) auto auto;
+  grid-template-columns: 48px 48px 20px 22px minmax(0, 1fr) auto auto;
   align-items: stretch;
   min-width: 560px;
   min-height: 20px;
@@ -2268,11 +2273,73 @@ a:hover {
 }
 
 .cr-diff-line-selected {
-  box-shadow: inset 2px 0 0 var(--cr-primary);
+  box-shadow: inset 2px 0 0 var(--cr-selection-accent);
 }
 
 .cr-diff-line-range {
-  background: color-mix(in srgb, var(--cr-primary) 12%, var(--cr-bg));
+  background: var(--cr-selection-bg);
+}
+
+.cr-diff-line-drag {
+  background: var(--cr-selection-bg);
+  box-shadow: inset 2px 0 0 var(--cr-selection-accent);
+}
+
+.cr-diff-line-drag .cr-diff-no {
+  color: var(--cr-selection-accent);
+}
+
+.cr-diff-risk-cell {
+  display: grid;
+  place-items: center;
+  align-self: center;
+}
+
+.cr-diff-risk-pin {
+  position: relative;
+  display: grid;
+  width: 17px;
+  height: 17px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  background: var(--cr-surface);
+  color: var(--cr-text-muted);
+  font-family: var(--cr-font-ui);
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.cr-diff-risk-pin:hover,
+.cr-diff-risk-pin:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 1px;
+}
+
+.cr-diff-risk-pin.cr-risk-blocker {
+  background: var(--cr-danger);
+  color: var(--cr-on-danger);
+  border-color: var(--cr-danger);
+}
+
+.cr-diff-risk-pin.cr-risk-major {
+  background: var(--cr-warning);
+  color: var(--cr-bg);
+  border-color: var(--cr-warning);
+}
+
+.cr-diff-risk-pin.cr-risk-minor {
+  background: var(--cr-info);
+  color: var(--cr-bg);
+  border-color: var(--cr-info);
+}
+
+.cr-diff-risk-pin.cr-risk-nit {
+  background: var(--cr-surface-raised);
+  color: var(--cr-text-muted);
 }
 
 .cr-diff-line-commented .cr-diff-comment-count {
@@ -2544,6 +2611,11 @@ a:hover {
   background: var(--cr-surface);
 }
 
+.cr-finding:focus-visible {
+  outline: 2px solid var(--cr-focus);
+  outline-offset: 2px;
+}
+
 .cr-finding-head {
   display: flex;
   flex-wrap: wrap;
@@ -2770,6 +2842,36 @@ a:hover {
   display: flex;
   flex-wrap: wrap;
   gap: var(--cr-space-2);
+}
+
+.cr-tree-risk {
+  display: grid;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: var(--cr-radius-pill);
+  background: var(--cr-surface);
+  font-family: var(--cr-font-ui);
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.cr-tree-risk.cr-risk-blocker {
+  color: var(--cr-danger);
+}
+
+.cr-tree-risk.cr-risk-major {
+  color: var(--cr-warning);
+}
+
+.cr-tree-risk.cr-risk-minor {
+  color: var(--cr-info);
+}
+
+.cr-tree-risk.cr-risk-nit {
+  color: var(--cr-text-muted);
 }
 
 .cr-tree-comments {
@@ -3062,8 +3164,12 @@ a:hover {
     overflow-x: auto;
   }
 
+  .cr-diff-gutter-head {
+    grid-template-columns: 34px 34px 16px 22px minmax(0, 1fr);
+  }
+
   .cr-diff-line {
-    grid-template-columns: 34px 34px 16px minmax(0, 1fr) auto auto;
+    grid-template-columns: 34px 34px 16px 22px minmax(0, 1fr) auto auto;
     font-size: 11.5px;
   }
 
@@ -3098,6 +3204,12 @@ a:hover {
     display: inline-block;
     width: 44px;
     height: 44px;
+  }
+
+  .cr-diff-risk-pin::before {
+    position: absolute;
+    inset: -14px;
+    content: '';
   }
 
   .cr-round-pill,
@@ -3165,5 +3277,177 @@ a:hover {
   .cr-button[data-size='small'],
   .cr-link-button {
     min-height: 44px;
+  }
+}
+
+.cr-form-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--cr-space-3);
+}
+
+.cr-form-error-summary {
+  margin: 0;
+  padding: var(--cr-space-3);
+  border: 1px solid color-mix(in srgb, var(--cr-danger) 45%, var(--cr-border));
+  border-radius: var(--cr-radius-control);
+  background: color-mix(in srgb, var(--cr-danger) 9%, var(--cr-surface));
+  color: var(--cr-text);
+  font-size: var(--cr-text-control);
+}
+
+.cr-commits-fieldset {
+  display: grid;
+  gap: var(--cr-space-2);
+  min-width: 0;
+  margin: var(--cr-space-2) 0 0;
+  padding: var(--cr-space-3);
+  border: 1px solid var(--cr-border);
+  border-radius: var(--cr-radius-control);
+}
+
+.cr-radio {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--cr-space-2);
+  min-height: 44px;
+  padding: 6px 4px;
+  cursor: pointer;
+}
+
+.cr-radio input {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: var(--cr-primary);
+}
+
+.cr-radio > span {
+  display: grid;
+  gap: 2px;
+}
+
+.cr-commit-picker {
+  display: grid;
+  gap: var(--cr-space-2);
+  padding-top: var(--cr-space-2);
+}
+
+.cr-commit-list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cr-commit-option {
+  display: grid;
+  grid-template-columns: 18px 72px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--cr-space-2);
+  min-height: 44px;
+  padding: 4px 6px;
+  border-radius: var(--cr-radius-control);
+  cursor: pointer;
+}
+
+.cr-commit-option:hover {
+  background: color-mix(in srgb, var(--cr-text) 5%, transparent);
+}
+
+.cr-commit-option input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--cr-primary);
+}
+
+.cr-commit-sha {
+  color: var(--cr-text-muted);
+  font-family: var(--cr-font-mono);
+  font-size: 12px;
+}
+
+.cr-commit-subject {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cr-commit-author {
+  color: var(--cr-text-muted);
+  font-size: 12px;
+}
+
+.cr-settings-form {
+  display: grid;
+  gap: var(--cr-space-4);
+  max-width: 1040px;
+}
+
+.cr-settings-notice {
+  margin: 0;
+  padding: var(--cr-space-3);
+  border: 1px solid color-mix(in srgb, var(--cr-success) 45%, var(--cr-border));
+  border-radius: var(--cr-radius-control);
+  background: color-mix(in srgb, var(--cr-success) 8%, var(--cr-surface));
+  color: var(--cr-text);
+  font-size: var(--cr-text-control);
+}
+
+.cr-repo-list {
+  display: grid;
+  gap: var(--cr-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cr-repo-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--cr-space-3);
+  padding: var(--cr-space-4);
+  border: 1px solid var(--cr-border);
+  border-radius: var(--cr-radius-control);
+  background: var(--cr-surface);
+}
+
+.cr-repo-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 0.8fr);
+  gap: var(--cr-space-3);
+}
+
+@media (max-width: 860px) {
+  .cr-repo-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cr-repo-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cr-repo-row > .cr-button {
+    justify-self: start;
+  }
+}
+
+@media (max-width: 520px) {
+  .cr-commit-option {
+    grid-template-columns: 18px minmax(0, 1fr);
+  }
+
+  .cr-commit-sha {
+    display: none;
+  }
+
+  .cr-commit-author {
+    grid-column: 2;
   }
 }

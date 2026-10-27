@@ -49,6 +49,21 @@ describe('design tokens', () => {
       expect(ratio(token(theme, 'info'), token(theme, 'surface'))).toBeGreaterThanOrEqual(4.5);
     });
 
+    it(`${theme} keeps diff and selection surfaces readable`, () => {
+      for (const surface of [
+        'added-bg',
+        'removed-bg',
+        'selection-bg',
+        'word-added-bg',
+        'word-removed-bg',
+      ]) {
+        expect(ratio(token(theme, 'text'), token(theme, surface))).toBeGreaterThanOrEqual(4.5);
+      }
+      expect(ratio(token(theme, 'on-selection'), token(theme, 'selection'))).toBeGreaterThanOrEqual(
+        4.5,
+      );
+    });
+
     it(`${theme} control pairs meet WCAG non-text contrast`, () => {
       expect(ratio(token(theme, 'border'), token(theme, 'bg'))).toBeGreaterThanOrEqual(3);
       expect(ratio(token(theme, 'on-primary'), token(theme, 'primary'))).toBeGreaterThanOrEqual(

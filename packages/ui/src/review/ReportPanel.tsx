@@ -143,7 +143,7 @@ export function ReportPanel({ report, onJump, onJumpComment }: ReportPanelProps)
       ) : (
         <ol className="cr-findings" aria-label="Reviewer findings">
           {findings.map((finding) => (
-            <li className="cr-finding" key={finding.id}>
+            <li className="cr-finding" key={finding.id} id={`finding-${finding.id}`} tabIndex={-1}>
               <div className="cr-finding-head">
                 <Badge tone={severityTone(finding.severity)}>{finding.severity}</Badge>
                 <Badge tone="neutral">{finding.category}</Badge>

@@ -40,7 +40,8 @@ export interface ParsedFile {
 export type DiffScope =
   | { kind: 'range'; baseRef: string; headRef: string; twoDot?: boolean }
   | { kind: 'worktree'; baseRef: string }
-  | { kind: 'commit'; sha: string };
+  | { kind: 'commit'; sha: string }
+  | { kind: 'commits'; shas: string[] };
 
 export interface ResolvedScope {
   kind: DiffScope['kind'];
@@ -52,6 +53,8 @@ export interface ResolvedScope {
   label: string;
   worktreeDigest: string;
   worktreeDigestTruncated?: boolean;
+  /** Present for a selected-commit scope, oldest to newest. */
+  shas?: string[];
 }
 
 export interface FileDiff {

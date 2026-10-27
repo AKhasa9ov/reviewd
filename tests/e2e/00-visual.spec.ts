@@ -62,8 +62,8 @@ test('creates a review through /new and opens it', async ({ page }) => {
   await page.goto(`${fx.baseUrl}/new`);
   await page.getByLabel('Repository path').fill(fx.repoRoot);
   await page.getByLabel('Title').fill('E2E UI created review');
-  await page.getByLabel('Base ref').fill('base');
-  await page.getByLabel('Head ref').fill('feature');
+  await page.getByLabel('Target branch', { exact: true }).fill('base');
+  await page.getByLabel('Source branch', { exact: true }).fill('feature');
   await page.getByRole('button', { name: 'Create review' }).click();
 
   await expect(page).toHaveURL(new RegExp(`/review/rev_`));

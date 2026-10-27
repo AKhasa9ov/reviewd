@@ -6,7 +6,7 @@ import type { ServerResponse } from 'node:http';
 export const CSP =
   "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'";
 
-const SPA_ROUTES = new Set(['/', '/auth', '/new', '/health']);
+const SPA_ROUTES = new Set(['/', '/auth', '/new', '/health', '/settings']);
 const IMMUTABLE_CACHE = 'public, max-age=31536000, immutable';
 
 const MIME: Record<string, string> = {

@@ -80,6 +80,31 @@ test.describe('@a11y accessibility', () => {
     await dialog.getByRole('button', { name: 'Cancel' }).click();
   });
 
+  test('settings and new review have no serious axe findings in dark, light and mobile', async ({
+    page,
+  }) => {
+    const fx = await login(page);
+    await page.goto(`${fx.baseUrl}/settings`);
+    await expect(page.getByRole('heading', { name: 'Repositories', exact: true })).toBeVisible();
+    await expectNoSeriousAxe(page, 'settings dark');
+
+    await page.goto(`${fx.baseUrl}/new`);
+    await expect(page.getByRole('heading', { name: 'Set the boundary' })).toBeVisible();
+    await expectNoSeriousAxe(page, 'new review dark');
+
+    await page.getByTestId('theme-toggle').first().click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    await expectNoSeriousAxe(page, 'new review light');
+
+    await page.setViewportSize({ width: 320, height: 800 });
+    await page.goto(`${fx.baseUrl}/settings`);
+    await expect(page.getByRole('heading', { name: 'Repositories', exact: true })).toBeVisible();
+    await expectNoSeriousAxe(page, 'settings 320');
+    await page.goto(`${fx.baseUrl}/new`);
+    await expect(page.getByRole('heading', { name: 'Set the boundary' })).toBeVisible();
+    await expectNoSeriousAxe(page, 'new review 320');
+  });
+
   test('mobile 320 list and detail have no serious axe findings', async ({ page }) => {
     const fx = await login(page);
     await page.setViewportSize({ width: 320, height: 800 });

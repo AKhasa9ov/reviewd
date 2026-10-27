@@ -3,6 +3,7 @@ import type {
   Comment,
   CommentState,
   FileDiff,
+  Finding,
   ReviewView,
   Side,
   Snapshot,
@@ -499,6 +500,31 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
     );
   }
 
+  function onSelectRange(file: FileDiff, side: Side, start: number, end: number): void {
+    setActiveFile(file.path);
+    setActiveLine(end);
+    setSelection({
+      path: file.path,
+      side,
+      lineStart: Math.min(start, end),
+      lineEnd: Math.max(start, end),
+    });
+  }
+
+  function openFinding(finding: Finding): void {
+    setTab('report');
+    go(buildReviewLocation(id, { ...deep, round: selectedRound ?? undefined }, { tab: 'report' }), {
+      replace: false,
+    });
+    window.setTimeout(() => {
+      const node = document.getElementById(`finding-${finding.id}`);
+      if (typeof node?.focus === 'function') node.focus({ preventScroll: true });
+      if (typeof node?.scrollIntoView === 'function') {
+        node.scrollIntoView({ block: 'center' });
+      }
+    }, 0);
+  }
+
   function openComposer(file: FileDiff, side: Side, lineStart: number, lineEnd = lineStart): void {
     clearDraft(id);
     setDraftSeed(null);
@@ -857,6 +883,7 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
       round={selectedRound ?? 1}
       delta={effectiveDelta}
       changedPaths={changed}
+      findings={report !== null && report.round === selectedRound ? report.findings : []}
       activeFile={activeFile}
       activeLine={activeLine}
       activeCommentId={activeCommentId}
@@ -864,7 +891,9 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
       onDeltaChange={setDelta}
       onJump={jumpTo}
       onSelectLine={onSelectLine}
+      onSelectRange={onSelectRange}
       onOpenComposer={openComposer}
+      onOpenFinding={openFinding}
       renderComposer={(file, side, lineStart, lineEnd) => {
         const maxLine = fileLineCount(file, side);
         return (

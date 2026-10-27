@@ -7,6 +7,7 @@ import {
   PlusIcon,
   PulseIcon,
   ReviewsIcon,
+  SettingsIcon,
   SunIcon,
   ThemeProvider,
   Tooltip,
@@ -94,6 +95,17 @@ export function Shell({ children }: ShellProps): JSX.Element {
                 <PlusIcon />
               </span>
               <span className="cr-nav-text">New review</span>
+            </Link>
+            <Link
+              className="cr-nav-link"
+              to="/settings"
+              aria-current={navCurrent(routePath, '/settings')}
+              aria-label="Settings"
+            >
+              <span className="cr-nav-icon">
+                <SettingsIcon />
+              </span>
+              <span className="cr-nav-text">Settings</span>
             </Link>
             <Link
               className="cr-nav-link"

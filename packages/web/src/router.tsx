@@ -40,6 +40,7 @@ export type Route =
   | { name: 'new' }
   | { name: 'auth' }
   | { name: 'health' }
+  | { name: 'settings' }
   | { name: 'not-found'; path: string };
 
 export function parseRoute(location: string): Route {
@@ -49,6 +50,7 @@ export function parseRoute(location: string): Route {
   if (pathname === '/new') return { name: 'new' };
   if (pathname === '/auth') return { name: 'auth' };
   if (pathname === '/health') return { name: 'health' };
+  if (pathname === '/settings') return { name: 'settings' };
   const match = /^\/review\/([^/]+)$/.exec(pathname);
   if (match?.[1] !== undefined) {
     let id = match[1];

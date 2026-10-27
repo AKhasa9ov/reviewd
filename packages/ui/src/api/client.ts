@@ -7,6 +7,10 @@ import type {
   HealthResponse,
   LatestFeedbackView,
   Page,
+  RepoBranchesResponse,
+  RepoCommitsResponse,
+  RepositoriesResponse,
+  RepositorySetting,
   ReviewSummary,
   ReviewView,
   ServiceSnapshotView,
@@ -188,6 +192,27 @@ export class ApiClient {
     if (options.offset !== undefined) params.set('offset', String(options.offset));
     const query = params.toString();
     return this.request<Page<ReviewSummary>>(`/api/reviews${query === '' ? '' : `?${query}`}`);
+  }
+
+  async listRepositories(): Promise<RepositoriesResponse> {
+    return this.request<RepositoriesResponse>('/api/settings/repositories');
+  }
+
+  async saveRepositories(repositories: RepositorySetting[]): Promise<RepositoriesResponse> {
+    return this.request<RepositoriesResponse>('/api/settings/repositories', {
+      method: 'PUT',
+      body: { repositories },
+    });
+  }
+
+  async listBranches(path: string): Promise<RepoBranchesResponse> {
+    const query = new URLSearchParams({ path });
+    return this.request<RepoBranchesResponse>(`/api/repos/branches?${query.toString()}`);
+  }
+
+  async listCommits(path: string, base: string, head: string): Promise<RepoCommitsResponse> {
+    const query = new URLSearchParams({ path, base, head });
+    return this.request<RepoCommitsResponse>(`/api/repos/commits?${query.toString()}`);
   }
 
   async createReview(input: CreateReviewRequest): Promise<CreateReviewResponse> {

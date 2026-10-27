@@ -77,6 +77,7 @@ describe('review detail', () => {
       'aria-pressed',
       'true',
     );
+    expect(screen.queryByLabelText(/reviewer risk/)).not.toBeInTheDocument();
   });
 
   it('posts a range comment from the diff composer', async () => {
@@ -110,6 +111,42 @@ describe('review detail', () => {
       }),
     );
     expect(await screen.findByText('Comment posted')).toBeInTheDocument();
+  });
+
+  it('keeps keyboard focus on a clicked diff line', async () => {
+    const user = userEvent.setup();
+    go('/review/rev_01?round=2&tab=files#file=src%2Fauth.ts&line=11');
+    render(<App client={fakeClient()} />);
+    await screen.findByRole('heading', { name: 'Billing retry semantics' });
+    const row = await screen.findByRole('row', { name: /line 11, added:/ });
+
+    await user.click(row);
+    expect(row).toHaveFocus();
+  });
+
+  it('shows reviewer risks in the file tree and on their exact diff lines', async () => {
+    const user = userEvent.setup();
+    go('/review/rev_01?round=2&tab=files#file=src%2Fauth.ts&line=11');
+    render(<App client={fakeClient()} />);
+    await screen.findByRole('heading', { name: 'Billing retry semantics' });
+
+    const treeRisk = await screen.findByLabelText('1 reviewer risk, highest major');
+    expect(treeRisk).toBeInTheDocument();
+    expect(treeRisk).toHaveClass('cr-tree-risk', 'cr-risk-major');
+
+    const pins = screen.getAllByRole('button', {
+      name: 'Open major finding Retry budget is hard-coded',
+    });
+    expect(pins).toHaveLength(2);
+    expect(screen.getByRole('row', { name: /line 11, added:/ })).toContainElement(pins[0]!);
+    expect(screen.getByRole('row', { name: /line 12, added:/ })).toContainElement(pins[1]!);
+
+    await user.click(pins[0]!);
+    expect(screen.getByRole('tab', { name: /Report/ })).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByText('Retry budget is hard-coded')).toBeInTheDocument();
+    expect(window.location.search).toContain('tab=report');
+    const finding = document.getElementById('finding-f1');
+    await waitFor(() => expect(finding).toHaveFocus());
   });
 
   it('posts a suggestion with the selected replacement', async () => {

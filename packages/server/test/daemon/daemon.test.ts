@@ -849,6 +849,132 @@ describe('review snapshot, comment state and refresh', () => {
   });
 });
 
+describe('selected commit reviews', () => {
+  it('creates a commit-set review with the oldest parent as its base', async () => {
+    const { daemonUrl } = await running();
+    const checkout = await repo();
+    const first = await checkout.git('rev-parse', 'HEAD');
+    const firstParent = await checkout.git('rev-parse', `${first}^`);
+    await checkout.write('src/a.ts', 'one\ntwo\nthree\n');
+    const second = await checkout.commit('follow-up');
+
+    const created = await fetch(`${daemonUrl}/api/reviews`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({
+        repoRoot: checkout.root,
+        title: 'Selected commits',
+        scope: { kind: 'commits', shas: [first, second] },
+        reviewer: { backend: 'none' },
+      }),
+    });
+    expect(created.status).toBe(201);
+    const body = await read(created);
+    const reviewId = body.review.review.id;
+    const snapshot = await read(
+      await fetch(`${daemonUrl}/api/reviews/${reviewId}/snapshot?round=1`, {
+        headers: headers(),
+      }),
+    );
+    expect(snapshot.snapshot.scope).toMatchObject({
+      kind: 'commits',
+      shas: [first, second],
+      baseSha: firstParent,
+      headSha: second,
+    });
+    expect(snapshot.snapshot.files[0].hunks[0].lines.map((line: any) => line.text)).toEqual([
+      'one',
+      'two',
+      'three',
+    ]);
+  });
+});
+
+describe('repository settings', () => {
+  it('persists configured repositories and lists merge-request commits oldest first', async () => {
+    const { daemonUrl } = await running();
+    const checkout = await repo();
+    await checkout.write('src/a.ts', 'one\ntwo\nthree\n');
+    await checkout.commit('follow-up');
+
+    const empty = await fetch(`${daemonUrl}/api/settings/repositories`, { headers: headers() });
+    expect(empty.status).toBe(200);
+    expect((await read(empty)).repositories).toEqual([]);
+
+    const saved = await fetch(`${daemonUrl}/api/settings/repositories`, {
+      method: 'PUT',
+      headers: headers(),
+      body: JSON.stringify({
+        repositories: [
+          {
+            name: 'Checkout',
+            path: checkout.root,
+            defaultTarget: 'main',
+          },
+        ],
+      }),
+    });
+    expect(saved.status).toBe(200);
+    const settings = await read(saved);
+    expect(settings.repositories).toHaveLength(1);
+    expect(settings.repositories[0]).toMatchObject({
+      name: 'Checkout',
+      defaultTarget: 'main',
+    });
+
+    const persisted = await read(
+      await fetch(`${daemonUrl}/api/settings/repositories`, { headers: headers() }),
+    );
+    expect(persisted.repositories[0].path).toBe(checkout.root);
+
+    const commits = await fetch(
+      `${daemonUrl}/api/repos/commits?path=${encodeURIComponent(checkout.root)}&base=main&head=feature`,
+      { headers: headers() },
+    );
+    expect(commits.status).toBe(200);
+    const log = await read(commits);
+    expect(log.mergeBase).toHaveLength(40);
+    expect(log.commits).toHaveLength(2);
+    expect(log.commits.map((commit: any) => commit.subject)).toEqual(['feature', 'follow-up']);
+
+    const optionRef = await fetch(
+      `${daemonUrl}/api/repos/commits?path=${encodeURIComponent(checkout.root)}&base=${encodeURIComponent('--output=/tmp/code-review-write')}&head=feature`,
+      { headers: headers() },
+    );
+    expect(optionRef.status).toBe(400);
+
+    await fetch(`${daemonUrl}/api/settings/repositories`, {
+      method: 'PUT',
+      headers: headers(),
+      body: JSON.stringify({ repositories: [{ name: 'Broken', path: '/definitely/missing' }] }),
+    }).then(async (response) => expect(response.status).toBe(400));
+
+    await fetch(`${daemonUrl}/api/settings/repositories`, {
+      method: 'PUT',
+      headers: headers(),
+      body: JSON.stringify({
+        repositories: [{ name: 'Checkout', path: checkout.root, defaultTarget: 'main' }],
+      }),
+    });
+  });
+
+  it('keeps repository settings across a daemon restart', async () => {
+    const first = await running();
+    const checkout = await repo();
+    await fetch(`${first.daemonUrl}/api/settings/repositories`, {
+      method: 'PUT',
+      headers: headers(),
+      body: JSON.stringify({ repositories: [{ name: 'Checkout', path: checkout.root }] }),
+    });
+    await first.daemon.close();
+    const restarted = await startWithStore(first.storeDir);
+    const settings = await read(
+      await fetch(`${restarted.daemonUrl}/api/settings/repositories`, { headers: headers() }),
+    );
+    expect(settings.repositories.map((item: any) => item.path)).toEqual([checkout.root]);
+  });
+});
+
 describe('delivery failure', () => {
   it('records a failed delivery and removes it from pending', async () => {
     const { daemonUrl } = await running();

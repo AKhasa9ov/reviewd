@@ -40,22 +40,23 @@ export async function resolveScope(input: ResolveScopeInput): Promise<ResolvedSc
   const signal = input.signal;
 
   if (input.scope.kind === 'range') {
-    const head = await runGit(root, ['rev-parse', '--verify', `${input.scope.headRef}^{commit}`], {
-      signal,
-    });
-    const headSha = head.stdout.trim();
-    const base =
+    const headSha = await resolveCommitRef(root, input.scope.headRef, signal);
+    const baseSha =
       input.scope.twoDot === true
-        ? await runGit(root, ['rev-parse', '--verify', `${input.scope.baseRef}^{commit}`], {
-            signal,
-          })
-        : await runGit(root, ['merge-base', input.scope.baseRef, input.scope.headRef], { signal });
+        ? await resolveCommitRef(root, input.scope.baseRef, signal)
+        : (
+            await runGit(root, [
+              'merge-base',
+              await resolveCommitRef(root, input.scope.baseRef, signal),
+              headSha,
+            ])
+          ).stdout.trim();
     return {
       kind: 'range',
       repoRoot: root,
       baseRef: input.scope.baseRef,
       headRef: input.scope.headRef,
-      baseSha: base.stdout.trim(),
+      baseSha,
       headSha,
       label: `${input.scope.baseRef}${input.scope.twoDot === true ? '..' : '...'}${input.scope.headRef}`,
       worktreeDigest: headSha,
@@ -63,10 +64,7 @@ export async function resolveScope(input: ResolveScopeInput): Promise<ResolvedSc
   }
 
   if (input.scope.kind === 'worktree') {
-    const base = await runGit(root, ['rev-parse', '--verify', `${input.scope.baseRef}^{commit}`], {
-      signal,
-    });
-    const baseSha = base.stdout.trim();
+    const baseSha = await resolveCommitRef(root, input.scope.baseRef, signal);
     const digest = await worktreeDigestState(root, baseSha, signal);
     const resolved: ResolvedScope = {
       kind: 'worktree',
@@ -81,34 +79,103 @@ export async function resolveScope(input: ResolveScopeInput): Promise<ResolvedSc
     return resolved;
   }
 
-  const head = await runGit(root, ['rev-parse', '--verify', `${input.scope.sha}^{commit}`], {
-    signal,
-  });
-  const headSha = head.stdout.trim();
-  const parentSha = await firstParentSha(root, headSha, signal);
-  let baseSha = EMPTY_TREE_SHA;
-  if (parentSha !== null) {
-    const available = await runGit(root, ['cat-file', '-e', `${parentSha}^{commit}`], {
-      allowFailure: true,
-      signal,
-    });
-    if (available.code !== 0) {
+  if (input.scope.kind === 'commits') {
+    const shas: unknown = input.scope.shas;
+    if (!Array.isArray(shas) || shas.length === 0) {
+      throw new GitError('git-failed', 'a commit scope needs at least one commit');
+    }
+    if (shas.length > MAX_SELECTED_COMMITS) {
       throw new GitError(
         'git-failed',
-        `commit ${headSha} has a parent that is not available; fetch/unshallow the repository`,
+        `a commit scope accepts at most ${MAX_SELECTED_COMMITS} commits`,
       );
     }
-    baseSha = parentSha;
+    const resolved: string[] = [];
+    const seen = new Set<string>();
+    for (const sha of shas) {
+      if (typeof sha !== 'string' || sha.trim() === '') {
+        throw new GitError('git-failed', 'every selected commit must be a commit ref');
+      }
+      const resolvedSha = await resolveCommitRef(root, sha.trim(), signal);
+      if (seen.has(resolvedSha)) continue;
+      seen.add(resolvedSha);
+      resolved.push(resolvedSha);
+    }
+    for (let index = 1; index < resolved.length; index += 1) {
+      const previous = resolved[index - 1] ?? '';
+      const current = resolved[index] ?? '';
+      const ancestor = await runGit(root, ['merge-base', '--is-ancestor', previous, current], {
+        allowFailure: true,
+        signal,
+      });
+      if (ancestor.code !== 0) {
+        throw new GitError(
+          'git-failed',
+          'selected commits must be ordered oldest to newest along one ancestry path',
+        );
+      }
+    }
+    const oldest = resolved[0] ?? '';
+    const headSha = resolved[resolved.length - 1] ?? oldest;
+    const baseSha = await resolveParentBase(root, oldest, signal);
+    return {
+      kind: 'commits',
+      repoRoot: root,
+      baseSha,
+      headSha,
+      label:
+        resolved.length === 1
+          ? `commit ${headSha.slice(0, 8)}`
+          : `${resolved.length} commits: ${oldest.slice(0, 8)}..${headSha.slice(0, 8)}`,
+      worktreeDigest: headSha,
+      shas: resolved,
+    };
   }
 
+  const headSha = await resolveCommitRef(root, input.scope.sha, signal);
   return {
     kind: 'commit',
     repoRoot: root,
-    baseSha,
+    baseSha: await resolveParentBase(root, headSha, signal),
     headSha,
     label: headSha.slice(0, 12),
     worktreeDigest: headSha,
   };
+}
+
+const MAX_SELECTED_COMMITS = 200;
+
+async function resolveCommitRef(
+  repoRoot: string,
+  ref: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  const result = await runGit(
+    repoRoot,
+    ['rev-parse', '--verify', '--end-of-options', `${ref}^{commit}`],
+    { signal },
+  );
+  return result.stdout.trim();
+}
+
+async function resolveParentBase(
+  repoRoot: string,
+  headSha: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  const parentSha = await firstParentSha(repoRoot, headSha, signal);
+  if (parentSha === null) return EMPTY_TREE_SHA;
+  const available = await runGit(repoRoot, ['cat-file', '-e', `${parentSha}^{commit}`], {
+    allowFailure: true,
+    signal,
+  });
+  if (available.code !== 0) {
+    throw new GitError(
+      'git-failed',
+      `commit ${headSha} has a parent that is not available; fetch/unshallow the repository`,
+    );
+  }
+  return parentSha;
 }
 
 async function firstParentSha(

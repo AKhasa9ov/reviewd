@@ -30,6 +30,11 @@ import { parsePositiveInt, readForm, readJson, requestId, sendJson } from './htt
 import type { DeliveryQueue } from './deliveries.js';
 import type { JobQueue } from './jobs.js';
 import { buildReviewPrompt } from './prompt.js';
+import {
+  readRepositorySettings,
+  writeRepositorySettings,
+  type RepositorySetting,
+} from './settings.js';
 import { serveStatic } from './static.js';
 import { openSse } from './sse.js';
 import type { EventHub } from './sse.js';
@@ -779,6 +784,105 @@ export async function handle(
     return;
   }
 
+  if (path === '/api/settings/repositories' && method === 'GET') {
+    sendJson(res, 200, await readRepositorySettings(ctx.store.root));
+    return;
+  }
+
+  if (path === '/api/settings/repositories' && method === 'PUT') {
+    const body = await readJson(req, ctx.config.maxBodyBytes);
+    const list = body.repositories;
+    if (!Array.isArray(list)) {
+      throw new ApiError('validation', 'repositories must be an array');
+    }
+    if (list.length > 100) {
+      throw new ApiError('validation', 'at most 100 repositories can be configured');
+    }
+    const seen = new Set<string>();
+    const repositories: RepositorySetting[] = [];
+    for (const [index, raw] of list.entries()) {
+      const item = object(raw, `repositories[${index}]`);
+      const name = str(item.name, `repositories[${index}].name`).trim();
+      const candidate = str(item.path, `repositories[${index}].path`).trim();
+      if (name.length > 120) {
+        throw new ApiError('validation', `repositories[${index}].name is too long`);
+      }
+      if (candidate.length > 4096) {
+        throw new ApiError('validation', `repositories[${index}].path is too long`);
+      }
+      const root = await resolveRepoRoot(candidate);
+      if (seen.has(root)) {
+        throw new ApiError('validation', `repository ${root} is configured twice`);
+      }
+      seen.add(root);
+      const defaultTarget =
+        item.defaultTarget === undefined
+          ? undefined
+          : str(item.defaultTarget, `repositories[${index}].defaultTarget`).trim();
+      if (defaultTarget !== undefined) {
+        assertGitRef(defaultTarget, `repositories[${index}].defaultTarget`);
+        const check = await runGit(
+          root,
+          ['rev-parse', '--verify', '--end-of-options', `${defaultTarget}^{commit}`],
+          { allowFailure: true },
+        );
+        if (check.code !== 0) {
+          throw new ApiError(
+            'validation',
+            `default target ${defaultTarget} is not a commit in ${root}`,
+          );
+        }
+      }
+      repositories.push({
+        name,
+        path: root,
+        ...(defaultTarget === undefined ? {} : { defaultTarget }),
+      });
+    }
+    await writeRepositorySettings(ctx.store.root, { repositories });
+    sendJson(res, 200, { repositories });
+    return;
+  }
+
+  if (path === '/api/repos/commits' && method === 'GET') {
+    const repoPath = url.searchParams.get('path');
+    const base = url.searchParams.get('base');
+    const head = url.searchParams.get('head');
+    if (repoPath === null) throw new ApiError('validation', 'path is required');
+    if (base === null) throw new ApiError('validation', 'base is required');
+    if (head === null) throw new ApiError('validation', 'head is required');
+    const root = await resolveRepoRoot(repoPath);
+    const baseRef = assertGitRef(base, 'base');
+    const headRef = assertGitRef(head, 'head');
+    const baseSha = await resolveCommitRef(root, baseRef);
+    const headSha = await resolveCommitRef(root, headRef);
+    const mergeBase = await runGit(root, ['merge-base', baseSha, headSha]);
+    const log = await runGit(root, [
+      'log',
+      '--topo-order',
+      '--reverse',
+      '--format=%H%x1f%h%x1f%an%x1f%aI%x1f%s',
+      `${baseSha}..${headSha}`,
+    ]);
+    const commits = log.stdout
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line !== '')
+      .map((line) => {
+        const [sha = '', shortSha = '', author = '', date = '', ...subject] = line.split('\x1f');
+        return { sha, shortSha, author, date, subject: subject.join('\x1f') };
+      });
+    sendJson(res, 200, {
+      repoRoot: root,
+      baseRef,
+      headRef,
+      mergeBase: mergeBase.stdout.trim(),
+      headSha,
+      commits,
+    });
+    return;
+  }
+
   if (path === '/api/repos/branches' && method === 'GET') {
     const repoPath = url.searchParams.get('path');
     if (repoPath === null) throw new ApiError('validation', 'path is required');
@@ -802,4 +906,22 @@ export async function handle(
   }
 
   throw new ApiError('not-found', `unknown route: ${method} ${path}`);
+}
+
+function assertGitRef(value: string, label: string): string {
+  const ref = value.trim();
+  if (ref === '' || ref.startsWith('-') || ref.length > 1024 || ref.includes('\0')) {
+    throw new ApiError('validation', `${label} must be a git ref or commit`);
+  }
+  return ref;
+}
+
+async function resolveCommitRef(root: string, ref: string): Promise<string> {
+  const result = await runGit(root, [
+    'rev-parse',
+    '--verify',
+    '--end-of-options',
+    `${ref}^{commit}`,
+  ]);
+  return result.stdout.trim();
 }

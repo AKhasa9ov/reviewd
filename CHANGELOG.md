@@ -13,9 +13,13 @@ versions may contain breaking changes.
 - Pending deliveries survive a daemon restart (atomic `deliveries.json`), and SSE/long-poll replay stored events with a daemon-wide cursor.
 - DSH proxy requires DSH authentication, forwards attribution/idempotency headers, and the reviewer is restricted to read-only tools with a bounded unified diff and correct worktree.
 - Health now probes store writability and git availability; command reviewers get a minimal environment and bounded output; reviewed repo mounts default to read-only.
+- Diff lines use tinted, contrast-checked surfaces; selection is blue, and reviewer findings appear as severity pins on their exact lines and as per-file risk badges.
+- Dragging across diff lines selects a comment range without triggering native text selection or scrolling the page mid-drag.
 
 ### Added
 
+- Repository settings at `/settings` with daemon-persisted, path-validated checkouts and default target branches (`/api/settings/repositories`).
+- Merge-request review setup: source and target branch pickers, all merge-base commits or an inclusive commit set (`commits` scope), plus `GET /api/repos/commits`.
 - Docker multi-stage image and Compose stack: Node 22 slim, non-root, read-only root,
   `/data` volume, healthcheck and graceful SIGTERM.
 - Operations guide for TLS/reverse proxy, token rotation, backup/restore, retention,

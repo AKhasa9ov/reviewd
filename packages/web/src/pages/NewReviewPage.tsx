@@ -1,17 +1,20 @@
-import { useState } from 'react';
-import type { DiffScope, ApiClient } from '@dsh-code-review/ui';
+import { useEffect, useState } from 'react';
+import type { ApiClient, DiffScope, RepoCommit, RepositorySetting } from '@dsh-code-review/ui';
 import { Button, Select } from '@dsh-code-review/ui';
 import { ErrorPanel, PageHeader } from '../components.js';
-import { navigate } from '../router.js';
+import { Link, navigate } from '../router.js';
 
-type ScopeKind = DiffScope['kind'];
+type ScopeKind = 'branch' | 'worktree' | 'commit';
+type CommitsMode = 'all' | 'selected';
 
 interface FormState {
   repoRoot: string;
   title: string;
   kind: ScopeKind;
+  targetRef: string;
+  sourceRef: string;
+  commitsMode: CommitsMode;
   baseRef: string;
-  headRef: string;
   sha: string;
   reviewer: 'none' | 'worker';
 }
@@ -19,49 +22,85 @@ interface FormState {
 interface FormErrors {
   repoRoot?: string;
   title?: string;
+  targetRef?: string;
+  sourceRef?: string;
+  commits?: string;
   baseRef?: string;
-  headRef?: string;
   sha?: string;
 }
 
 const initialForm: FormState = {
   repoRoot: '',
   title: '',
-  kind: 'range',
+  kind: 'branch',
+  targetRef: 'main',
+  sourceRef: '',
+  commitsMode: 'all',
   baseRef: 'main',
-  headRef: '',
   sha: '',
   reviewer: 'none',
 };
 
-function buildScope(form: FormState): DiffScope {
+function selectedRange(commits: readonly RepoCommit[], selected: readonly string[]): string[] {
+  const selectedSet = new Set(selected);
+  const indexes = commits
+    .map((commit, index) => (selectedSet.has(commit.sha) ? index : -1))
+    .filter((index) => index >= 0);
+  if (indexes.length === 0) return [];
+  const oldest = Math.min(...indexes);
+  const newest = Math.max(...indexes);
+  return commits.slice(oldest, newest + 1).map((commit) => commit.sha);
+}
+
+function validate(
+  form: FormState,
+  commits: readonly RepoCommit[],
+  selected: readonly string[],
+): FormErrors {
+  const errors: FormErrors = {};
+  if (form.repoRoot.trim() === '') errors.repoRoot = 'Enter the repository path on the daemon.';
+  if (form.title.trim() === '') errors.title = 'Give this review a title.';
+  if (form.kind === 'branch') {
+    if (form.targetRef.trim() === '') {
+      errors.targetRef = 'Choose the branch this merge request is merged into.';
+    }
+    if (form.sourceRef.trim() === '') {
+      errors.sourceRef = 'Choose the branch that contains the changes.';
+    } else if (form.sourceRef.trim() === form.targetRef.trim()) {
+      errors.sourceRef = 'The source and target branch must be different.';
+    }
+    if (form.commitsMode === 'selected' && selectedRange(commits, selected).length === 0) {
+      errors.commits = 'Select at least one commit.';
+    }
+  }
+  if (form.kind === 'worktree' && form.baseRef.trim() === '') {
+    errors.baseRef = 'A base ref is required.';
+  }
+  if (form.kind === 'commit' && form.sha.trim() === '') {
+    errors.sha = 'A commit SHA is required.';
+  }
+  return errors;
+}
+
+function buildScope(
+  form: FormState,
+  commits: readonly RepoCommit[],
+  selected: readonly string[],
+): DiffScope {
   if (form.kind === 'worktree') {
     return { kind: 'worktree', baseRef: form.baseRef.trim() };
   }
   if (form.kind === 'commit') {
     return { kind: 'commit', sha: form.sha.trim() };
   }
+  if (form.commitsMode === 'selected') {
+    return { kind: 'commits', shas: selectedRange(commits, selected) };
+  }
   return {
     kind: 'range',
-    baseRef: form.baseRef.trim(),
-    headRef: form.headRef.trim(),
+    baseRef: form.targetRef.trim(),
+    headRef: form.sourceRef.trim(),
   };
-}
-
-function validate(form: FormState): FormErrors {
-  const errors: FormErrors = {};
-  if (form.repoRoot.trim() === '') errors.repoRoot = 'Enter the repository path on the daemon.';
-  if (form.title.trim() === '') errors.title = 'Give this review a title.';
-  if (form.kind !== 'commit' && form.baseRef.trim() === '') {
-    errors.baseRef = 'A base ref is required.';
-  }
-  if (form.kind === 'range' && form.headRef.trim() === '') {
-    errors.headRef = 'A head ref is required for a range review.';
-  }
-  if (form.kind === 'commit' && form.sha.trim() === '') {
-    errors.sha = 'A commit SHA is required.';
-  }
-  return errors;
 }
 
 export interface NewReviewPageProps {
@@ -71,17 +110,174 @@ export interface NewReviewPageProps {
 
 export function NewReviewPage({ client, onCreated }: NewReviewPageProps): JSX.Element {
   const [form, setForm] = useState<FormState>(initialForm);
+  const [repositories, setRepositories] = useState<RepositorySetting[]>([]);
+  const [branches, setBranches] = useState<string[]>([]);
+  const [branchesLoading, setBranchesLoading] = useState(false);
+  const [branchesError, setBranchesError] = useState<string | null>(null);
+  const [commits, setCommits] = useState<RepoCommit[]>([]);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [commitsLoading, setCommitsLoading] = useState(false);
+  const [commitsError, setCommitsError] = useState<string | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  useEffect(() => {
+    let active = true;
+    void client
+      .listRepositories()
+      .then((result) => {
+        if (!active) return;
+        setRepositories(result.repositories);
+        const first = result.repositories[0];
+        if (first !== undefined) {
+          setForm((current) =>
+            current.repoRoot === ''
+              ? {
+                  ...current,
+                  repoRoot: first.path,
+                  targetRef: first.defaultTarget ?? current.targetRef,
+                }
+              : current,
+          );
+        }
+      })
+      .catch(() => {
+        if (active) setRepositories([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [client]);
+
+  useEffect(() => {
+    const root = form.repoRoot.trim();
+    if (root === '') {
+      setBranches([]);
+      setBranchesError(null);
+      return;
+    }
+    let active = true;
+    setBranchesLoading(true);
+    setBranchesError(null);
+    void client
+      .listBranches(root)
+      .then((result) => {
+        if (!active) return;
+        setBranches(result.branches);
+        setForm((current) => {
+          if (current.repoRoot !== root) return current;
+          const configured = repositories.find((repository) => repository.path === root);
+          const preferred = configured?.defaultTarget;
+          const target =
+            current.targetRef !== '' && result.branches.includes(current.targetRef)
+              ? current.targetRef
+              : preferred !== undefined && result.branches.includes(preferred)
+                ? preferred
+                : result.branches.includes('main')
+                  ? 'main'
+                  : (result.branches[0] ?? current.targetRef);
+          return { ...current, targetRef: target };
+        });
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setBranches([]);
+        setBranchesError(
+          error instanceof Error ? error.message : 'Could not list branches in this repository.',
+        );
+      })
+      .finally(() => {
+        if (active) setBranchesLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [client, form.repoRoot, repositories]);
+
+  useEffect(() => {
+    if (
+      form.kind !== 'branch' ||
+      form.commitsMode !== 'selected' ||
+      form.repoRoot.trim() === '' ||
+      form.targetRef.trim() === '' ||
+      form.sourceRef.trim() === '' ||
+      form.sourceRef.trim() === form.targetRef.trim()
+    ) {
+      setCommits([]);
+      setSelected([]);
+      setCommitsError(null);
+      return;
+    }
+    let active = true;
+    setCommitsLoading(true);
+    setCommitsError(null);
+    setSelected([]);
+    void client
+      .listCommits(form.repoRoot.trim(), form.targetRef.trim(), form.sourceRef.trim())
+      .then((result) => {
+        if (!active) return;
+        setCommits(result.commits);
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setCommits([]);
+        setCommitsError(
+          error instanceof Error ? error.message : 'Could not list commits for this merge request.',
+        );
+      })
+      .finally(() => {
+        if (active) setCommitsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [client, form.kind, form.commitsMode, form.repoRoot, form.targetRef, form.sourceRef]);
+
   function update<K extends keyof FormState>(key: K, value: FormState[K]): void {
     setForm((current) => ({ ...current, [key]: value }));
+    setErrors((current) => {
+      const next = { ...current };
+      if (key === 'kind') {
+        delete next.targetRef;
+        delete next.sourceRef;
+        delete next.commits;
+        delete next.baseRef;
+        delete next.sha;
+      } else if (key === 'commitsMode') {
+        delete next.commits;
+      } else if (
+        key === 'repoRoot' ||
+        key === 'title' ||
+        key === 'sourceRef' ||
+        key === 'targetRef' ||
+        key === 'baseRef' ||
+        key === 'sha'
+      ) {
+        delete next[key as keyof FormErrors];
+        if (key === 'repoRoot' || key === 'sourceRef' || key === 'targetRef') {
+          delete next.commits;
+        }
+      }
+      return next;
+    });
+    setSubmitError(null);
+  }
+
+  function toggleCommit(sha: string): void {
+    setSelected((current) =>
+      current.includes(sha) ? current.filter((value) => value !== sha) : [...current, sha],
+    );
+    setErrors((current) => {
+      const next = { ...current };
+      delete next.commits;
+      return next;
+    });
   }
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
-    const nextErrors = validate(form);
+    const nextErrors = validate(form, commits, selected);
     setErrors(nextErrors);
     setSubmitError(null);
     if (Object.keys(nextErrors).length > 0) return;
@@ -91,7 +287,7 @@ export function NewReviewPage({ client, onCreated }: NewReviewPageProps): JSX.El
       const result = await client.createReview({
         repoRoot: form.repoRoot.trim(),
         title: form.title.trim(),
-        scope: buildScope(form),
+        scope: buildScope(form, commits, selected),
         reviewer: { backend: form.reviewer },
       });
       const id = result.review.review.id;
@@ -104,44 +300,103 @@ export function NewReviewPage({ client, onCreated }: NewReviewPageProps): JSX.El
     }
   }
 
+  const hasErrors = Object.keys(errors).length > 0;
+  const chosenShas = selectedRange(commits, selected);
+
   return (
     <>
       <PageHeader
         eyebrow="New review"
         title="Set the boundary"
-        description="Point reviewd at a repository and the exact range you want a human and an agent to inspect."
+        description="Choose a repository, the branch that carries the changes, and the branch it should merge into. reviewd records the merge-request boundary; it never merges or rewrites a branch."
       />
       <form className="cr-form" onSubmit={(event) => void onSubmit(event)} noValidate>
+        <datalist id="branch-options">
+          {branches.map((branch) => (
+            <option key={branch} value={branch} />
+          ))}
+        </datalist>
         {submitError !== null ? (
           <ErrorPanel title="Could not create the review" message={submitError} />
+        ) : null}
+        {hasErrors ? (
+          <p className="cr-form-error-summary" role="alert">
+            Check the highlighted fields before creating the review.
+          </p>
         ) : null}
 
         <div className="cr-form-card">
           <div className="cr-form-section">
-            <h2 className="cr-form-section-title">Repository</h2>
-            <p className="cr-form-section-copy">
-              The path is resolved on the daemon, not in this browser.
-            </p>
-            <label className="cr-label" htmlFor="repo-root">
-              Repository path
-            </label>
-            <input
-              id="repo-root"
-              className="cr-input"
-              value={form.repoRoot}
-              onChange={(event) => update('repoRoot', event.target.value)}
-              placeholder="/srv/repos/example"
-              autoComplete="off"
-              spellCheck={false}
-              aria-invalid={errors.repoRoot === undefined ? undefined : true}
-              aria-describedby={errors.repoRoot === undefined ? undefined : 'repo-root-error'}
-              required
-            />
-            {errors.repoRoot !== undefined ? (
-              <span className="cr-error" id="repo-root-error" role="alert">
-                {errors.repoRoot}
-              </span>
-            ) : null}
+            <div className="cr-form-section-head">
+              <div>
+                <h2 className="cr-form-section-title">Repository</h2>
+                <p className="cr-form-section-copy">
+                  Paths are resolved on the daemon. Manage saved repositories in Settings.
+                </p>
+              </div>
+              <Link className="cr-link-button" to="/settings">
+                Manage repositories
+              </Link>
+            </div>
+            <div className="cr-form-grid">
+              <div className="cr-field">
+                <Select
+                  label="Saved repository"
+                  id="saved-repository"
+                  value={
+                    repositories.some((repository) => repository.path === form.repoRoot)
+                      ? form.repoRoot
+                      : ''
+                  }
+                  onChange={(event) => {
+                    const repository = repositories.find(
+                      (item) => item.path === event.target.value,
+                    );
+                    setForm((current) => ({
+                      ...current,
+                      repoRoot: event.target.value,
+                      ...(repository?.defaultTarget === undefined
+                        ? {}
+                        : { targetRef: repository.defaultTarget }),
+                    }));
+                    setErrors((current) => {
+                      const next = { ...current };
+                      delete next.repoRoot;
+                      return next;
+                    });
+                  }}
+                  options={[
+                    { value: '', label: 'Choose a saved repository' },
+                    ...repositories.map((repository) => ({
+                      value: repository.path,
+                      label: repository.name,
+                    })),
+                  ]}
+                />
+              </div>
+              <div className="cr-field">
+                <label className="cr-label" htmlFor="repo-root">
+                  Repository path
+                </label>
+                <input
+                  id="repo-root"
+                  className="cr-input cr-mono"
+                  value={form.repoRoot}
+                  onChange={(event) => update('repoRoot', event.target.value)}
+                  placeholder="/srv/repos/example"
+                  autoComplete="off"
+                  spellCheck={false}
+                  aria-invalid={errors.repoRoot === undefined ? undefined : true}
+                  aria-describedby={errors.repoRoot === undefined ? undefined : 'repo-root-error'}
+                  required
+                />
+                {errors.repoRoot !== undefined ? (
+                  <span className="cr-error" id="repo-root-error" role="alert">
+                    {errors.repoRoot}
+                  </span>
+                ) : null}
+              </div>
+            </div>
           </div>
 
           <div className="cr-form-section">
@@ -192,7 +447,7 @@ export function NewReviewPage({ client, onCreated }: NewReviewPageProps): JSX.El
                   value={form.kind}
                   onChange={(event) => update('kind', event.target.value as ScopeKind)}
                   options={[
-                    { value: 'range', label: 'Branch range' },
+                    { value: 'branch', label: 'Merge request (branches)' },
                     { value: 'worktree', label: 'Working tree' },
                     { value: 'commit', label: 'Single commit' },
                   ]}
@@ -203,55 +458,166 @@ export function NewReviewPage({ client, onCreated }: NewReviewPageProps): JSX.El
 
           <div className="cr-form-section">
             <h2 className="cr-form-section-title">Changes</h2>
-            {form.kind === 'range' ? (
-              <div className="cr-form-grid">
-                <div className="cr-field">
-                  <label className="cr-label" htmlFor="base-ref">
-                    Base ref
-                  </label>
-                  <input
-                    id="base-ref"
-                    className="cr-input cr-mono"
-                    value={form.baseRef}
-                    onChange={(event) => update('baseRef', event.target.value)}
-                    placeholder="main"
-                    autoComplete="off"
-                    spellCheck={false}
-                    aria-invalid={errors.baseRef === undefined ? undefined : true}
-                    aria-describedby={errors.baseRef === undefined ? undefined : 'base-ref-error'}
-                  />
-                  {errors.baseRef !== undefined ? (
-                    <span className="cr-error" id="base-ref-error" role="alert">
-                      {errors.baseRef}
-                    </span>
-                  ) : null}
+            {form.kind === 'branch' ? (
+              <>
+                <div className="cr-form-grid">
+                  <div className="cr-field">
+                    <label className="cr-label" htmlFor="source-ref">
+                      Source branch
+                    </label>
+                    <input
+                      id="source-ref"
+                      className="cr-input cr-mono"
+                      value={form.sourceRef}
+                      onChange={(event) => update('sourceRef', event.target.value)}
+                      placeholder="feature/billing"
+                      autoComplete="off"
+                      spellCheck={false}
+                      list="branch-options"
+                      aria-invalid={errors.sourceRef === undefined ? undefined : true}
+                      aria-describedby={
+                        errors.sourceRef === undefined ? 'source-ref-hint' : 'source-ref-error'
+                      }
+                    />
+                    {errors.sourceRef !== undefined ? (
+                      <span className="cr-error" id="source-ref-error" role="alert">
+                        {errors.sourceRef}
+                      </span>
+                    ) : (
+                      <span className="cr-hint" id="source-ref-hint">
+                        The branch whose commits you want to inspect.
+                      </span>
+                    )}
+                  </div>
+                  <div className="cr-field">
+                    <label className="cr-label" htmlFor="target-ref">
+                      Target branch
+                    </label>
+                    <input
+                      id="target-ref"
+                      className="cr-input cr-mono"
+                      value={form.targetRef}
+                      onChange={(event) => update('targetRef', event.target.value)}
+                      placeholder="main"
+                      autoComplete="off"
+                      spellCheck={false}
+                      list="branch-options"
+                      aria-invalid={errors.targetRef === undefined ? undefined : true}
+                      aria-describedby={
+                        errors.targetRef === undefined ? 'target-ref-hint' : 'target-ref-error'
+                      }
+                    />
+                    {errors.targetRef !== undefined ? (
+                      <span className="cr-error" id="target-ref-error" role="alert">
+                        {errors.targetRef}
+                      </span>
+                    ) : (
+                      <span className="cr-hint" id="target-ref-hint">
+                        The merge destination. Only the boundary is recorded.
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div className="cr-field">
-                  <label className="cr-label" htmlFor="head-ref">
-                    Head ref
-                  </label>
-                  <input
-                    id="head-ref"
-                    className="cr-input cr-mono"
-                    value={form.headRef}
-                    onChange={(event) => update('headRef', event.target.value)}
-                    placeholder="feature/billing"
-                    autoComplete="off"
-                    spellCheck={false}
-                    aria-invalid={errors.headRef === undefined ? undefined : true}
-                    aria-describedby={errors.headRef === undefined ? undefined : 'head-ref-error'}
-                  />
-                  {errors.headRef !== undefined ? (
-                    <span className="cr-error" id="head-ref-error" role="alert">
-                      {errors.headRef}
+                {branchesLoading ? (
+                  <p className="cr-hint" role="status">
+                    Loading branches…
+                  </p>
+                ) : null}
+                {branchesError !== null ? (
+                  <p className="cr-error" role="alert">
+                    {branchesError}
+                  </p>
+                ) : null}
+
+                <fieldset className="cr-commits-fieldset">
+                  <legend className="cr-label">Commits</legend>
+                  <label className="cr-radio">
+                    <input
+                      type="radio"
+                      name="commits-mode"
+                      value="all"
+                      checked={form.commitsMode === 'all'}
+                      onChange={() => {
+                        update('commitsMode', 'all');
+                        setErrors((current) => {
+                          const next = { ...current };
+                          delete next.commits;
+                          return next;
+                        });
+                      }}
+                    />
+                    <span>
+                      All commits in the merge request
+                      <span className="cr-hint">
+                        Diffs the source branch against the merge base with the target.
+                      </span>
                     </span>
+                  </label>
+                  <label className="cr-radio">
+                    <input
+                      type="radio"
+                      name="commits-mode"
+                      value="selected"
+                      checked={form.commitsMode === 'selected'}
+                      onChange={() => update('commitsMode', 'selected')}
+                    />
+                    <span>
+                      Choose commits
+                      <span className="cr-hint">
+                        The selection is inclusive: commits between the first and last checked
+                        commit are included.
+                      </span>
+                    </span>
+                  </label>
+                  {form.commitsMode === 'selected' ? (
+                    <div className="cr-commit-picker">
+                      {commitsLoading ? (
+                        <p className="cr-hint" role="status">
+                          Loading commits…
+                        </p>
+                      ) : commitsError !== null ? (
+                        <p className="cr-error" role="alert">
+                          {commitsError}
+                        </p>
+                      ) : commits.length === 0 ? (
+                        <p className="cr-hint">No commits found between these branches.</p>
+                      ) : (
+                        <ul className="cr-commit-list">
+                          {commits.map((commit) => (
+                            <li key={commit.sha}>
+                              <label className="cr-commit-option">
+                                <input
+                                  type="checkbox"
+                                  checked={selected.includes(commit.sha)}
+                                  onChange={() => toggleCommit(commit.sha)}
+                                />
+                                <span className="cr-commit-sha">{commit.shortSha}</span>{' '}
+                                <span className="cr-commit-subject">{commit.subject}</span>{' '}
+                                <span className="cr-commit-author">{commit.author}</span>
+                              </label>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {chosenShas.length > 0 ? (
+                        <p className="cr-hint" role="status">
+                          {chosenShas.length} commit{chosenShas.length === 1 ? '' : 's'} will be
+                          reviewed.
+                        </p>
+                      ) : null}
+                      {errors.commits !== undefined ? (
+                        <span className="cr-error" role="alert">
+                          {errors.commits}
+                        </span>
+                      ) : null}
+                    </div>
                   ) : null}
-                </div>
-              </div>
+                </fieldset>
+              </>
             ) : form.kind === 'worktree' ? (
               <div className="cr-field">
                 <label className="cr-label" htmlFor="worktree-base">
-                  Base ref
+                  Base branch
                 </label>
                 <input
                   id="worktree-base"
@@ -261,6 +627,7 @@ export function NewReviewPage({ client, onCreated }: NewReviewPageProps): JSX.El
                   placeholder="main"
                   autoComplete="off"
                   spellCheck={false}
+                  list="branch-options"
                   aria-invalid={errors.baseRef === undefined ? undefined : true}
                 />
                 <span className="cr-hint">

@@ -56,6 +56,39 @@ export interface SubmitResponse {
   delivery: SubmissionDelivery;
 }
 
+export interface RepositorySetting {
+  name: string;
+  path: string;
+  defaultTarget?: string;
+}
+
+export interface RepositoriesResponse {
+  repositories: RepositorySetting[];
+}
+
+export interface RepoBranchesResponse {
+  repoRoot: string;
+  branches: string[];
+}
+
+export interface RepoCommit {
+  sha: string;
+  shortSha: string;
+  author: string;
+  date: string;
+  subject: string;
+}
+
+export interface RepoCommitsResponse {
+  repoRoot: string;
+  baseRef: string;
+  headRef: string;
+  mergeBase: string;
+  headSha: string;
+  /** Oldest first, matching the `commits` scope convention. */
+  commits: RepoCommit[];
+}
+
 export interface HealthResponse {
   status: string;
   store: { writable: boolean };

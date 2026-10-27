@@ -17,6 +17,7 @@ test('lists reviews and completes comment, reply, resolve and submit from the re
   const addedLine = page.getByRole('row', { name: /line 2, added/ }).first();
   await expect(addedLine).toBeVisible();
   await addedLine.click();
+  await expect(addedLine).toBeFocused();
   await page.keyboard.press('c');
   const composer = page.getByRole('form', { name: /Comment on line 2/ });
   await expect(composer).toBeVisible();
@@ -136,4 +137,21 @@ test('restores an unsent comment draft after a browser reload', async ({ page })
   await expect(restored).not.toBeVisible();
   await page.reload();
   await expect(page.getByRole('form', { name: /Comment on line 3/ })).not.toBeVisible();
+});
+
+test('selects a comment range by dragging across diff lines', async ({ page }) => {
+  await openReview(page);
+  await page.getByRole('tab', { name: /Files changed/ }).click();
+  const start = page.getByRole('row', { name: /line 1, context/ }).first();
+  const end = page.getByRole('row', { name: /line 2, added/ }).first();
+  await expect(start).toBeVisible();
+  await expect(end).toBeVisible();
+  const startBox = await start.boundingBox();
+  const endBox = await end.boundingBox();
+  if (startBox === null || endBox === null) throw new Error('diff rows have no box');
+  await page.mouse.move(startBox.x + 60, startBox.y + startBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(endBox.x + 60, endBox.y + endBox.height / 2, { steps: 6 });
+  await page.mouse.up();
+  await expect(page.getByRole('form', { name: /Comment on lines 1–2/ })).toBeVisible();
 });

@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Comment, CommentState, FileDiff, Side, Snapshot } from '@dsh-code-review/core';
+import type { MouseEvent as ReactMouseEvent } from 'react';
+import type {
+  Comment,
+  CommentState,
+  FileDiff,
+  Finding,
+  Side,
+  Snapshot,
+} from '@dsh-code-review/core';
 import { Badge, EmptyState, Skeleton } from '../primitives/Feedback.js';
 import { Button } from '../primitives/Button.js';
 import { Input } from '../primitives/Field.js';
@@ -20,6 +28,7 @@ export interface DiffViewerProps {
   round: number;
   delta: boolean;
   changedPaths: ReadonlySet<string>;
+  findings?: readonly Finding[];
   activeFile?: string | undefined;
   activeLine?: number | undefined;
   activeCommentId?: string | undefined;
@@ -27,7 +36,9 @@ export interface DiffViewerProps {
   onDeltaChange: (value: boolean) => void;
   onJump: (path: string, line?: number, side?: Side) => void;
   onSelectLine: (file: FileDiff, side: Side, line: number, shift: boolean) => void;
+  onSelectRange: (file: FileDiff, side: Side, start: number, end: number) => void;
   onOpenComposer: (file: FileDiff, side: Side, line: number, end: number) => void;
+  onOpenFinding?: (finding: Finding) => void;
   renderComposer?: (file: FileDiff, side: Side, lineStart: number, lineEnd: number) => JSX.Element;
   onReply: (comment: Comment, body: string) => Promise<void>;
   onCommentState: (comment: Comment, state: CommentState) => Promise<void>;
@@ -37,6 +48,52 @@ export interface DiffViewerProps {
 }
 
 const MAX_DIFF_ROWS = 800;
+
+interface DragRange {
+  path: string;
+  side: Side;
+  lineStart: number;
+  lineEnd: number;
+}
+
+interface DragState extends DragRange {
+  anchor: number;
+  last: number;
+  file: FileDiff;
+}
+
+const SEVERITY_RANK: Record<Finding['severity'], number> = {
+  blocker: 4,
+  major: 3,
+  minor: 2,
+  nit: 1,
+};
+
+function findingsOnLine(
+  findings: readonly Finding[],
+  path: string,
+  side: Side,
+  line: number,
+): Finding[] {
+  if (side !== 'new') return [];
+  return findings.filter(
+    (finding) =>
+      finding.file === path &&
+      finding.unanchored !== true &&
+      line >= finding.lineStart &&
+      line <= finding.lineEnd,
+  );
+}
+
+function highestFinding(findings: readonly Finding[]): Finding | null {
+  return findings.reduce<Finding | null>(
+    (highest, finding) =>
+      highest === null || SEVERITY_RANK[finding.severity] > SEVERITY_RANK[highest.severity]
+        ? finding
+        : highest,
+    null,
+  );
+}
 
 function statusTone(
   status: FileDiff['status'],
@@ -103,9 +160,15 @@ function DiffFileSection({
   activeLine,
   activeCommentId,
   composer,
+  dragRange,
+  findings,
   onJump,
   onSelectLine,
+  onLineDragStart,
+  onLineDragEnter,
   onOpenComposer,
+  onOpenFinding,
+  consumeSuppressedClick,
   renderComposer,
   onReply,
   onCommentState,
@@ -120,9 +183,15 @@ function DiffFileSection({
   activeLine?: number | undefined;
   activeCommentId?: string | undefined;
   composer: DiffViewerProps['composer'];
+  dragRange: DragRange | null;
+  findings: readonly Finding[];
   onJump: DiffViewerProps['onJump'];
   onSelectLine: DiffViewerProps['onSelectLine'];
+  onLineDragStart: (file: FileDiff, side: Side, line: number, event: ReactMouseEvent) => void;
+  onLineDragEnter: (file: FileDiff, side: Side, line: number) => void;
   onOpenComposer: DiffViewerProps['onOpenComposer'];
+  onOpenFinding: DiffViewerProps['onOpenFinding'];
+  consumeSuppressedClick: () => boolean;
   renderComposer: DiffViewerProps['renderComposer'];
   onReply: DiffViewerProps['onReply'];
   onCommentState: DiffViewerProps['onCommentState'];
@@ -226,6 +295,7 @@ function DiffFileSection({
                   <span>old</span>
                   <span>new</span>
                   <span />
+                  <span />
                 </div>
                 {shown.map((row) =>
                   row.type === 'hunk' ? (
@@ -257,8 +327,14 @@ function DiffFileSection({
                       activeLine={activeLine}
                       activeCommentId={activeCommentId}
                       composer={composer}
+                      dragRange={dragRange}
+                      findings={findings}
                       onSelectLine={onSelectLine}
+                      onLineDragStart={onLineDragStart}
+                      onLineDragEnter={onLineDragEnter}
                       onOpenComposer={onOpenComposer}
+                      onOpenFinding={onOpenFinding}
+                      consumeSuppressedClick={consumeSuppressedClick}
                       renderComposer={renderComposer}
                       onReply={onReply}
                       onCommentState={onCommentState}
@@ -302,8 +378,14 @@ function DiffLineRow({
   activeLine,
   activeCommentId,
   composer,
+  dragRange,
+  findings,
   onSelectLine,
+  onLineDragStart,
+  onLineDragEnter,
   onOpenComposer,
+  onOpenFinding,
+  consumeSuppressedClick,
   renderComposer,
   onReply,
   onCommentState,
@@ -318,8 +400,14 @@ function DiffLineRow({
   activeLine?: number | undefined;
   activeCommentId?: string | undefined;
   composer: DiffViewerProps['composer'];
+  dragRange: DragRange | null;
+  findings: readonly Finding[];
   onSelectLine: DiffViewerProps['onSelectLine'];
+  onLineDragStart: (file: FileDiff, side: Side, line: number, event: ReactMouseEvent) => void;
+  onLineDragEnter: (file: FileDiff, side: Side, line: number) => void;
   onOpenComposer: DiffViewerProps['onOpenComposer'];
+  onOpenFinding: DiffViewerProps['onOpenFinding'];
+  consumeSuppressedClick: () => boolean;
   renderComposer: DiffViewerProps['renderComposer'];
   onReply: DiffViewerProps['onReply'];
   onCommentState: DiffViewerProps['onCommentState'];
@@ -333,7 +421,15 @@ function DiffLineRow({
   const no = side === 'new' ? line.newNo : line.oldNo;
   if (no === null) return <></>;
   const lineComments = commentsAtLine(comments, round, file.path, no, side);
+  const lineFindings = findingsOnLine(findings, file.path, side, no);
+  const highestRisk = highestFinding(lineFindings);
   const selected = activeLine === no;
+  const inDragRange =
+    dragRange !== null &&
+    dragRange.path === file.path &&
+    dragRange.side === side &&
+    no >= dragRange.lineStart &&
+    no <= dragRange.lineEnd;
   const range =
     composer !== null &&
     composer !== undefined &&
@@ -353,7 +449,9 @@ function DiffLineRow({
           `cr-diff-line-${line.kind}`,
           selected ? 'cr-diff-line-selected' : '',
           range ? 'cr-diff-line-range' : '',
+          inDragRange ? 'cr-diff-line-drag' : '',
           lineComments.length > 0 ? 'cr-diff-line-commented' : '',
+          highestRisk !== null ? `cr-diff-line-risk cr-risk-${highestRisk.severity}` : '',
         ]
           .filter(Boolean)
           .join(' ')}
@@ -361,7 +459,18 @@ function DiffLineRow({
         tabIndex={0}
         aria-label={label}
         aria-current={selected ? 'true' : undefined}
-        onClick={(event) => onSelectLine(file, side, no, event.shiftKey)}
+        onMouseDown={(event) => {
+          if (event.button !== 0 || event.shiftKey) return;
+          const target = event.target as HTMLElement | null;
+          if (target === null || target.closest('button, a, input, textarea, select') !== null)
+            return;
+          onLineDragStart(file, side, no, event);
+        }}
+        onMouseOver={() => onLineDragEnter(file, side, no)}
+        onClick={(event) => {
+          if (consumeSuppressedClick()) return;
+          onSelectLine(file, side, no, event.shiftKey);
+        }}
         onKeyDown={(event) => {
           if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
@@ -377,6 +486,32 @@ function DiffLineRow({
         </span>
         <span className="cr-diff-marker" aria-hidden="true">
           {marker}
+        </span>
+        <span className="cr-diff-risk-cell" role="cell">
+          {highestRisk === null ? null : (
+            <button
+              type="button"
+              className={`cr-diff-risk-pin cr-risk-${highestRisk.severity}`}
+              title={`${highestRisk.severity}: ${highestRisk.title}${
+                highestRisk.lineEnd > highestRisk.lineStart
+                  ? ` (lines ${highestRisk.lineStart}–${highestRisk.lineEnd})`
+                  : ''
+              }`}
+              aria-label={`Open ${highestRisk.severity} finding ${highestRisk.title}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenFinding?.(highestRisk);
+              }}
+            >
+              {highestRisk.severity === 'blocker'
+                ? 'B'
+                : highestRisk.severity === 'major'
+                  ? 'M'
+                  : highestRisk.severity === 'minor'
+                    ? 'm'
+                    : 'n'}
+            </button>
+          )}
         </span>
         <code className="cr-diff-text" role="cell">
           {line.text === '' ? ' ' : line.text}
@@ -437,6 +572,7 @@ export function DiffViewer({
   round,
   delta,
   changedPaths,
+  findings = [],
   activeFile,
   activeLine,
   activeCommentId,
@@ -444,7 +580,9 @@ export function DiffViewer({
   onDeltaChange,
   onJump,
   onSelectLine,
+  onSelectRange,
   onOpenComposer,
+  onOpenFinding,
   renderComposer,
   onReply,
   onCommentState,
@@ -454,6 +592,76 @@ export function DiffViewer({
 }: DiffViewerProps): JSX.Element {
   const [search, setSearch] = useState('');
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [dragRange, setDragRange] = useState<DragRange | null>(null);
+  const dragRef = useRef<DragState | null>(null);
+  const suppressClickRef = useRef(false);
+  const openComposerRef = useRef(onOpenComposer);
+  openComposerRef.current = onOpenComposer;
+
+  useEffect(() => {
+    function finishDrag(): void {
+      const drag = dragRef.current;
+      dragRef.current = null;
+      setDragRange(null);
+      document.body.classList.remove('cr-selecting-lines');
+      if (drag === null || drag.last === drag.anchor) return;
+      suppressClickRef.current = true;
+      window.setTimeout(() => {
+        suppressClickRef.current = false;
+      }, 0);
+      if (!readOnly) {
+        openComposerRef.current(
+          drag.file,
+          drag.side,
+          Math.min(drag.anchor, drag.last),
+          Math.max(drag.anchor, drag.last),
+        );
+      }
+    }
+    window.addEventListener('mouseup', finishDrag);
+    return () => {
+      window.removeEventListener('mouseup', finishDrag);
+      document.body.classList.remove('cr-selecting-lines');
+    };
+  }, [readOnly]);
+
+  function beginLineDrag(file: FileDiff, side: Side, line: number, event: ReactMouseEvent): void {
+    event.preventDefault();
+    (event.currentTarget as HTMLElement).focus({ preventScroll: true });
+    onSelectRange(file, side, line, line);
+    dragRef.current = {
+      path: file.path,
+      side,
+      lineStart: line,
+      lineEnd: line,
+      anchor: line,
+      last: line,
+      file,
+    };
+    setDragRange({ path: file.path, side, lineStart: line, lineEnd: line });
+    document.body.classList.add('cr-selecting-lines');
+  }
+
+  function enterLine(file: FileDiff, side: Side, line: number): void {
+    const drag = dragRef.current;
+    if (drag === null || drag.path !== file.path || drag.side !== side) return;
+    drag.last = line;
+    drag.lineStart = Math.min(drag.anchor, line);
+    drag.lineEnd = Math.max(drag.anchor, line);
+    setDragRange({
+      path: drag.path,
+      side: drag.side,
+      lineStart: drag.lineStart,
+      lineEnd: drag.lineEnd,
+    });
+    onSelectRange(file, side, drag.lineStart, drag.lineEnd);
+  }
+
+  function consumeSuppressedClick(): boolean {
+    if (!suppressClickRef.current) return false;
+    suppressClickRef.current = false;
+    return true;
+  }
   const visibleFiles = delta
     ? snapshot.files.filter((file) => changedPaths.has(file.path))
     : snapshot.files;
@@ -470,6 +678,23 @@ export function DiffViewer({
     const anchor = latestAnchor(comment);
     if (anchor === undefined) continue;
     openCommentsByPath.set(anchor.path, (openCommentsByPath.get(anchor.path) ?? 0) + 1);
+  }
+
+  function riskBadge(path: string): JSX.Element | null {
+    const items = findings.filter(
+      (finding) => finding.file === path && finding.unanchored !== true,
+    );
+    const highest = highestFinding(items);
+    if (highest === null) return null;
+    return (
+      <span
+        className={`cr-tree-risk cr-risk-${highest.severity}`}
+        aria-label={`${items.length} reviewer ${items.length === 1 ? 'risk' : 'risks'}, highest ${highest.severity}`}
+        title={`${items.length} reviewer ${items.length === 1 ? 'risk' : 'risks'} · highest ${highest.severity}`}
+      >
+        {items.length}
+      </span>
+    );
   }
 
   if (snapshot.files.length === 0) {
@@ -553,6 +778,7 @@ export function DiffViewer({
                             {file.added > 0 ? `+${file.added}` : ''}
                             {file.deleted > 0 ? ` −${file.deleted}` : ''}
                           </span>
+                          {riskBadge(file.path)}
                           {(openCommentsByPath.get(file.path) ?? 0) > 0 ? (
                             <span
                               className="cr-tree-comments"
@@ -647,9 +873,15 @@ export function DiffViewer({
                 activeLine={activeFile === file.path ? activeLine : undefined}
                 activeCommentId={activeCommentId}
                 composer={composer}
+                dragRange={dragRange}
+                findings={findings}
                 onJump={onJump}
                 onSelectLine={onSelectLine}
+                onLineDragStart={beginLineDrag}
+                onLineDragEnter={enterLine}
                 onOpenComposer={onOpenComposer}
+                onOpenFinding={onOpenFinding}
+                consumeSuppressedClick={consumeSuppressedClick}
                 renderComposer={renderComposer}
                 onReply={onReply}
                 onCommentState={onCommentState}

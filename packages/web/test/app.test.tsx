@@ -40,6 +40,17 @@ function fakeClient(overrides: Partial<Record<keyof ApiClient, unknown>> = {}): 
       git: { ok: true },
       version: '0.1.0',
     })),
+    listRepositories: vi.fn(async () => ({ repositories: [] })),
+    saveRepositories: vi.fn(async (repositories) => ({ repositories })),
+    listBranches: vi.fn(async () => ({ repoRoot: '/srv/repo', branches: [] })),
+    listCommits: vi.fn(async () => ({
+      repoRoot: '/srv/repo',
+      baseRef: 'main',
+      headRef: 'feature',
+      mergeBase: 'a',
+      headSha: 'b',
+      commits: [],
+    })),
     authenticate: vi.fn(async () => undefined),
     logout: vi.fn(async () => undefined),
     ...overrides,
@@ -155,7 +166,7 @@ describe('new review form', () => {
 
     await user.type(screen.getByLabelText('Repository path'), '/srv/repo');
     await user.type(screen.getByLabelText('Title'), 'Billing retry semantics');
-    await user.type(screen.getByLabelText('Head ref'), 'feature/billing');
+    await user.type(screen.getByLabelText('Source branch'), 'feature/billing');
     await user.click(screen.getByRole('button', { name: 'Create review' }));
     await waitFor(() => expect(createReview).toHaveBeenCalledOnce());
     expect(createReview.mock.calls[0]?.[0]).toMatchObject({
@@ -167,6 +178,19 @@ describe('new review form', () => {
     expect(
       await screen.findByRole('heading', { name: 'Billing retry semantics' }),
     ).toBeInTheDocument();
+  });
+
+  it('clears only the field error that was edited', async () => {
+    const user = userEvent.setup();
+    render(<App client={fakeClient()} />);
+    await user.click(screen.getByRole('button', { name: 'New review' }));
+    await user.click(screen.getByRole('button', { name: 'Create review' }));
+    expect(screen.getByText('Enter the repository path on the daemon.')).toBeInTheDocument();
+    expect(screen.getByText('Give this review a title.')).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Repository path'), '/srv/repo');
+    expect(screen.queryByText('Enter the repository path on the daemon.')).not.toBeInTheDocument();
+    expect(screen.getByText('Give this review a title.')).toBeInTheDocument();
   });
 
   it('switches the scope fields and posts a commit scope', async () => {
@@ -187,6 +211,179 @@ describe('new review form', () => {
     await waitFor(() => expect(createReview).toHaveBeenCalledOnce());
     expect(createReview.mock.calls[0]?.[0]).toMatchObject({
       scope: { kind: 'commit', sha: '4f3a2c1' },
+    });
+  });
+});
+
+describe('repository settings', () => {
+  it('adds a repository and saves its default target', async () => {
+    const user = userEvent.setup();
+    const saveRepositories = vi.fn(async (repositories: unknown) => ({ repositories }));
+    go('/settings');
+    render(
+      <App
+        client={fakeClient({
+          listRepositories: vi.fn(async () => ({ repositories: [] })),
+          saveRepositories,
+        })}
+      />,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Repositories' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Add repository' }));
+    await user.type(screen.getByLabelText('Repository name'), 'Checkout');
+    await user.type(screen.getByLabelText('Path on daemon'), '/srv/checkout');
+    await user.type(screen.getByLabelText('Default target branch'), 'main');
+    await user.click(screen.getByRole('button', { name: 'Save repositories' }));
+
+    await waitFor(() =>
+      expect(saveRepositories).toHaveBeenCalledWith([
+        { name: 'Checkout', path: '/srv/checkout', defaultTarget: 'main' },
+      ]),
+    );
+    expect(await screen.findByText('Repository settings saved.')).toBeInTheDocument();
+  });
+
+  it('does not let an empty save overwrite settings while loading', async () => {
+    go('/settings');
+    const listRepositories = vi.fn(() => new Promise(() => undefined));
+    render(<App client={fakeClient({ listRepositories })} />);
+    await screen.findByRole('heading', { name: /^Repositories$/ });
+    expect(screen.getByRole('button', { name: 'Save repositories' })).toBeDisabled();
+  });
+
+  it('locks repository fields while a save is in flight', async () => {
+    const user = userEvent.setup();
+    const checkout = { name: 'Checkout', path: '/srv/checkout', defaultTarget: 'main' };
+    const saveRepositories = vi.fn(() => new Promise(() => undefined));
+    go('/settings');
+    render(
+      <App
+        client={fakeClient({
+          listRepositories: vi.fn(async () => ({ repositories: [checkout] })),
+          saveRepositories,
+        })}
+      />,
+    );
+    await screen.findByDisplayValue('Checkout');
+    await user.click(screen.getByRole('button', { name: 'Save repositories' }));
+
+    expect(screen.getByLabelText('Path on daemon')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Add repository' })).toBeDisabled();
+  });
+
+  it('rejects an incomplete repository before saving', async () => {
+    const user = userEvent.setup();
+    const saveRepositories = vi.fn();
+    go('/settings');
+    render(
+      <App
+        client={fakeClient({
+          listRepositories: vi.fn(async () => ({ repositories: [] })),
+          saveRepositories,
+        })}
+      />,
+    );
+    await screen.findByRole('heading', { name: 'Repositories' });
+    await user.click(screen.getByRole('button', { name: 'Add repository' }));
+    await user.click(screen.getByRole('button', { name: 'Save repositories' }));
+    expect(screen.getByText('Repository name is required.')).toBeInTheDocument();
+    expect(screen.getByText('Repository path is required.')).toBeInTheDocument();
+    expect(saveRepositories).not.toHaveBeenCalled();
+  });
+});
+
+describe('merge request setup', () => {
+  const repo = { name: 'Checkout', path: '/srv/checkout', defaultTarget: 'main' };
+  const commits = [
+    {
+      sha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      shortSha: 'aaaaaaa',
+      author: 'alex',
+      date: '2026-10-01T10:00:00+03:00',
+      subject: 'Add retry counter',
+    },
+    {
+      sha: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      shortSha: 'bbbbbbb',
+      author: 'alex',
+      date: '2026-10-02T10:00:00+03:00',
+      subject: 'Fix retry budget',
+    },
+  ];
+
+  function clientWith(overrides: Record<string, unknown>): ApiClient {
+    return fakeClient({
+      listRepositories: vi.fn(async () => ({ repositories: [repo] })),
+      listBranches: vi.fn(async () => ({
+        repoRoot: repo.path,
+        branches: ['feature', 'main'],
+      })),
+      listCommits: vi.fn(async () => ({
+        repoRoot: repo.path,
+        baseRef: 'main',
+        headRef: 'feature',
+        mergeBase: 'a',
+        headSha: 'b',
+        commits,
+      })),
+      ...overrides,
+    });
+  }
+
+  it('defaults to a branch merge request and posts the range boundary', async () => {
+    const user = userEvent.setup();
+    const createReview = vi.fn(async (input: unknown) => ({
+      review: { review: { id: 'rev_11' } },
+      url: '',
+      warnings: [],
+      input,
+    }));
+    render(<App client={clientWith({ createReview })} />);
+    await user.click(screen.getByRole('button', { name: 'New review' }));
+    expect(await screen.findByDisplayValue('/srv/checkout')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText('Target branch')).toHaveValue('main'));
+    await user.type(screen.getByLabelText('Title'), 'Retry merge request');
+    await user.type(screen.getByLabelText('Source branch'), 'feature');
+    await user.click(screen.getByRole('button', { name: 'Create review' }));
+
+    await waitFor(() => expect(createReview).toHaveBeenCalledOnce());
+    expect(createReview.mock.calls[0]?.[0]).toMatchObject({
+      repoRoot: '/srv/checkout',
+      title: 'Retry merge request',
+      scope: { kind: 'range', baseRef: 'main', headRef: 'feature' },
+    });
+  });
+
+  it('posts the selected commits when choosing commits', async () => {
+    const user = userEvent.setup();
+    const createReview = vi.fn(async (input: unknown) => ({
+      review: { review: { id: 'rev_12' } },
+      url: '',
+      warnings: [],
+      input,
+    }));
+    const listCommits = vi.fn(async () => ({
+      repoRoot: repo.path,
+      baseRef: 'main',
+      headRef: 'feature',
+      mergeBase: 'a',
+      headSha: 'b',
+      commits,
+    }));
+    render(<App client={clientWith({ createReview, listCommits })} />);
+    await user.click(screen.getByRole('button', { name: 'New review' }));
+    await user.type(await screen.findByLabelText('Title'), 'Selected retries');
+    await user.type(screen.getByLabelText('Source branch'), 'feature');
+    await user.click(screen.getByRole('radio', { name: /Choose commits/ }));
+    await waitFor(() => expect(listCommits).toHaveBeenCalled());
+    await user.click(await screen.findByRole('checkbox', { name: /aaaaaaa Add retry counter/ }));
+    await user.click(screen.getByRole('checkbox', { name: /bbbbbbb Fix retry budget/ }));
+    await user.click(screen.getByRole('button', { name: 'Create review' }));
+
+    await waitFor(() => expect(createReview).toHaveBeenCalledOnce());
+    expect(createReview.mock.calls[0]?.[0]).toMatchObject({
+      scope: { kind: 'commits', shas: [commits[0]?.sha, commits[1]?.sha] },
     });
   });
 });
