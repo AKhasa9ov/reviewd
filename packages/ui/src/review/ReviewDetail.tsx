@@ -4,6 +4,8 @@ import type {
   CommentState,
   FileDiff,
   Finding,
+  FindingDecision,
+  FindingDecisionState,
   ReviewView,
   Side,
   Snapshot,
@@ -23,6 +25,7 @@ import { CommentThread } from './CommentThread.js';
 import { DiffViewer } from './DiffViewer.js';
 import { clearDraft, readDraft, writeDraft, type StoredCommentDraft } from './drafts.js';
 import { FixStatusBoard } from './FixStatusBoard.js';
+import { FindingDecisionDialog } from './FindingDecisionDialog.js';
 import { ReportPanel } from './ReportPanel.js';
 import { SignalsPanel } from './SignalsPanel.js';
 import { SubmitDialog } from './SubmitDialog.js';
@@ -67,6 +70,11 @@ type SelectionState = {
   side: Side;
   lineStart: number;
   lineEnd: number;
+};
+
+type DecisionTarget = {
+  finding: Finding;
+  state: FindingDecisionState;
 };
 
 type ActionError = {
@@ -190,6 +198,9 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
   const [commentSubmitting, setCommentSubmitting] = useState(false);
   const [commentError, setCommentError] = useState<string | null>(null);
   const [pendingCommentId, setPendingCommentId] = useState<string | undefined>();
+  const [decisionTarget, setDecisionTarget] = useState<DecisionTarget | null>(null);
+  const [decisionPending, setDecisionPending] = useState(false);
+  const [decisionError, setDecisionError] = useState<string | null>(null);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -454,6 +465,15 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
   const signals = useMemo(() => (snapshot === null ? [] : deriveSignals(snapshot)), [snapshot]);
   const report = view?.report ?? null;
   const readOnly = view?.review.status === 'closed';
+  const findingDecisions = useMemo(() => {
+    const decisions = new Map<string, FindingDecision>();
+    if (report === null) return decisions;
+    for (const decision of view?.review.findingDecisions ?? []) {
+      if (decision.round === report.round) decisions.set(decision.findingId, decision);
+    }
+    return decisions;
+  }, [view, report]);
+  const canDecideFinding = !readOnly && report !== null && report.round === selectedRound;
   const agentRunning = view?.review.agent?.status === 'running';
   const scope = snapshot?.scope;
 
@@ -635,6 +655,32 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
       setActionError(actionErrorFor(error));
     } finally {
       setPendingCommentId(undefined);
+    }
+  }
+
+  function openFindingDecision(finding: Finding, state: FindingDecisionState): void {
+    setDecisionError(null);
+    setDecisionTarget({ finding, state });
+  }
+
+  async function submitFindingDecision(state: FindingDecisionState, note: string): Promise<void> {
+    if (decisionTarget === null) return;
+    setDecisionPending(true);
+    setDecisionError(null);
+    try {
+      await client.decideFinding(id, decisionTarget.finding.id, {
+        state,
+        ...(note === '' ? {} : { note }),
+      });
+      setDecisionTarget(null);
+      toast(state === 'accepted' ? 'Finding accepted' : 'Finding dismissed');
+      reloadReview();
+    } catch (error) {
+      setDecisionError(
+        error instanceof Error ? error.message : 'Could not save the finding decision.',
+      );
+    } finally {
+      setDecisionPending(false);
     }
   }
 
@@ -907,6 +953,10 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
       onRequestNextRound={() => setRefreshOpen(true)}
       changedPaths={changed}
       findings={report !== null && report.round === selectedRound ? report.findings : []}
+      findingDecisions={
+        report !== null && report.round === selectedRound ? findingDecisions : undefined
+      }
+      onDecideFinding={canDecideFinding ? openFindingDecision : undefined}
       activeFile={activeFile}
       activeLine={activeLine}
       activeCommentId={activeCommentId}
@@ -1201,6 +1251,9 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
             {tab === 'report' ? (
               <ReportPanel
                 report={report}
+                decisions={findingDecisions}
+                canDecide={canDecideFinding}
+                onDecide={openFindingDecision}
                 onJump={jumpToLocation}
                 onJumpComment={(commentId) => {
                   const comment = review.comments.find((item) => item.id === commentId);
@@ -1475,6 +1528,24 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
           ))}
         </dl>
       </Dialog>
+
+      {decisionTarget !== null ? (
+        <FindingDecisionDialog
+          key={`${decisionTarget.finding.id}:${decisionTarget.state}:${decisionTarget.finding.lineStart}`}
+          finding={decisionTarget.finding}
+          state={decisionTarget.state}
+          decision={findingDecisions.get(decisionTarget.finding.id)}
+          pending={decisionPending}
+          error={decisionError}
+          onClose={() => {
+            if (!decisionPending) {
+              setDecisionTarget(null);
+              setDecisionError(null);
+            }
+          }}
+          onSubmit={(state, note) => void submitFindingDecision(state, note)}
+        />
+      ) : null}
     </div>
   );
 }

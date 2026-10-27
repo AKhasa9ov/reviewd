@@ -2801,6 +2801,51 @@ body.cr-selecting-lines {
   gap: var(--cr-space-2);
 }
 
+.cr-finding-decision {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--cr-space-2);
+  margin-top: var(--cr-space-3);
+  padding-top: var(--cr-space-3);
+  border-top: 1px solid var(--cr-border);
+}
+
+.cr-finding-decision-status {
+  display: flex;
+  flex: 1 1 220px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--cr-space-2);
+  min-width: 0;
+}
+
+.cr-finding-decision-note {
+  flex: 1 1 100%;
+  margin: 0;
+  color: var(--cr-text-muted);
+  font-size: var(--cr-text-control);
+  overflow-wrap: anywhere;
+}
+
+.cr-finding-decision-note-label {
+  color: var(--cr-text);
+  font-weight: 600;
+}
+
+.cr-finding-decision-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cr-space-2);
+}
+
+.cr-finding-decision .cr-button[aria-pressed='true'] {
+  border-color: var(--cr-primary);
+  color: var(--cr-primary);
+  box-shadow: inset 0 0 0 1px var(--cr-primary);
+}
+
 .cr-diff-empty,
 .cr-diff-placeholder,
 .cr-diff-more,

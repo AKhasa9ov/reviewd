@@ -5,6 +5,8 @@ import type {
   CommentState,
   FileDiff,
   Finding,
+  FindingDecision,
+  FindingDecisionState,
   Side,
   Snapshot,
 } from '@dsh-code-review/core';
@@ -13,6 +15,7 @@ import { Button } from '../primitives/Button.js';
 import { Input } from '../primitives/Field.js';
 import { FileIcon } from '../icons.js';
 import { CommentThread } from './CommentThread.js';
+import { FindingDecisionControls } from './FindingDecisionControls.js';
 import { FullFileDialog } from './FullFileDialog.js';
 import {
   buildDiffRows,
@@ -34,6 +37,8 @@ export interface DiffViewerProps {
   onRequestNextRound?: (() => void) | undefined;
   changedPaths: ReadonlySet<string>;
   findings?: readonly Finding[];
+  findingDecisions?: ReadonlyMap<string, FindingDecision>;
+  onDecideFinding?: (finding: Finding, state: FindingDecisionState) => void;
   activeFile?: string | undefined;
   activeLine?: number | undefined;
   activeCommentId?: string | undefined;
@@ -53,6 +58,7 @@ export interface DiffViewerProps {
 }
 
 const MAX_DIFF_ROWS = 800;
+const EMPTY_FINDING_DECISIONS = new Map<string, FindingDecision>();
 
 interface DragRange {
   path: string;
@@ -112,10 +118,19 @@ function severityTone(severity: Finding['severity']): 'danger' | 'warning' | 'in
 
 interface InlineFindingProps {
   finding: Finding;
+  decision?: FindingDecision | undefined;
+  readOnly?: boolean;
+  onDecide?: ((finding: Finding, state: FindingDecisionState) => void) | undefined;
   onOpenFinding?: ((finding: Finding) => void) | undefined;
 }
 
-function InlineFinding({ finding, onOpenFinding }: InlineFindingProps): JSX.Element {
+function InlineFinding({
+  finding,
+  decision,
+  readOnly = false,
+  onDecide,
+  onOpenFinding,
+}: InlineFindingProps): JSX.Element {
   const lines =
     finding.lineStart === finding.lineEnd
       ? `line ${finding.lineStart}`
@@ -159,6 +174,14 @@ function InlineFinding({ finding, onOpenFinding }: InlineFindingProps): JSX.Elem
             </button>
           ) : null}
         </div>
+        {onDecide !== undefined ? (
+          <FindingDecisionControls
+            finding={finding}
+            decision={decision}
+            readOnly={readOnly}
+            onDecide={onDecide}
+          />
+        ) : null}
       </div>
     </article>
   );
@@ -241,6 +264,8 @@ function DiffFileSection({
   composer,
   dragRange,
   findings,
+  findingDecisions,
+  onDecideFinding,
   onJump,
   onViewFullFile,
   onSelectLine,
@@ -265,6 +290,8 @@ function DiffFileSection({
   composer: DiffViewerProps['composer'];
   dragRange: DragRange | null;
   findings: readonly Finding[];
+  findingDecisions: ReadonlyMap<string, FindingDecision>;
+  onDecideFinding?: DiffViewerProps['onDecideFinding'];
   onJump: DiffViewerProps['onJump'];
   onViewFullFile: (file: FileDiff) => void;
   onSelectLine: DiffViewerProps['onSelectLine'];
@@ -423,6 +450,8 @@ function DiffFileSection({
                       composer={composer}
                       dragRange={dragRange}
                       findings={findings}
+                      findingDecisions={findingDecisions}
+                      onDecideFinding={onDecideFinding}
                       onSelectLine={onSelectLine}
                       onLineDragStart={onLineDragStart}
                       onLineDragEnter={onLineDragEnter}
@@ -474,6 +503,8 @@ function DiffLineRow({
   composer,
   dragRange,
   findings,
+  findingDecisions,
+  onDecideFinding,
   onSelectLine,
   onLineDragStart,
   onLineDragEnter,
@@ -496,6 +527,8 @@ function DiffLineRow({
   composer: DiffViewerProps['composer'];
   dragRange: DragRange | null;
   findings: readonly Finding[];
+  findingDecisions: ReadonlyMap<string, FindingDecision>;
+  onDecideFinding?: DiffViewerProps['onDecideFinding'];
   onSelectLine: DiffViewerProps['onSelectLine'];
   onLineDragStart: (file: FileDiff, side: Side, line: number, event: ReactMouseEvent) => void;
   onLineDragEnter: (file: FileDiff, side: Side, line: number) => void;
@@ -629,7 +662,13 @@ function DiffLineRow({
         .filter((finding) => finding.lineStart === no)
         .map((finding) => (
           <div className="cr-inline-finding-row" role="row" key={finding.id}>
-            <InlineFinding finding={finding} onOpenFinding={onOpenFinding} />
+            <InlineFinding
+              finding={finding}
+              decision={findingDecisions.get(finding.id)}
+              readOnly={readOnly}
+              onDecide={onDecideFinding}
+              onOpenFinding={onOpenFinding}
+            />
           </div>
         ))}
       {lineComments.length > 0 ? (
@@ -675,6 +714,8 @@ export function DiffViewer({
   onRequestNextRound,
   changedPaths,
   findings = [],
+  findingDecisions = EMPTY_FINDING_DECISIONS,
+  onDecideFinding,
   activeFile,
   activeLine,
   activeCommentId,
@@ -1049,6 +1090,8 @@ export function DiffViewer({
                 composer={composer}
                 dragRange={dragRange}
                 findings={findings}
+                findingDecisions={findingDecisions}
+                onDecideFinding={onDecideFinding}
                 onJump={onJump}
                 onViewFullFile={setFullFile}
                 onSelectLine={onSelectLine}

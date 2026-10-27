@@ -22,6 +22,15 @@ function fakeClient(overrides: Partial<Record<keyof ApiClient, unknown>> = {}): 
     addComment: vi.fn(async () => ({ comment: reviewView.review.comments[0] })),
     reply: vi.fn(async () => ({ comment: reviewView.review.comments[0] })),
     setCommentState: vi.fn(async () => ({ comment: reviewView.review.comments[0] })),
+    decideFinding: vi.fn(async (_id: string, findingId: string, input: { state: string }) => ({
+      decision: {
+        findingId,
+        round: 2,
+        state: input.state,
+        by: { name: 'Ada', kind: 'human' },
+        at: '2026-10-27T12:00:00.000Z',
+      },
+    })),
     submit: vi.fn(),
     refresh: vi.fn(),
     events: vi.fn(async () => ({ events: [], latestSeq: 0 })),
@@ -250,6 +259,90 @@ describe('review detail', () => {
     expect(window.location.search).toContain('tab=report');
     const finding = document.getElementById('finding-f1');
     await waitFor(() => expect(finding).toHaveFocus());
+  });
+
+  it('accepts an inline finding with an optional note for the agent', async () => {
+    const user = userEvent.setup();
+    go('/review/rev_01?round=2&tab=files#file=src%2Fauth.ts&line=11');
+    const decideFinding = vi.fn(
+      async (_id: string, findingId: string, input: { state: string; note?: string }) => ({
+        decision: {
+          findingId,
+          round: 2,
+          state: input.state,
+          ...(input.note === undefined ? {} : { note: input.note }),
+          by: { name: 'Ada', kind: 'human' },
+          at: '2026-10-27T12:00:00.000Z',
+        },
+      }),
+    );
+    render(<App client={fakeClient({ decideFinding })} />);
+    await screen.findByRole('heading', { name: 'Billing retry semantics' });
+
+    const inline = await screen.findByLabelText('major finding: Retry budget is hard-coded');
+    await user.click(within(inline).getByRole('button', { name: 'Accept' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Accept finding' });
+    await user.type(
+      within(dialog).getByLabelText('Note for the agent (optional)'),
+      'Please fix this before merge.',
+    );
+    await user.click(within(dialog).getByRole('button', { name: 'Accept finding' }));
+
+    await waitFor(() =>
+      expect(decideFinding).toHaveBeenCalledWith('rev_01', 'f1', {
+        state: 'accepted',
+        note: 'Please fix this before merge.',
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Accept finding' })).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText('Finding accepted')).toBeInTheDocument();
+  });
+
+  it('shows persisted finding decisions with their notes', async () => {
+    const user = userEvent.setup();
+    const decided = structuredClone(reviewView);
+    decided.review.findingDecisions = [
+      {
+        findingId: 'f1',
+        round: 2,
+        state: 'accepted',
+        note: 'Will fix in this branch.',
+        by: { name: 'Ada', kind: 'human' },
+        at: '2026-10-27T12:00:00.000Z',
+      },
+    ];
+    go('/review/rev_01?round=2&tab=report');
+    render(<App client={fakeClient({ getReview: vi.fn(async () => decided) })} />);
+
+    await screen.findByRole('heading', { name: 'Billing retry semantics' });
+    const finding = await screen.findByText('Retry budget is hard-coded');
+    const card = finding.closest('.cr-finding') as HTMLElement;
+    expect(within(card).getByText('Accepted')).toBeInTheDocument();
+    expect(within(card).getByText('Will fix in this branch.')).toBeInTheDocument();
+    expect(within(card).getByRole('button', { name: 'Accept' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(within(card).getByRole('button', { name: 'Dismiss' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+  });
+
+  it('hides finding decisions on a closed review', async () => {
+    const user = userEvent.setup();
+    const closed = structuredClone(reviewView);
+    closed.review.status = 'closed';
+    go('/review/rev_01?round=2&tab=report');
+    render(<App client={fakeClient({ getReview: vi.fn(async () => closed) })} />);
+
+    await screen.findByRole('heading', { name: 'Billing retry semantics' });
+    expect(await screen.findByText('Retry budget is hard-coded')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Dismiss' })).not.toBeInTheDocument();
   });
 
   it('posts a suggestion with the selected replacement', async () => {
