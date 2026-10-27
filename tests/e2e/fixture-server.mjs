@@ -59,6 +59,10 @@ async function main() {
     join(repo, 'src', 'util.ts'),
     'export function label(value: string): string {\n  return value.trim();\n}\n',
   );
+  await writeFile(
+    join(repo, 'src', 'config.ts'),
+    "export const config = {\n  retries: 2,\n  timeoutMs: 500,\n  label: 'config',\n  region: 'eu',\n  tracing: false,\n  cache: true,\n  fallback: 'none',\n  queue: 10,\n  batch: 25,\n};\n",
+  );
   await git('add', '-A');
   await git('commit', '-m', 'base');
   await git('branch', 'base');
@@ -70,6 +74,10 @@ async function main() {
   await writeFile(
     join(repo, 'src', 'util.ts'),
     'export function label(value: string): string {\n  return value.trim().toLowerCase();\n}\n',
+  );
+  await writeFile(
+    join(repo, 'src', 'config.ts'),
+    "export const config = {\n  retries: 3,\n  timeoutMs: 500,\n  label: 'config',\n  region: 'eu',\n  tracing: false,\n  cache: true,\n  fallback: 'none',\n  queue: 10,\n  batch: 25,\n};\n",
   );
   await writeFile(join(repo, 'src', 'feature.ts'), "export const feature = 'ready';\n");
   await git('add', '-A');

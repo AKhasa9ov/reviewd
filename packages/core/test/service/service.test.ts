@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createId,
   ReviewLifecycle,
@@ -26,6 +26,7 @@ const roots: string[] = [];
 const stores: ReviewStore[] = [];
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await Promise.all(stores.splice(0).map((store) => store.close()));
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
@@ -556,6 +557,53 @@ describe('ReviewServiceImpl', () => {
     await expectError(run, 'conflict');
     const events = await h.service.events(view.review.id);
     expect(events.some((event) => event.type === 'agent/failed')).toBe(true);
+    expect((await h.service.get(view.review.id)).review.agent?.status).toBe('failed');
+  });
+
+  it('does not start a backend that was cancelled while the run was being prepared', async () => {
+    let releaseAppend: (() => void) | undefined;
+    const blockedAppend = new Promise<void>((resolve) => {
+      releaseAppend = resolve;
+    });
+    let appendEntered: (() => void) | undefined;
+    const appendStarted = new Promise<void>((resolve) => {
+      appendEntered = resolve;
+    });
+    let backendStarted = false;
+    const backend: ReviewerBackend = {
+      kind: 'fake',
+      async run(_job, _sink, signal) {
+        backendStarted = true;
+        if (signal.aborted) throw new Error('started after cancellation');
+        return report([]);
+      },
+    };
+    const h = await harness({ backend });
+    const originalAppend = h.store.append.bind(h.store);
+    vi.spyOn(h.store, 'append').mockImplementation(async (reviewId, event) => {
+      if (event.type === 'agent/started') {
+        appendEntered?.();
+        await blockedAppend;
+      }
+      return originalAppend(reviewId, event);
+    });
+    const view = await h.service.create(
+      {
+        repoRoot: '/tmp/repo',
+        title: 'Cancel race',
+        scope: h.scope,
+        reviewer: { backend: 'fake' },
+      },
+      { actor },
+    );
+
+    const run = h.service.runReviewer(view.review.id, { actor });
+    await appendStarted;
+    await h.service.cancelAgent(view.review.id, { actor });
+    releaseAppend?.();
+
+    await expectError(run, 'conflict');
+    expect(backendStarted).toBe(false);
     expect((await h.service.get(view.review.id)).review.agent?.status).toBe('failed');
   });
 

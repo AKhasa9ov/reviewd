@@ -97,6 +97,7 @@ test('opens the full file and switches between current and base versions', async
   const dialog = page.getByRole('dialog', { name: 'src/app.ts' });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('row', { name: /Line 2, added: return 3;/ })).toBeVisible();
+  await expect(dialog.getByText('Should this value be configurable?').first()).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Current' })).toHaveAttribute(
     'aria-pressed',
     'true',
@@ -108,6 +109,43 @@ test('opens the full file and switches between current and base versions', async
 
   await dialog.getByRole('button', { name: 'Close dialog' }).click();
   await expect(dialog).toBeHidden();
+});
+
+test('comments on base lines outside the diff and shows the thread in the full file', async ({
+  page,
+}) => {
+  await openReview(page);
+  await page.getByRole('tab', { name: /Files changed/ }).click();
+  await page
+    .getByRole('group', { name: 'Review rounds' })
+    .getByRole('button', { name: /^r\d+ / })
+    .last()
+    .click();
+  await page.getByRole('button', { name: 'Full diff to base' }).click();
+  await expect(
+    page.getByRole('tabpanel', { name: 'Files changed' }).getByText('base → head'),
+  ).toBeVisible();
+
+  await page.getByRole('button', { name: 'View full file for src/config.ts' }).click();
+  const dialog = page.getByRole('dialog', { name: 'src/config.ts' });
+  await dialog.getByRole('button', { name: 'Base' }).click();
+  await expect(
+    dialog.getByRole('row', { name: /Line 6, unchanged: tracing: false,/ }),
+  ).toBeVisible();
+
+  await dialog.getByRole('row', { name: /Line 6, unchanged:/ }).click();
+  await dialog.getByRole('row', { name: /Line 8, unchanged:/ }).click({ modifiers: ['Shift'] });
+  await dialog.getByRole('button', { name: 'Comment on lines 6–8' }).click();
+  const composer = dialog.getByRole('form', { name: 'Comment on lines 6–8' });
+  await expect(composer).toBeVisible();
+  const body = 'E2E: the base fallback lines need a comment.';
+  await composer.getByRole('textbox', { name: 'Comment', exact: true }).fill(body);
+  await composer.getByRole('button', { name: 'Post comment' }).click();
+
+  await expect(page.getByText('Comment posted')).toBeVisible();
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText(body)).toBeVisible();
+  await expect(composer).not.toBeVisible();
 });
 
 test('keeps the full file dialog inside a 320px viewport', async ({ page }) => {

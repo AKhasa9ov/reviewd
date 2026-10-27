@@ -2212,10 +2212,47 @@ body.cr-selecting-lines {
 .cr-full-file-line {
   min-height: 20px;
   color: var(--cr-text);
+  cursor: pointer;
 }
 
-.cr-full-file-line + .cr-full-file-line {
+.cr-full-file-line:focus-visible {
+  outline: 2px solid var(--cr-focus);
+  outline-offset: -2px;
+}
+
+.cr-full-file-line-selected {
+  background: color-mix(in srgb, var(--cr-primary) 18%, var(--cr-bg));
+}
+
+.cr-full-file-block + .cr-full-file-block .cr-full-file-line {
   border-top: 1px solid color-mix(in srgb, var(--cr-border) 45%, transparent);
+}
+
+.cr-full-file-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cr-space-2);
+}
+
+.cr-full-file-toolbar .cr-meta {
+  margin: 0;
+}
+
+.cr-full-file-thread-cell,
+.cr-full-file-composer-cell {
+  padding: var(--cr-space-2);
+  border-top: 1px solid var(--cr-border);
+  background: var(--cr-surface);
+}
+
+.cr-full-file-thread-cell .cr-thread + .cr-thread {
+  margin-top: var(--cr-space-2);
+}
+
+.cr-full-file-composer-cell {
+  background: var(--cr-surface-raised);
 }
 
 .cr-full-file-line-add {

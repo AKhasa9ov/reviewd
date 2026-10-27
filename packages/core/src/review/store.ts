@@ -144,8 +144,7 @@ function isReviewState(value: unknown): value is ReviewState {
     Array.isArray(value.comments) &&
     value.comments.every(isComment) &&
     (value.findingDecisions === undefined ||
-      (Array.isArray(value.findingDecisions) &&
-        value.findingDecisions.every(isFindingDecision))) &&
+      (Array.isArray(value.findingDecisions) && value.findingDecisions.every(isFindingDecision))) &&
     typeof value.version === 'number' &&
     Number.isInteger(value.version) &&
     value.version >= 0 &&

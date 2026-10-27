@@ -63,6 +63,7 @@ type ComposerState = {
   side: Side;
   lineStart: number;
   lineEnd: number;
+  surface: 'diff' | 'full';
 };
 
 type SelectionState = {
@@ -183,6 +184,11 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
   const [activeFile, setActiveFile] = useState<string | undefined>(deep.file);
   const [activeLine, setActiveLine] = useState<number | undefined>(deep.line);
   const [activeCommentId, setActiveCommentId] = useState<string | undefined>();
+  const [fullFileJump, setFullFileJump] = useState<{
+    path: string;
+    side: Side;
+    line: number;
+  } | null>(null);
   const [selection, setSelection] = useState<SelectionState | null>(null);
   const [composer, setComposer] = useState<ComposerState | null>(() =>
     restoredDraft === null
@@ -192,6 +198,7 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
           side: restoredDraft.side,
           lineStart: restoredDraft.lineStart,
           lineEnd: restoredDraft.lineEnd,
+          surface: 'diff',
         },
   );
   const [draftSeed, setDraftSeed] = useState<StoredCommentDraft | null>(restoredDraft);
@@ -213,7 +220,7 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
   const [delivery, setDelivery] = useState<SubmissionDelivery | null>(null);
   const [cancelPending, setCancelPending] = useState(false);
   const [scrollRestore, setScrollRestore] = useState<number | null>(null);
-  const pendingJump = useRef<{ path: string; line?: number } | null>(null);
+  const pendingJump = useRef<{ path: string; line?: number; side?: Side } | null>(null);
   const goRef = useRef(0);
 
   const go = useCallback(
@@ -231,6 +238,13 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
   );
 
   const reloadReview = useCallback(() => setReloadKey((value) => value + 1), []);
+  const refreshView = useCallback(async () => {
+    try {
+      setView(await client.getReview(id));
+    } catch {
+      reloadReview();
+    }
+  }, [client, id, reloadReview]);
 
   useEffect(() => {
     setDraftSeed(restoredDraft);
@@ -240,6 +254,7 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
       side: restoredDraft.side,
       lineStart: restoredDraft.lineStart,
       lineEnd: restoredDraft.lineEnd,
+      surface: 'diff',
     });
     setSelection({
       path: restoredDraft.path,
@@ -390,9 +405,9 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
 
   useEffect(() => {
     if (snapshot === null) return;
+    const pending = pendingJump.current;
     const target =
-      pendingJump.current ??
-      (deep.file !== undefined ? { path: deep.file, line: deep.line } : null);
+      pending ?? (deep.file !== undefined ? { path: deep.file, line: deep.line } : null);
     if (target === null) {
       if (scrollRestore !== null) {
         const value = scrollRestore;
@@ -407,15 +422,19 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
     }
     const file = target.path;
     const line = target.line;
+    const side = pending?.side;
     const timer = window.setTimeout(() => {
       const fileNode = document.getElementById(diffFileId(file));
       if (typeof fileNode?.scrollIntoView === 'function')
         fileNode.scrollIntoView({ block: 'start' });
       if (line !== undefined) {
         const row =
-          document.getElementById(diffLineId(file, 'new', line)) ??
-          document.getElementById(diffLineId(file, 'old', line));
+          side === undefined
+            ? (document.getElementById(diffLineId(file, 'new', line)) ??
+              document.getElementById(diffLineId(file, 'old', line)))
+            : document.getElementById(diffLineId(file, side, line));
         if (typeof row?.scrollIntoView === 'function') row.scrollIntoView({ block: 'center' });
+        if (row === null && side !== undefined) setFullFileJump({ path: file, side, line });
         row?.focus({ preventScroll: true });
       }
       pendingJump.current = null;
@@ -491,7 +510,7 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
     setTab('files');
     setActiveFile(path);
     setActiveLine(line);
-    pendingJump.current = { path, ...(line === undefined ? {} : { line }) };
+    pendingJump.current = { path, ...(line === undefined ? {} : { line }), side };
     go(
       buildReviewLocation(
         id,
@@ -512,6 +531,7 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
       if (line !== undefined) {
         const row = document.getElementById(diffLineId(path, side, line));
         if (typeof row?.scrollIntoView === 'function') row.scrollIntoView({ block: 'center' });
+        if (row === null && tab === 'files') setFullFileJump({ path, side, line });
         row?.focus({ preventScroll: true });
       }
     }
@@ -565,15 +585,28 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
     }, 0);
   }
 
-  function openComposer(file: FileDiff, side: Side, lineStart: number, lineEnd = lineStart): void {
+  function openComposer(
+    file: FileDiff,
+    side: Side,
+    lineStart: number,
+    lineEnd = lineStart,
+    surface: 'diff' | 'full' = 'diff',
+  ): void {
     clearDraft(id);
     setDraftSeed(null);
     setTab('files');
-    setComposer({ path: file.path, side, lineStart, lineEnd });
+    setComposer({ path: file.path, side, lineStart, lineEnd, surface });
     setSelection({ path: file.path, side, lineStart, lineEnd });
     setCommentError(null);
     setActiveFile(file.path);
     setActiveLine(lineStart);
+  }
+
+  function cancelComposer(): void {
+    clearDraft(id);
+    setDraftSeed(null);
+    setComposer(null);
+    setCommentError(null);
   }
 
   function openComposerAtSelection(): void {
@@ -620,7 +653,7 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
       setPendingCommentId(result.comment.id);
       setActiveCommentId(result.comment.id);
       toast('Comment posted');
-      reloadReview();
+      void refreshView();
     } catch (error) {
       setCommentError(error instanceof Error ? error.message : 'Could not post the comment.');
     } finally {
@@ -633,7 +666,7 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
     try {
       await client.reply(id, comment.id, body);
       toast('Reply sent');
-      reloadReview();
+      void refreshView();
     } finally {
       setPendingCommentId(undefined);
     }
@@ -650,7 +683,7 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
             ? 'Comment dismissed'
             : 'Comment reopened',
       );
-      reloadReview();
+      void refreshView();
     } catch (error) {
       setActionError(actionErrorFor(error));
     } finally {
@@ -699,7 +732,6 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
       );
     }
     jumpTo(anchor.path, anchor.lineStart, anchor.side);
-    pendingJump.current = { path: anchor.path, line: anchor.lineStart };
   }
 
   function jumpToLocation(location: { file: string; lineStart: number }): void {
@@ -946,6 +978,7 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
     <DiffViewer
       snapshot={snapshot}
       comments={filteredComments}
+      allComments={view?.review.comments ?? []}
       round={selectedRound ?? 1}
       delta={effectiveDelta}
       canDelta={canDelta}
@@ -960,7 +993,11 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
       activeFile={activeFile}
       activeLine={activeLine}
       activeCommentId={activeCommentId}
-      composer={composer}
+      composer={composer?.surface === 'diff' ? composer : null}
+      fullFileComposer={composer?.surface === 'full' ? composer : null}
+      fullFileJump={fullFileJump}
+      onFullFileJumpHandled={() => setFullFileJump(null)}
+      onCancelComposer={cancelComposer}
       onDeltaChange={setDelta}
       onJump={jumpTo}
       onSelectLine={onSelectLine}
@@ -980,12 +1017,7 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
             serverError={commentError}
             initialDraft={draftSeed ?? undefined}
             onDraftChange={persistDraft}
-            onCancel={() => {
-              clearDraft(id);
-              setDraftSeed(null);
-              setComposer(null);
-              setCommentError(null);
-            }}
+            onCancel={cancelComposer}
             onSubmit={(draft) => void submitComment(file, side, draft)}
           />
         );

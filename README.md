@@ -97,9 +97,11 @@ review health
 | ------------------------------------------------ | ----------------------------------------------------- |
 | ![Review list](docs/images/review-list-dark.png) | ![Review detail](docs/images/review-detail-light.png) |
 
-The standalone UI supports real git diffs, file and line comments, suggestions, rounds,
-delta/full views, deep links, keyboard navigation, 320px layouts and light/dark themes.
-The browser suite runs axe WCAG 2.1 A/AA checks and fails on serious or critical findings.
+The standalone UI supports real git diffs, file and line comments (including full-file
+comments on current or base lines outside the diff), suggestions, rounds, delta/full views,
+finding accept/dismiss decisions with notes, deep links, keyboard navigation, 320px layouts
+and light/dark themes. The browser suite runs axe WCAG 2.1 A/AA checks and fails on serious
+or critical findings.
 
 ## What it does
 
@@ -107,7 +109,9 @@ The browser suite runs axe WCAG 2.1 A/AA checks and fails on serious or critical
   posts findings with severities, questions and evidence, and can suggest edits.
 - **Human control.** Comments are anchored to a file/side/line or range with a quote,
   context and content hash. They survive force-pushes and renames by re-anchoring; the
-  previous and current locations are both shown.
+  previous and current locations are both shown. Reviewers can accept or dismiss agent
+  findings; the latest decision and its optional note are persisted and shape the next
+  feedback package.
 - **Fix tracking.** Every refresh creates an immutable round. Deterministic rules classify
   comments as `applied`, `addressed`, `unchanged`, `outdated` or `moved`; agent claims and
   reviewer verification are separate signals, not silent truth.
@@ -245,7 +249,8 @@ or review does not return another route's result. Errors are `ReviewError` with
 
 `submit` appends `review/submitted` and returns a deterministic markdown + JSON package
 (no timestamps or random values). Both the markdown and the JSON are capped at 100 KiB;
-the JSON gets `truncated: true` and a notice when items must be dropped. It includes open human comments, open blocker/major findings, accepted
+the JSON gets `truncated: true` and a notice when items must be dropped. It includes open human comments, open blocker/major findings,
+accepted findings (all non-praise severities), dismissed findings with their notes, accepted
 and applied suggestions (applied ones are marked “do not reapply”), questions, verification
 entries and a resolved summary. `deliveryKey` is `reviewId:round:submissionId` and is stable
 for delivery idempotency. An `approve` verdict closes the review; other verdicts keep it
@@ -271,9 +276,12 @@ open. A round can be submitted once.
       "lineEnd": 42,
       "title": "…",
       "rationale": "…",
-      "evidence": "…"
+      "evidence": "…",
+      "decision": "accepted",
+      "note": "Please fix this before merge."
     }
   ],
+  "dismissedFindings": [],
   "humanComments": [
     { "commentId": "cmt_…", "path": "src/a.ts", "lineStart": 42, "lineEnd": 42, "body": "…" }
   ],

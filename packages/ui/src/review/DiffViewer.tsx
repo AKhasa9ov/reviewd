@@ -30,6 +30,7 @@ import {
 export interface DiffViewerProps {
   snapshot: Snapshot;
   comments: readonly Comment[];
+  allComments?: readonly Comment[];
   round: number;
   delta: boolean;
   canDelta: boolean;
@@ -43,11 +44,21 @@ export interface DiffViewerProps {
   activeLine?: number | undefined;
   activeCommentId?: string | undefined;
   composer?: { path: string; side: Side; lineStart: number; lineEnd: number } | null;
+  fullFileComposer?: { path: string; side: Side; lineStart: number; lineEnd: number } | null;
+  fullFileJump?: { path: string; side: Side; line: number } | null;
+  onFullFileJumpHandled?: (() => void) | undefined;
+  onCancelComposer?: (() => void) | undefined;
   onDeltaChange: (value: boolean) => void;
   onJump: (path: string, line?: number, side?: Side) => void;
   onSelectLine: (file: FileDiff, side: Side, line: number, shift: boolean) => void;
   onSelectRange: (file: FileDiff, side: Side, start: number, end: number) => void;
-  onOpenComposer: (file: FileDiff, side: Side, line: number, end: number) => void;
+  onOpenComposer: (
+    file: FileDiff,
+    side: Side,
+    line: number,
+    end: number,
+    surface?: 'diff' | 'full',
+  ) => void;
   onOpenFinding?: (finding: Finding) => void;
   renderComposer?: (file: FileDiff, side: Side, lineStart: number, lineEnd: number) => JSX.Element;
   onReply: (comment: Comment, body: string) => Promise<void>;
@@ -71,6 +82,12 @@ interface DragState extends DragRange {
   anchor: number;
   last: number;
   file: FileDiff;
+}
+
+interface FullFileState {
+  file: FileDiff;
+  side?: Side | undefined;
+  line?: number | undefined;
 }
 
 const SEVERITY_RANK: Record<Finding['severity'], number> = {
@@ -707,6 +724,7 @@ function DiffLineRow({
 export function DiffViewer({
   snapshot,
   comments,
+  allComments,
   round,
   delta,
   canDelta,
@@ -720,6 +738,10 @@ export function DiffViewer({
   activeLine,
   activeCommentId,
   composer,
+  fullFileComposer,
+  fullFileJump,
+  onFullFileJumpHandled,
+  onCancelComposer,
   onDeltaChange,
   onJump,
   onSelectLine,
@@ -738,7 +760,7 @@ export function DiffViewer({
   const [dragRange, setDragRange] = useState<DragRange | null>(null);
   const [wrap, setWrap] = useState(true);
   const [currentFile, setCurrentFile] = useState<string | undefined>(activeFile);
-  const [fullFile, setFullFile] = useState<FileDiff | null>(null);
+  const [fullFile, setFullFile] = useState<FullFileState | null>(null);
   const filesRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
   const suppressClickRef = useRef(false);
@@ -748,6 +770,14 @@ export function DiffViewer({
   useEffect(() => {
     if (activeFile !== undefined) setCurrentFile(activeFile);
   }, [activeFile]);
+
+  useEffect(() => {
+    if (fullFileJump === null || fullFileJump === undefined) return;
+    const file = snapshot.files.find((item) => item.path === fullFileJump.path);
+    if (file === undefined) return;
+    setFullFile({ file, side: fullFileJump.side, line: fullFileJump.line });
+    onFullFileJumpHandled?.();
+  }, [fullFileJump, onFullFileJumpHandled, snapshot]);
 
   useEffect(() => {
     function finishDrag(): void {
@@ -1093,7 +1123,7 @@ export function DiffViewer({
                 findingDecisions={findingDecisions}
                 onDecideFinding={onDecideFinding}
                 onJump={onJump}
-                onViewFullFile={setFullFile}
+                onViewFullFile={(file) => setFullFile({ file })}
                 onSelectLine={onSelectLine}
                 onLineDragStart={beginLineDrag}
                 onLineDragEnter={enterLine}
@@ -1112,7 +1142,42 @@ export function DiffViewer({
         )}
       </div>
       {fullFile !== null ? (
-        <FullFileDialog key={fullFile.path} file={fullFile} onClose={() => setFullFile(null)} />
+        <FullFileDialog
+          key={`${fullFile.file.path}:${fullFile.side ?? 'default'}:${fullFile.line ?? 'all'}`}
+          file={fullFile.file}
+          comments={allComments ?? comments}
+          round={round}
+          initialSide={fullFile.side}
+          initialLine={fullFile.line}
+          composer={
+            fullFileComposer !== null &&
+            fullFileComposer !== undefined &&
+            fullFileComposer.path === fullFile.file.path
+              ? {
+                  side: fullFileComposer.side,
+                  lineStart: fullFileComposer.lineStart,
+                  lineEnd: fullFileComposer.lineEnd,
+                }
+              : null
+          }
+          activeCommentId={activeCommentId}
+          readOnly={readOnly}
+          onClose={() => setFullFile(null)}
+          onOpenComposer={(side, start, end) =>
+            onOpenComposer(fullFile.file, side, start, end, 'full')
+          }
+          onCancelComposer={onCancelComposer}
+          {...(renderComposer === undefined
+            ? {}
+            : {
+                renderComposer: (side: Side, start: number, end: number) =>
+                  renderComposer(fullFile.file, side, start, end),
+              })}
+          onReply={onReply}
+          onState={onCommentState}
+          onCommentJump={onCommentJump}
+          onCommentFocus={onCommentFocus}
+        />
       ) : null}
     </div>
   );

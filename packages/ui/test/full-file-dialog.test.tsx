@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { FileDiff } from '@dsh-code-review/core';
@@ -39,6 +39,7 @@ describe('FullFileDialog', () => {
     render(
       <FullFileDialog
         file={file({ binary: true, oldLines: undefined, newLines: undefined })}
+        round={1}
         onClose={vi.fn()}
       />,
     );
@@ -54,6 +55,7 @@ describe('FullFileDialog', () => {
     render(
       <FullFileDialog
         file={file({ status: 'deleted', newLines: undefined, deleted: 2, added: 0 })}
+        round={1}
         onClose={onClose}
       />,
     );
@@ -65,6 +67,42 @@ describe('FullFileDialog', () => {
     expect(within(dialog).queryByRole('button', { name: 'Current' })).not.toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Close' }));
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('cancels an open composer on Escape without closing the dialog', () => {
+    const onClose = vi.fn();
+    const onCancelComposer = vi.fn();
+    render(
+      <FullFileDialog
+        file={file()}
+        round={1}
+        composer={{ side: 'new', lineStart: 1, lineEnd: 1 }}
+        onCancelComposer={onCancelComposer}
+        onClose={onClose}
+        renderComposer={() => <textarea aria-label="Composer" />}
+      />,
+    );
+    const dialog = screen.getByRole('dialog', { name: 'src/app.ts' });
+
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+
+    expect(onCancelComposer).toHaveBeenCalledOnce();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(dialog).toBeInTheDocument();
+  });
+
+  it('selects a keyboard range and opens the composer on Enter', async () => {
+    const user = userEvent.setup();
+    const onOpenComposer = vi.fn();
+    render(
+      <FullFileDialog file={file()} round={1} onOpenComposer={onOpenComposer} onClose={vi.fn()} />,
+    );
+    const dialog = screen.getByRole('dialog', { name: 'src/app.ts' });
+
+    await user.click(within(dialog).getByRole('row', { name: /Line 2, added:/ }));
+    await user.keyboard('{Shift>}{ArrowUp}{/Shift}{Enter}');
+
+    expect(onOpenComposer).toHaveBeenCalledWith('new', 1, 2);
   });
 
   it('renders long files progressively and can show every line', async () => {
@@ -80,6 +118,7 @@ describe('FullFileDialog', () => {
           added: lines.length,
           deleted: 0,
         })}
+        round={1}
         onClose={vi.fn()}
       />,
     );

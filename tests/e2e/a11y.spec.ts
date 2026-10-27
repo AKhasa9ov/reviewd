@@ -51,6 +51,7 @@ test.describe('@a11y accessibility', () => {
 
     await page.goto(`${fx.baseUrl}/review/${encodeURIComponent(fx.reviewId)}`);
     await expect(page.getByTestId('review-detail')).toBeVisible();
+    await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(244, 246, 248)');
     await expectNoSeriousAxe(page, 'detail light');
 
     await page.getByTestId('theme-toggle').first().click();

@@ -107,10 +107,7 @@ function findingLines(finding: Finding, decision?: FindingDecision): string[] {
   ];
 }
 
-function actionableFinding(
-  finding: Finding,
-  decision: FindingDecision | undefined,
-): boolean {
+function actionableFinding(finding: Finding, decision: FindingDecision | undefined): boolean {
   if (finding.kind === 'praise') return false;
   if (decision?.state === 'dismissed') return false;
   if (decision?.state === 'accepted') return true;
@@ -285,9 +282,7 @@ export function buildFeedback(input: BuildFeedbackInput): FeedbackPackage {
     dismissed.flatMap((finding) => {
       const decision = decisions.get(finding.id);
       if (decision?.note === undefined) return [];
-      return [
-        `- [${finding.file}:${finding.lineStart}] ${finding.title} — ${decision.note}`,
-      ];
+      return [`- [${finding.file}:${finding.lineStart}] ${finding.title} — ${decision.note}`];
     }),
   );
 

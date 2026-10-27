@@ -65,6 +65,7 @@ Codes: `unauthorized`, `forbidden`, `not-found`, `validation`, `conflict`, `stal
 | POST   | `/api/reviews/:id/comments/:cid/replies`    | `{body}`                                                                |
 | PATCH  | `/api/reviews/:id/comments/:cid`            | `{state: open\|resolved\|dismissed}`                                    |
 | POST   | `/api/reviews/:id/comments/:cid/suggestion` | `{action: accept\|decline\|apply}`                                      |
+| POST   | `/api/reviews/:id/findings/:fid/decision`   | `{state: accepted\|dismissed, note?}`; latest report round only         |
 | POST   | `/api/reviews/:id/refresh`                  | optional `{scope}`; appends a round                                     |
 | POST   | `/api/reviews/:id/submit`                   | `{verdict,summary?,includeResolved?,harness?}`                          |
 | POST   | `/api/reviews/:id/close`                    | `{verdict: approved\|closed}`                                           |
@@ -82,6 +83,16 @@ Codes: `unauthorized`, `forbidden`, `not-found`, `validation`, `conflict`, `stal
 | POST   | `/api/deliveries/:id/ack`                   | `{by}`                                                                  |
 | POST   | `/api/deliveries/:id/fail`                  | `{error}`                                                               |
 | POST   | `/api/gc`                                   | `{olderThanDays}`; closed-by-age reviews and unreferenced snapshots     |
+
+### Finding decisions
+
+`POST /api/reviews/:id/findings/:fid/decision` records a human decision
+(`{state: "accepted" | "dismissed", note?: string}`) for a finding from the latest reviewer
+report. The latest decision for a `(round, findingId)` wins; notes are trimmed and capped at
+4000 characters. An accepted finding stays actionable in feedback (including minor/nit), a
+dismissed one is excluded and its note is listed under “Отклонено человеком (не повторять)”.
+Closed reviews reject decisions. The event is `finding/decision` and is folded into
+`review.findingDecisions`.
 
 ### Curl example
 

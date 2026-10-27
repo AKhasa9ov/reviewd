@@ -1170,11 +1170,7 @@ describe('review finding decisions', () => {
   it('routes a decision with an optional note to the service', async () => {
     const calls: unknown[] = [];
     const service = {
-      async decideFinding(
-        id: string,
-        findingId: string,
-        input: { state: string; note?: string },
-      ) {
+      async decideFinding(id: string, findingId: string, input: { state: string; note?: string }) {
         calls.push({ id, findingId, input });
         return {
           decision: {
@@ -1196,14 +1192,11 @@ describe('review finding decisions', () => {
     } as unknown as ReviewService;
     const { daemonUrl } = await running({}, { service });
 
-    const response = await fetch(
-      `${daemonUrl}/api/reviews/rev_1/findings/f%201/decision`,
-      {
-        method: 'POST',
-        headers: headers(),
-        body: JSON.stringify({ state: 'accepted', note: '  Fix before merge  ' }),
-      },
-    );
+    const response = await fetch(`${daemonUrl}/api/reviews/rev_1/findings/f%201/decision`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ state: 'accepted', note: '  Fix before merge  ' }),
+    });
 
     expect(response.status).toBe(200);
     expect(await read(response)).toMatchObject({

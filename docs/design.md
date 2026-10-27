@@ -638,10 +638,17 @@ Signals — не приговор, а подсветка; в UI отдельна
 Review: <publicUrl>/review/<id>?round=2
 Scope: <base>..<head> (<sha>)
 
-### Блокеры и major (агент)
+### Замечания агента (к исправлению)
 - [blocker][src/x.ts:42] <title>
   <rationale>
   > evidence
+- [accepted][major][src/y.ts:18] <title>
+  <rationale>
+  > evidence
+  Комментарий человека: <note>
+
+### Отклонено человеком (не повторять)
+- [src/z.ts:7] <title> — <note>
 
 ### Комментарии человека (open)
 - [src/x.ts:57] <body>
@@ -662,8 +669,9 @@ Scope: <base>..<head> (<sha>)
 Если сообщение повторное — не применяй правки дважды.
 ```
 
-- Собираются: unresolved human comments, open blocker/major findings, accepted-not-applied suggestions, questions, verification summary, applied suggestions (как «не повторять»).
-- Resolved/nit исключаются по умолчанию; лимит 100 KiB; при превышении — top-N + ссылка на review.
+- Собираются: unresolved human comments, open blocker/major findings, accepted findings любого non-praise severity (включая minor/nit), accepted-not-applied suggestions, questions, verification summary, applied suggestions (как «не повторять»).
+- Решение человека по finding — последнее для `(round, findingId)`: `accepted` оставляет finding в actionable и добавляет note, `dismissed` исключает его из actionable, а note идёт в секцию «Отклонено человеком (не повторять)». Praise в actionable не попадает.
+- Resolved/nit исключаются по умолчанию (кроме явно accepted finding); лимит 100 KiB; при превышении — top-N + ссылка на review.
 
 ### 10.2 DSH bridge
 
@@ -951,10 +959,12 @@ interface Config {
 - DSH panel: sidebar хоста + main; правая панель скрыта по умолчанию, открывается как sheet; всё в токенах хоста.
 - Список ревью: фильтры, поиск, строки с branch/scope, автор, возраст, статус, «N not fixed».
 - Деталь: header (base→head, SHA copy, round pills, verdict, Submit), tabs Conversation / Files changed / Report / Signals, file tree, diff, right rail (summary, fix status, agent, delivery, submit). Files changed открывается по умолчанию, если в URL нет `tab`.
-- Diff: длинные строки переносятся по умолчанию (тумблер Wrap lines), чтобы не было горизонтального скролла; inline-карточки findings и треды комментариев рендерятся сразу под строкой; file tree следует за вертикальным скроллом через `aria-current`. Кнопка «Full file» открывает read-only модалку полного файла, не ломая inline-треды и выбор строк в diff.
+- Diff: длинные строки переносятся по умолчанию (тумблер Wrap lines), чтобы не было горизонтального скролла; inline-карточки findings и треды комментариев рендерятся сразу под строкой; file tree следует за вертикальным скроллом через `aria-current`. Кнопка «Full file» открывает модалку полного файла с комментариями и выбором строк, не ломая inline-треды и выбор строк в diff.
 - Settings: у каждого репозитория компактная иконка папки открывает локальный просмотр папок с хлебными крошками, переходом вверх и пометкой git-репозиториев; выбор папки заполняет Path on daemon и загружает ветки через `GET /api/repos/branches`, после чего Default target branch выбирается из выпадающего списка. Смена пути сбрасывает выбранную ветку; сохранённое значение вне списка остаётся доступным как `<ref> (saved)`.
 - Round pills показывают counts; дефолт rN — дельта с rN-1, тумблер «Full diff to base». Delta доступна только с r2: на r1 кнопка disabled, рядом объяснение «Delta compares this round with the previous one» и CTA «Create the next round», открывающий существующий refresh-диалог. Если предыдущий снапшот раунда недоступен, показывается причина вместо молчаливо неработающего тумблера.
-- У каждого файла в diff есть кнопка «Full file»: read-only модалка с полным файлом, номерами строк и подсветкой добавленных/удалённых строк. Для modified/renamed доступен переключатель Current/Base; для added/untracked — Current, для deleted — Base. Файлы длиннее 2000 строк рендерятся порциями с кнопкой «Show all N lines». Для binary/oversized/truncated/unreadable показывается явное объяснение вместо пустого экрана.
+- У каждого файла в diff есть кнопка «Full file»: модалка полного файла с номерами строк и подсветкой добавленных/удалённых строк. Для modified/renamed доступен переключатель Current/Base; для added/untracked — Current, для deleted — Base. Строки выбираются кликом, Shift-click или Shift+↑/↓, а Enter или кнопка «Comment on line N» открывают composer; диапазон можно выбрать и на Base, в том числе вне хунков diff. Существующие треды и новые комментарии рендерятся inline на обеих версиях, независимо от фильтра fix status; после отправки модалка остаётся открытой. Файлы длиннее 2000 строк рендерятся порциями с кнопкой «Show all N lines». Для binary/oversized/truncated/unreadable показывается явное объяснение вместо пустого экрана.
+- Anchor, которого нет в diff (например, старая строка вне хунка), из Conversation открывает Full file сразу на нужной версии и строке.
+- Findings: в Report и inline-карточках есть Accept/Dismiss; решение открывает диалог с необязательной заметкой, persisted-статус и заметка видны на карточке. Менять решение можно до закрытия ревью; закрытое ревью показывает решения read-only. Praise не получает действий, а решения принимаются только для последнего раунда отчёта.
 - Fix status board: Addressed / Not fixed / Outdated / Needs decision; клик фильтрует треды; у каждого пункта jump-to-line.
 - Тред: цитата кода, anchor history («line 42 → 57»), статусы, ответы, markdown preview.
 - Suggestion: «было/стало», Apply/Decline; Apply только при совпадении head/worktree, иначе disabled + причина + «Send to agent».

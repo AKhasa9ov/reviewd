@@ -5,7 +5,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ApiClient } from '@dsh-code-review/ui';
 import { ApiError } from '@dsh-code-review/ui';
 import { App } from '../src/App.js';
-import { latestFeedback, reviewView, snapshotR1, snapshotR2 } from './reviewFixtures.js';
+import {
+  comment,
+  latestFeedback,
+  makeAnchor,
+  reviewView,
+  snapshotR1,
+  snapshotR2,
+} from './reviewFixtures.js';
 
 function go(path: string): void {
   window.history.replaceState({}, '', path);
@@ -150,6 +157,129 @@ describe('review detail', () => {
 
     await user.click(within(dialog).getByRole('button', { name: 'Close dialog' }));
     expect(screen.queryByRole('dialog', { name: 'src/auth.ts' })).not.toBeInTheDocument();
+  });
+
+  it('posts a range comment on base lines outside the diff and keeps the full file open', async () => {
+    const user = userEvent.setup();
+    go('/review/rev_01?round=2&tab=files#file=src%2Fauth.ts&line=11');
+    const addComment = vi.fn(async () => ({ comment: reviewView.review.comments[0] }));
+    render(<App client={fakeClient({ addComment })} />);
+    await screen.findByRole('heading', { name: 'Billing retry semantics' });
+    await screen.findByRole('row', { name: /line 11, added:/ });
+
+    await user.click(screen.getByRole('button', { name: 'View full file for src/auth.ts' }));
+    const dialog = await screen.findByRole('dialog', { name: 'src/auth.ts' });
+    await user.click(within(dialog).getByRole('button', { name: 'Base' }));
+
+    await user.click(within(dialog).getByRole('row', { name: /Line 2, unchanged:/ }));
+    await user.keyboard('{Shift>}');
+    await user.click(within(dialog).getByRole('row', { name: /Line 4, unchanged:/ }));
+    await user.keyboard('{/Shift}');
+    await user.click(within(dialog).getByRole('button', { name: 'Comment on lines 2–4' }));
+
+    const composer = within(dialog).getByRole('form', { name: 'Comment on lines 2–4' });
+    await user.type(within(composer).getByLabelText('Comment'), 'The old fallback needs a note.');
+    await user.click(within(composer).getByRole('button', { name: 'Post comment' }));
+
+    await waitFor(() =>
+      expect(addComment).toHaveBeenCalledWith(
+        'rev_01',
+        expect.objectContaining({
+          body: 'The old fallback needs a note.',
+          path: 'src/auth.ts',
+          side: 'old',
+          lineStart: 2,
+          lineEnd: 4,
+        }),
+      ),
+    );
+    expect(screen.getByRole('dialog', { name: 'src/auth.ts' })).toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole('form', { name: 'Comment on lines 2–4' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows comments anchored to base lines inside the full file', async () => {
+    const user = userEvent.setup();
+    const withBaseComment = structuredClone(reviewView);
+    withBaseComment.review.comments.push(
+      comment(
+        'c4',
+        'Old fallback line needs context.',
+        [
+          {
+            ...makeAnchor(2, 'src/auth.ts', 3, 3, 'active', '  // old line 3'),
+            side: 'old',
+          },
+        ],
+        'open',
+      ),
+    );
+    go('/review/rev_01?round=2&tab=files#file=src%2Fauth.ts&line=11');
+    render(<App client={fakeClient({ getReview: vi.fn(async () => withBaseComment) })} />);
+    await screen.findByRole('heading', { name: 'Billing retry semantics' });
+    await screen.findByRole('row', { name: /line 11, added:/ });
+
+    await user.click(screen.getByRole('button', { name: 'View full file for src/auth.ts' }));
+    const dialog = await screen.findByRole('dialog', { name: 'src/auth.ts' });
+    await user.click(within(dialog).getByRole('button', { name: 'Base' }));
+
+    expect(within(dialog).getByText('Old fallback line needs context.')).toBeInTheDocument();
+  });
+
+  it('jumps to a diff line without opening the full file', async () => {
+    const user = userEvent.setup();
+    go('/review/rev_01?round=2&tab=conversation');
+    render(<App client={fakeClient()} />);
+    await screen.findByRole('heading', { name: 'Billing retry semantics' });
+
+    const thread = (
+      await screen.findByText('This should use the configured max attempts.')
+    ).closest('.cr-thread');
+    await user.click(within(thread as HTMLElement).getByRole('button', { name: /jump to line/ }));
+
+    const row = await screen.findByRole('row', { name: /line 11, added:/ });
+    await waitFor(() => expect(row).toHaveFocus());
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(window.location.hash).toContain('line=11');
+  });
+
+  it('opens the full file at an anchor that is outside the diff', async () => {
+    const user = userEvent.setup();
+    const withBaseComment = structuredClone(reviewView);
+    withBaseComment.review.comments.push(
+      comment(
+        'c5',
+        'Old fallback line needs context.',
+        [
+          {
+            ...makeAnchor(2, 'src/auth.ts', 3, 3, 'active', '  // old line 3'),
+            side: 'old',
+          },
+        ],
+        'open',
+      ),
+    );
+    go('/review/rev_01?round=2&tab=conversation');
+    render(<App client={fakeClient({ getReview: vi.fn(async () => withBaseComment) })} />);
+    await screen.findByRole('heading', { name: 'Billing retry semantics' });
+
+    const jump = await screen.findByRole('button', {
+      name: /src\/auth\.ts line 3 \(jump to line\)/,
+    });
+    await user.click(jump);
+
+    const dialog = await screen.findByRole('dialog', { name: 'src/auth.ts' });
+    await waitFor(() =>
+      expect(within(dialog).getByRole('button', { name: 'Base' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      ),
+    );
+    expect(within(dialog).getByRole('row', { name: /Line 3, unchanged:/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
   });
 
   it('updates the active file in the tree while the diff scrolls', async () => {
@@ -302,7 +432,6 @@ describe('review detail', () => {
   });
 
   it('shows persisted finding decisions with their notes', async () => {
-    const user = userEvent.setup();
     const decided = structuredClone(reviewView);
     decided.review.findingDecisions = [
       {
@@ -333,7 +462,6 @@ describe('review detail', () => {
   });
 
   it('hides finding decisions on a closed review', async () => {
-    const user = userEvent.setup();
     const closed = structuredClone(reviewView);
     closed.review.status = 'closed';
     go('/review/rev_01?round=2&tab=report');

@@ -747,6 +747,9 @@ export class ReviewServiceImpl implements ReviewService {
           throw this.translate(error);
         }
         this.active.set(id, { controller, backend });
+        if (controller.signal.aborted) {
+          throw new ReviewError('conflict', `reviewer was cancelled for ${id}`, { id });
+        }
         raw = await backend.run(
           job,
           async (finding) => {

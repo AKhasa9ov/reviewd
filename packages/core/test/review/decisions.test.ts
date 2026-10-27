@@ -2,11 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  ReviewLifecycle,
-  ReviewStore,
-  createEvent,
-} from '../../src/index.js';
+import { ReviewLifecycle, ReviewStore, createEvent } from '../../src/index.js';
 import type {
   Actor,
   AgentReport,
@@ -171,7 +167,10 @@ describe('finding decisions', () => {
     );
 
     const loaded = await lifecycle.get(reviewId);
-    expect(loaded.findingDecisions).toEqual([expect.objectContaining({ state: 'accepted' }), dismissed]);
+    expect(loaded.findingDecisions).toEqual([
+      expect.objectContaining({ state: 'accepted' }),
+      dismissed,
+    ]);
     expect(dismissed).not.toHaveProperty('note');
   });
 

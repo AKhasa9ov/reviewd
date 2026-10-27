@@ -157,9 +157,7 @@ function input(
   };
 }
 
-function decision(
-  overrides: Partial<FindingDecision> = {},
-): FindingDecision {
+function decision(overrides: Partial<FindingDecision> = {}): FindingDecision {
   return {
     findingId: 'f1',
     round: 1,
@@ -221,9 +219,7 @@ describe('buildFeedback', () => {
     const feedback = buildFeedback(
       input({
         report: report({ findings: [finding({ severity: 'minor', title: 'Tighten the type' })] }),
-        decisions: [
-          decision({ state: 'accepted', note: 'Please do this, it affects callers.' }),
-        ],
+        decisions: [decision({ state: 'accepted', note: 'Please do this, it affects callers.' })],
       }),
     );
 

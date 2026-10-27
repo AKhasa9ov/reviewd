@@ -216,6 +216,23 @@ describe('reanchor', () => {
     expect(nextDelete.quote).toBe('C');
   });
 
+  it('reanchors a base-side anchor outside every hunk', () => {
+    const previous = captureAnchor(
+      snapshot([file('src/a.ts', { oldLines: six }, [hunk(1, 2, 1, 2)])]),
+      { path: 'src/a.ts', side: 'old', lineStart: 5, round: 1, id: 'anc_r1' },
+    );
+
+    const next = reanchor(
+      previous,
+      snapshot([file('src/a.ts', { oldLines: six, newLines: six }, [hunk(1, 2, 1, 2)])]),
+      { round: 2, id: 'anc_r2' },
+    );
+
+    expect(next.state).toBe('active');
+    expect(next.lineStart).toBe(5);
+    expect(next.previous).toEqual({ round: 1, path: 'src/a.ts', lineStart: 5, lineEnd: 5 });
+  });
+
   it('searches inside the default 40-line window and not outside it', () => {
     const lines = Array.from({ length: 60 }, (_, index) => `line ${index + 1}`);
     const previous = captureAnchor(snapshot([file('src/a.ts', { newLines: lines })]), {

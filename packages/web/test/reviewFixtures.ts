@@ -27,7 +27,7 @@ export function makeAnchor(
   };
 }
 
-function comment(
+export function comment(
   id: string,
   body: string,
   anchors: Anchor[],
