@@ -38,10 +38,12 @@ export function ErrorPanel({
   title,
   message,
   onRetry,
+  retryLabel = 'Retry',
 }: {
   title: string;
   message: string;
   onRetry?: () => void;
+  retryLabel?: string;
 }): JSX.Element {
   return (
     <div className="cr-error-panel" role="alert">
@@ -51,7 +53,7 @@ export function ErrorPanel({
       </div>
       {onRetry !== undefined ? (
         <button type="button" className="cr-button" data-variant="secondary" onClick={onRetry}>
-          Retry
+          {retryLabel}
         </button>
       ) : null}
     </div>

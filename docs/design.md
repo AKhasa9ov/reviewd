@@ -912,8 +912,9 @@ interface Config {
 
 ### 15.1 Провенанс и направление
 
-- Стили из `ui-design-intelligence`: `dark-mode-first`, `data-dense-console` (компактные строки 28–32px, tabular figures, keyboard-first, статус = иконка+цвет), палитра `Developer Tools IDE` (`#101817`, `#1B2825`, `#273532`, `#F3F7F6`, `#A8BDB9`, `#6AE7CE`, `#E5685D`, border `#536A65` 3.10:1), типографика JetBrains Mono / Inter, motion 240/180/150/120ms.
-- Для diff/тредов строк в базе нет — используются общие дефолты и проверяются axe/Playwright; это фиксируется как fallback, не как «database match».
+- Стили из `ui-design-intelligence`: `dark-mode-first`, `data-dense-console` (компактные строки 28–32px, tabular figures, keyboard-first, статус = иконка+цвет), нейтральная графитовая база из style defaults `#0D1117`, `#161B22`, `#21262D`, `#E6EDF3`, `#9DA7B3`, синий акцент `#58A6FF`, border `#5B6572` (3.2:1), типографика JetBrains Mono / Inter, motion 240/180/150/120ms.
+- Зелёный и красный больше не окрашивают оболочку: они зарезервированы за добавленными/удалёнными строками, чтобы diff читался однозначно.
+- Для diff/тредов строк в базе нет — используются общие дефолты и проверяются расчётным контрастом, axe и Playwright; это фиксируется как fallback, не как «database match».
 - Светлая тема — производная от той же гаммы, каждый pair проходит расчётный контраст; не инверсия.
 
 ### 15.2 Токены
@@ -921,20 +922,20 @@ interface Config {
 ```css
 /* dark (default) */
 :root, .theme-dark {
-  --cr-bg: #101817; --cr-surface: #1B2825; --cr-surface-raised: #273532;
-  --cr-text: #F3F7F6; --cr-text-muted: #A8BDB9; --cr-border: #536A65;
-  --cr-primary: #6AE7CE; --cr-on-primary: #0F2420;
-  --cr-danger: #E5685D; --cr-on-danger: #2F110E;
-  --cr-warning: #E5A85D; --cr-info: #7C9CFF;
-  --cr-added-bg: rgba(106,231,206,.10); --cr-removed-bg: rgba(229,104,93,.10);
-  --cr-focus: #6AE7CE;
+  --cr-bg: #0D1117; --cr-surface: #161B22; --cr-surface-raised: #21262D;
+  --cr-text: #E6EDF3; --cr-text-muted: #9DA7B3; --cr-border: #5B6572;
+  --cr-primary: #58A6FF; --cr-on-primary: #08111F;
+  --cr-danger: #FF7B72; --cr-on-danger: #2B0B0B;
+  --cr-warning: #E3B341; --cr-info: #79C0FF;
+  --cr-added-bg: #10261A; --cr-removed-bg: #2B1518;
+  --cr-focus: #58A6FF;
 }
 /* light — derived, validated in tests */
 .theme-light {
-  --cr-bg: #FFFFFF; --cr-surface: #F6F8F7; --cr-surface-raised: #EDF2F0;
-  --cr-text: #0F1A18; --cr-text-muted: #4E625D; --cr-border: #C9D6D2;
-  --cr-primary: #0B7A67; --cr-on-primary: #FFFFFF;
-  --cr-danger: #B23A2F; --cr-warning: #8A5A12; --cr-info: #2F55B5;
+  --cr-bg: #FFFFFF; --cr-surface: #F6F8FA; --cr-surface-raised: #EAEEF2;
+  --cr-text: #1F2328; --cr-text-muted: #57606A; --cr-border: #8C959F;
+  --cr-primary: #0969DA; --cr-on-primary: #FFFFFF;
+  --cr-danger: #B42318; --cr-warning: #7A4D00; --cr-info: #1D4ED8;
 }
 ```
 
@@ -946,10 +947,12 @@ interface Config {
 
 ### 15.3 Layout
 
-- Standalone 1440: sidebar 280 / main flexible / right rail 320; 1024 — rail сворачивается; 768 — file tree drawer, rail drawer; 320 — single column, sticky action bar.
+- Standalone 1440: sidebar 280 / main flexible / right rail 320 на Conversation/Report/Signals; на Files changed правый rail скрыт, diff занимает всю ширину. 1024 — rail сворачивается; 768 — file tree drawer, rail drawer; 320 — single column, sticky action bar.
 - DSH panel: sidebar хоста + main; правая панель скрыта по умолчанию, открывается как sheet; всё в токенах хоста.
 - Список ревью: фильтры, поиск, строки с branch/scope, автор, возраст, статус, «N not fixed».
-- Деталь: header (base→head, SHA copy, round pills, verdict, Submit), tabs Conversation / Files changed / Report / Signals, file tree, diff, right rail (summary, fix status, agent, delivery, submit).
+- Деталь: header (base→head, SHA copy, round pills, verdict, Submit), tabs Conversation / Files changed / Report / Signals, file tree, diff, right rail (summary, fix status, agent, delivery, submit). Files changed открывается по умолчанию, если в URL нет `tab`.
+- Diff: длинные строки переносятся по умолчанию (тумблер Wrap lines), чтобы не было горизонтального скролла; inline-карточки findings и треды комментариев рендерятся сразу под строкой; file tree следует за вертикальным скроллом через `aria-current`.
+- Settings: у каждого репозитория кнопка Browse… открывает локальный просмотр папок с хлебными крошками, переходом вверх и пометкой git-репозиториев; выбор папки заполняет Path on daemon.
 - Round pills показывают counts; дефолт rN — дельта с rN-1, тумблер «Full diff to base».
 - Fix status board: Addressed / Not fixed / Outdated / Needs decision; клик фильтрует треды; у каждого пункта jump-to-line.
 - Тред: цитата кода, anchor history («line 42 → 57»), статусы, ответы, markdown preview.
@@ -967,7 +970,8 @@ interface Config {
 
 ### 15.5 A11y и клавиатура
 
-- WCAG AA: контраст 4.5/3, семантика, `aria-current`, dialog focus trap + Escape + restore, tabs `aria-selected`, diff line labels («line 57, added»), live-region для тостов/ошибок.
+- WCAG AA: контраст 4.5/3, семантика, `aria-current` для активного файла и строки, dialog focus trap + Escape + restore, tabs `aria-selected`, diff line labels («line 57, added»), live-region для тостов/ошибок.
+- Diff table: direct children — только `row`, строки — только `cell`; inline findings/треды/composer оборачиваются в row + cell, чтобы `aria-required-children` проходил.
 - Keyboard: Tab-порядок; `c` комментарий, `r` resolve, `j/k` файлы, `[/]` раунды, `?` help, `g l` — список; одиночные клавиши инертны в input/textarea/contenteditable и отключаемы (`data-shortcuts-off`).
 - Touch: ≥44×44 на coarse pointer, ≥8px между целями, никаких hover-only.
 - 320px без горизонтального скролла страницы; 200% zoom; длинные пути/URL wrap; reduced motion.

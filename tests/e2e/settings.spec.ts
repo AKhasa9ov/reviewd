@@ -8,7 +8,13 @@ test('saves a repository and starts branch and commit-set reviews', async ({ pag
   await expect(page.getByRole('heading', { name: 'Repositories', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Add repository' }).click();
   await page.getByLabel('Repository name').fill('E2E checkout');
-  await page.getByLabel('Path on daemon').fill(fx.repoRoot);
+  await page.getByRole('button', { name: 'Browse folders for repository E2E checkout' }).click();
+  const folderDialog = page.getByRole('dialog', { name: 'Choose a repository folder' });
+  await folderDialog.getByLabel('Folder path').fill(fx.repoRoot);
+  await folderDialog.getByRole('button', { name: 'Open', exact: true }).click();
+  await expect(folderDialog.getByText('git repo')).toBeVisible();
+  await folderDialog.getByRole('button', { name: 'Use this folder' }).click();
+  await expect(page.getByLabel('Path on daemon')).toHaveValue(fx.repoRoot);
   await page.getByLabel('Default target branch').fill('base');
   await page.getByRole('button', { name: 'Save repositories' }).click();
   await expect(page.getByText('Repository settings saved.')).toBeVisible();

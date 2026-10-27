@@ -87,6 +87,26 @@ test('switches immutable rounds, toggles delta, and honors deep links', async ({
   await expect(page.locator('.cr-diff-line-selected').first()).toBeVisible();
 });
 
+test('tracks the file in view while the diff scrolls', async ({ page }) => {
+  await page.setViewportSize({ width: 1200, height: 520 });
+  await openReview(page);
+  await expect(page.getByRole('tab', { name: /Files changed/ })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+
+  await page.getByRole('button', { name: 'Full diff to base' }).click();
+  await expect(page.locator('.cr-diff-file[data-file="src/util.ts"]')).toBeVisible();
+  const current = page.locator('.cr-tree-file[aria-current="true"]');
+  await expect(current).toContainText('app.ts');
+
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await expect(current).toContainText('util.ts');
+
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expect(current).toContainText('app.ts');
+});
+
 test('supports c, ?, and g l keyboard shortcuts outside form fields', async ({ page }) => {
   const fx = await openReview(page);
   await page.goto(

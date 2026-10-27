@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ApiClient, RepositorySetting } from '@dsh-code-review/ui';
 import { Button } from '@dsh-code-review/ui';
 import { ErrorPanel, PageHeader } from '../components.js';
+import { FolderPickerDialog } from './FolderPickerDialog.js';
 
 interface DraftRepository extends RepositorySetting {
   key: number;
@@ -25,6 +26,7 @@ export function SettingsPage({ client }: SettingsPageProps): JSX.Element {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [picker, setPicker] = useState<{ key: number; path: string } | null>(null);
   const nextKeyRef = useRef(1);
   const savingRef = useRef(false);
 
@@ -74,6 +76,25 @@ export function SettingsPage({ client }: SettingsPageProps): JSX.Element {
 
   function addRepository(): void {
     setDrafts((current) => [...current, { key: nextKey(), name: '', path: '', defaultTarget: '' }]);
+    setNotice(null);
+  }
+
+  function chooseFolder(path: string, name: string): void {
+    if (picker === null) return;
+    const key = picker.key;
+    setPicker(null);
+    setDrafts((current) =>
+      current.map((draft) =>
+        draft.key === key
+          ? { ...draft, path, name: draft.name.trim() === '' ? name : draft.name }
+          : draft,
+      ),
+    );
+    setErrors((current) => {
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
     setNotice(null);
   }
 
@@ -221,22 +242,36 @@ export function SettingsPage({ client }: SettingsPageProps): JSX.Element {
                         <label className="cr-label" htmlFor={`repo-${draft.key}-path`}>
                           Path on daemon
                         </label>
-                        <input
-                          id={`repo-${draft.key}-path`}
-                          className="cr-input cr-mono"
-                          value={draft.path}
-                          disabled={saving}
-                          onChange={(event) => update(draft.key, { path: event.target.value })}
-                          placeholder="/srv/repos/checkout"
-                          autoComplete="off"
-                          spellCheck={false}
-                          aria-invalid={draftErrors.path === undefined ? undefined : true}
-                          aria-describedby={
-                            draftErrors.path === undefined
-                              ? undefined
-                              : `repo-${draft.key}-path-error`
-                          }
-                        />
+                        <div className="cr-path-control">
+                          <input
+                            id={`repo-${draft.key}-path`}
+                            className="cr-input cr-mono"
+                            value={draft.path}
+                            disabled={saving}
+                            onChange={(event) => update(draft.key, { path: event.target.value })}
+                            placeholder="/srv/repos/checkout"
+                            autoComplete="off"
+                            spellCheck={false}
+                            aria-invalid={draftErrors.path === undefined ? undefined : true}
+                            aria-describedby={
+                              draftErrors.path === undefined
+                                ? undefined
+                                : `repo-${draft.key}-path-error`
+                            }
+                          />
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="small"
+                            disabled={saving}
+                            aria-label={`Browse folders for repository ${
+                              draft.name.trim() || draft.path.trim() || index + 1
+                            }`}
+                            onClick={() => setPicker({ key: draft.key, path: draft.path.trim() })}
+                          >
+                            Browse…
+                          </Button>
+                        </div>
                         {draftErrors.path !== undefined ? (
                           <span
                             className="cr-error"
@@ -287,6 +322,15 @@ export function SettingsPage({ client }: SettingsPageProps): JSX.Element {
           ) : null}
         </form>
       )}
+      {picker !== null ? (
+        <FolderPickerDialog
+          key={picker.key}
+          client={client}
+          initialPath={picker.path === '' ? undefined : picker.path}
+          onClose={() => setPicker(null)}
+          onSelect={chooseFolder}
+        />
+      ) : null}
     </>
   );
 }

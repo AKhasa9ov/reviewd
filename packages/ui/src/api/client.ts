@@ -4,6 +4,7 @@ import type {
   EventsResponse,
   CreateReviewRequest,
   CreateReviewResponse,
+  DirectoryListing,
   HealthResponse,
   LatestFeedbackView,
   Page,
@@ -202,6 +203,16 @@ export class ApiClient {
     return this.request<RepositoriesResponse>('/api/settings/repositories', {
       method: 'PUT',
       body: { repositories },
+    });
+  }
+
+  async listDirectories(path?: string, signal?: AbortSignal): Promise<DirectoryListing> {
+    const params = new URLSearchParams();
+    const trimmed = path?.trim();
+    if (trimmed !== undefined && trimmed !== '') params.set('path', trimmed);
+    const query = params.toString();
+    return this.request<DirectoryListing>(`/api/fs/dirs${query === '' ? '' : `?${query}`}`, {
+      ...(signal === undefined ? {} : { signal }),
     });
   }
 

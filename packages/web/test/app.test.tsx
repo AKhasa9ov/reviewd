@@ -41,6 +41,13 @@ function fakeClient(overrides: Partial<Record<keyof ApiClient, unknown>> = {}): 
       version: '0.1.0',
     })),
     listRepositories: vi.fn(async () => ({ repositories: [] })),
+    listDirectories: vi.fn(async () => ({
+      path: '/srv',
+      parent: '/',
+      breadcrumbs: [{ name: '/', path: '/' }],
+      entries: [],
+      truncated: false,
+    })),
     saveRepositories: vi.fn(async (repositories) => ({ repositories })),
     listBranches: vi.fn(async () => ({ repoRoot: '/srv/repo', branches: [] })),
     listCommits: vi.fn(async () => ({
@@ -224,6 +231,13 @@ describe('repository settings', () => {
       <App
         client={fakeClient({
           listRepositories: vi.fn(async () => ({ repositories: [] })),
+          listDirectories: vi.fn(async () => ({
+            path: '/srv',
+            parent: '/',
+            breadcrumbs: [{ name: '/', path: '/' }],
+            entries: [],
+            truncated: false,
+          })),
           saveRepositories,
         })}
       />,
@@ -272,6 +286,48 @@ describe('repository settings', () => {
     expect(screen.getByRole('button', { name: 'Add repository' })).toBeDisabled();
   });
 
+  it('picks a repository folder from the daemon browser', async () => {
+    const user = userEvent.setup();
+    const listDirectories = vi.fn(async (path?: string) =>
+      path === '/srv/checkout'
+        ? {
+            path: '/srv/checkout',
+            parent: '/srv',
+            breadcrumbs: [
+              { name: '/', path: '/' },
+              { name: 'srv', path: '/srv' },
+              { name: 'checkout', path: '/srv/checkout' },
+            ],
+            entries: [],
+            truncated: false,
+          }
+        : {
+            path: '/srv',
+            parent: '/',
+            breadcrumbs: [
+              { name: '/', path: '/' },
+              { name: 'srv', path: '/srv' },
+            ],
+            entries: [{ name: 'checkout', path: '/srv/checkout', isGit: true }],
+            truncated: false,
+          },
+    );
+    go('/settings');
+    render(<App client={fakeClient({ listDirectories })} />);
+    await screen.findByRole('heading', { name: /^Repositories$/ });
+    await user.click(screen.getByRole('button', { name: 'Add repository' }));
+    await user.click(screen.getByRole('button', { name: 'Browse folders for repository 1' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Choose a repository folder' });
+    await user.click(within(dialog).getByRole('button', { name: /checkout/ }));
+    await screen.findByText('This folder has no subfolders. You can still choose it.');
+    await user.click(within(dialog).getByRole('button', { name: 'Use this folder' }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Path on daemon')).toHaveValue('/srv/checkout');
+    expect(screen.getByLabelText('Repository name')).toHaveValue('checkout');
+  });
+
   it('rejects an incomplete repository before saving', async () => {
     const user = userEvent.setup();
     const saveRepositories = vi.fn();
@@ -280,6 +336,13 @@ describe('repository settings', () => {
       <App
         client={fakeClient({
           listRepositories: vi.fn(async () => ({ repositories: [] })),
+          listDirectories: vi.fn(async () => ({
+            path: '/srv',
+            parent: '/',
+            breadcrumbs: [{ name: '/', path: '/' }],
+            entries: [],
+            truncated: false,
+          })),
           saveRepositories,
         })}
       />,

@@ -88,6 +88,13 @@ test.describe('@a11y accessibility', () => {
     await expect(page.getByRole('heading', { name: 'Repositories', exact: true })).toBeVisible();
     await expectNoSeriousAxe(page, 'settings dark');
 
+    await page.getByRole('button', { name: 'Add repository' }).click();
+    await page.getByRole('button', { name: 'Browse folders for repository 1' }).click();
+    const folderDialog = page.getByRole('dialog', { name: 'Choose a repository folder' });
+    await expect(folderDialog).toBeVisible();
+    await expectNoSeriousAxe(page, 'folder picker dark');
+    await folderDialog.getByRole('button', { name: 'Cancel' }).click();
+
     await page.goto(`${fx.baseUrl}/new`);
     await expect(page.getByRole('heading', { name: 'Set the boundary' })).toBeVisible();
     await expectNoSeriousAxe(page, 'new review dark');

@@ -85,6 +85,80 @@ function findingsOnLine(
   );
 }
 
+function severityLetter(severity: Finding['severity']): string {
+  return severity === 'blocker'
+    ? 'B'
+    : severity === 'major'
+      ? 'M'
+      : severity === 'minor'
+        ? 'm'
+        : 'n';
+}
+
+function severityTone(severity: Finding['severity']): 'danger' | 'warning' | 'info' | 'neutral' {
+  return severity === 'blocker'
+    ? 'danger'
+    : severity === 'major'
+      ? 'warning'
+      : severity === 'minor'
+        ? 'info'
+        : 'neutral';
+}
+
+interface InlineFindingProps {
+  finding: Finding;
+  onOpenFinding?: ((finding: Finding) => void) | undefined;
+}
+
+function InlineFinding({ finding, onOpenFinding }: InlineFindingProps): JSX.Element {
+  const lines =
+    finding.lineStart === finding.lineEnd
+      ? `line ${finding.lineStart}`
+      : `lines ${finding.lineStart}–${finding.lineEnd}`;
+  return (
+    <article
+      role="cell"
+      className={`cr-inline-finding cr-risk-${finding.severity}`}
+      aria-label={`${finding.severity} finding: ${finding.title}`}
+    >
+      <span className="cr-inline-finding-severity" aria-hidden="true">
+        {severityLetter(finding.severity)}
+      </span>
+      <div className="cr-inline-finding-main">
+        <header className="cr-inline-finding-head">
+          <strong>{finding.title}</strong>
+          <span className="cr-meta">
+            {finding.category} · {lines} · agent
+          </span>
+        </header>
+        <p className="cr-inline-finding-rationale">{finding.rationale}</p>
+        {finding.evidence.trim() !== '' || finding.suggestion !== undefined ? (
+          <details className="cr-inline-finding-details">
+            <summary>Evidence and suggestion</summary>
+            {finding.evidence.trim() !== '' ? (
+              <pre className="cr-inline-finding-evidence">{finding.evidence}</pre>
+            ) : null}
+            {finding.suggestion !== undefined ? (
+              <div className="cr-inline-finding-suggestion">
+                <span className="cr-suggestion-caption">Suggested change</span>
+                <pre>{finding.suggestion.replacement}</pre>
+              </div>
+            ) : null}
+          </details>
+        ) : null}
+        <div className="cr-inline-finding-actions">
+          <Badge tone={severityTone(finding.severity)}>{finding.severity}</Badge>
+          {onOpenFinding !== undefined ? (
+            <button type="button" className="cr-link-button" onClick={() => onOpenFinding(finding)}>
+              Open in report
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </article>
+  );
+}
+
 function highestFinding(findings: readonly Finding[]): Finding | null {
   return findings.reduce<Finding | null>(
     (highest, finding) =>
@@ -299,19 +373,21 @@ function DiffFileSection({
                 </div>
                 {shown.map((row) =>
                   row.type === 'hunk' ? (
-                    <div className="cr-hunk" key={row.key} role="separator">
+                    <div className="cr-hunk" key={row.key} role="row">
                       {(() => {
                         const header = row.hunk?.header.trim() ?? '';
                         const raw = header.startsWith('@@');
                         return (
                           <>
-                            <span className="cr-hunk-code">
+                            <span className="cr-hunk-code" role="cell">
                               {raw
                                 ? header
                                 : `@@ -${row.hunk?.oldStart},${row.hunk?.oldLines} +${row.hunk?.newStart},${row.hunk?.newLines} @@`}
                             </span>
                             {!raw && header !== '' ? (
-                              <span className="cr-hunk-header">{header}</span>
+                              <span className="cr-hunk-header" role="cell">
+                                {header}
+                              </span>
                             ) : null}
                           </>
                         );
@@ -503,53 +579,58 @@ function DiffLineRow({
                 onOpenFinding?.(highestRisk);
               }}
             >
-              {highestRisk.severity === 'blocker'
-                ? 'B'
-                : highestRisk.severity === 'major'
-                  ? 'M'
-                  : highestRisk.severity === 'minor'
-                    ? 'm'
-                    : 'n'}
+              {severityLetter(highestRisk.severity)}
             </button>
           )}
         </span>
         <code className="cr-diff-text" role="cell">
           {line.text === '' ? ' ' : line.text}
         </code>
-        {!readOnly ? (
-          <button
-            type="button"
-            className="cr-diff-comment"
-            aria-label={`Comment on line ${no}`}
-            onClick={(event) => {
-              event.stopPropagation();
-              onOpenComposer(file, side, no, no);
-            }}
-          >
-            +
-          </button>
-        ) : null}
-        {lineComments.length > 0 ? (
-          <span className="cr-diff-comment-count" aria-label={`${lineComments.length} comments`}>
-            {lineComments.length}
-          </span>
-        ) : null}
+        <span className="cr-diff-actions-cell" role="cell">
+          {!readOnly ? (
+            <button
+              type="button"
+              className="cr-diff-comment"
+              aria-label={`Comment on line ${no}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenComposer(file, side, no, no);
+              }}
+            >
+              +
+            </button>
+          ) : null}
+          {lineComments.length > 0 ? (
+            <span className="cr-diff-comment-count" aria-label={`${lineComments.length} comments`}>
+              {lineComments.length}
+            </span>
+          ) : null}
+        </span>
       </div>
+      {lineFindings
+        .filter((finding) => finding.lineStart === no)
+        .map((finding) => (
+          <div className="cr-inline-finding-row" role="row" key={finding.id}>
+            <InlineFinding finding={finding} onOpenFinding={onOpenFinding} />
+          </div>
+        ))}
       {lineComments.length > 0 ? (
-        <div className="cr-inline-thread">
-          {lineComments.map((comment) => (
-            <CommentThread
-              key={comment.id}
-              comment={comment}
-              compact
-              active={activeCommentId === comment.id}
-              readOnly={readOnly}
-              onReply={onReply}
-              onState={onCommentState}
-              onJump={onCommentJump}
-              onFocus={onCommentFocus}
-            />
-          ))}
+        <div className="cr-inline-thread" role="row">
+          <div className="cr-inline-thread-cell" role="cell">
+            {lineComments.map((comment) => (
+              <CommentThread
+                key={comment.id}
+                comment={comment}
+                compact
+                active={activeCommentId === comment.id}
+                readOnly={readOnly}
+                onReply={onReply}
+                onState={onCommentState}
+                onJump={onCommentJump}
+                onFocus={onCommentFocus}
+              />
+            ))}
+          </div>
         </div>
       ) : null}
       {composer !== null &&
@@ -558,8 +639,8 @@ function DiffLineRow({
       composer.side === side &&
       composer.lineStart === no &&
       renderComposer !== undefined ? (
-        <div className="cr-inline-composer">
-          {renderComposer(file, side, composer.lineStart, composer.lineEnd)}
+        <div className="cr-inline-composer" role="row">
+          <div role="cell">{renderComposer(file, side, composer.lineStart, composer.lineEnd)}</div>
         </div>
       ) : null}
     </>
@@ -593,10 +674,17 @@ export function DiffViewer({
   const [search, setSearch] = useState('');
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [dragRange, setDragRange] = useState<DragRange | null>(null);
+  const [wrap, setWrap] = useState(true);
+  const [currentFile, setCurrentFile] = useState<string | undefined>(activeFile);
+  const filesRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
   const suppressClickRef = useRef(false);
   const openComposerRef = useRef(onOpenComposer);
   openComposerRef.current = onOpenComposer;
+
+  useEffect(() => {
+    if (activeFile !== undefined) setCurrentFile(activeFile);
+  }, [activeFile]);
 
   useEffect(() => {
     function finishDrag(): void {
@@ -671,7 +759,47 @@ export function DiffViewer({
       ? visibleFiles
       : visibleFiles.filter((file) => file.path.toLowerCase().includes(query));
   const groups = groupByDirectory(filteredFiles);
+  const fileKey = filteredFiles.map((file) => file.path).join('\u0000');
   const canDelta = round > 1;
+
+  useEffect(() => {
+    const root = filesRef.current;
+    if (root === null || typeof window === 'undefined') return;
+    let frame = 0;
+    function update(): void {
+      frame = 0;
+      const sections = [...root!.querySelectorAll<HTMLElement>('.cr-diff-file[data-file]')];
+      if (sections.length === 0) return;
+      const viewportHeight = window.innerHeight;
+      let next: string | undefined;
+      let bestVisible = 0;
+      for (const section of sections) {
+        const rect = section.getBoundingClientRect();
+        const visible = Math.max(0, Math.min(rect.bottom, viewportHeight) - Math.max(rect.top, 0));
+        if (visible > bestVisible) {
+          bestVisible = visible;
+          next = section.dataset.file;
+        }
+      }
+      const fallback = sections[0]?.dataset.file;
+      const resolved = next ?? fallback;
+      if (resolved !== undefined) {
+        setCurrentFile((previous) => (previous === resolved ? previous : resolved));
+      }
+    }
+    function schedule(): void {
+      if (frame !== 0) return;
+      frame = window.requestAnimationFrame(update);
+    }
+    update();
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    return () => {
+      if (frame !== 0) window.cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+    };
+  }, [fileKey]);
   const openCommentsByPath = new Map<string, number>();
   for (const comment of comments) {
     if (comment.state !== 'open') continue;
@@ -753,7 +881,7 @@ export function DiffViewer({
                           key={file.path}
                           className={[
                             'cr-tree-file',
-                            activeFile === file.path ? 'cr-tree-file-active' : '',
+                            currentFile === file.path ? 'cr-tree-file-active' : '',
                           ]
                             .filter(Boolean)
                             .join(' ')}
@@ -762,6 +890,7 @@ export function DiffViewer({
                             onJump(file.path, first?.line);
                           }}
                           title={file.path}
+                          aria-current={currentFile === file.path ? 'true' : undefined}
                         >
                           <span
                             className={`cr-tree-status cr-tree-status-${file.status}`}
@@ -821,6 +950,16 @@ export function DiffViewer({
           <span className="cr-meta cr-diff-scope-note">
             {delta && canDelta ? `r${round} vs r${round - 1}` : 'base → head'}
           </span>
+          <div className="cr-segmented" role="group" aria-label="Code display">
+            <button
+              type="button"
+              className="cr-segmented-button"
+              aria-pressed={wrap}
+              onClick={() => setWrap((value) => !value)}
+            >
+              Wrap lines
+            </button>
+          </div>
           <span className="cr-meta cr-diff-count">
             {filteredFiles.length} file{filteredFiles.length === 1 ? '' : 's'}
           </span>
@@ -862,14 +1001,17 @@ export function DiffViewer({
             }
           />
         ) : (
-          <div className="cr-diff-files">
+          <div
+            className={['cr-diff-files', wrap ? 'cr-diff-wrap' : ''].filter(Boolean).join(' ')}
+            ref={filesRef}
+          >
             {filteredFiles.map((file) => (
               <DiffFileSection
                 key={file.path}
                 file={file}
                 comments={comments}
                 round={round}
-                active={activeFile === file.path}
+                active={currentFile === file.path}
                 activeLine={activeFile === file.path ? activeLine : undefined}
                 activeCommentId={activeCommentId}
                 composer={composer}

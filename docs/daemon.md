@@ -56,6 +56,7 @@ Codes: `unauthorized`, `forbidden`, `not-found`, `validation`, `conflict`, `stal
 | GET    | `/api/repos/commits?path=&base=&head=`      | merge base and commits between two branches, oldest first               |
 | GET    | `/api/settings/repositories`                | saved repositories and default target branches                          |
 | PUT    | `/api/settings/repositories`                | validates and persists `{repositories:[{name,path,defaultTarget?}]}`    |
+| GET    | `/api/fs/dirs?path=`                        | subdirectories (max 500) with git markers; defaults to the home dir     |
 | POST   | `/api/reviews`                              | `{repoRoot,title,scope,reviewer}`; returns `{review,url,warnings}`      |
 | GET    | `/api/reviews`                              | `status`, `limit`, `offset`                                             |
 | GET    | `/api/reviews/:id`                          | `{review,latestSnapshot,report}`                                        |

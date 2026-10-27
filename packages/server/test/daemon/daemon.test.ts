@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { chmod, mkdtemp, rm } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { startDaemon } from '../../src/daemon/server.js';
 import type { ReviewDaemon } from '../../src/daemon/types.js';
@@ -972,6 +972,78 @@ describe('repository settings', () => {
       await fetch(`${restarted.daemonUrl}/api/settings/repositories`, { headers: headers() }),
     );
     expect(settings.repositories.map((item: any) => item.path)).toEqual([checkout.root]);
+  });
+});
+
+describe('directory browsing', () => {
+  async function browseFixture(): Promise<string> {
+    const root = await mkdtemp(join(tmpdir(), 'reviewd-browse-'));
+    cleanups.push(async () => {
+      await rm(root, { recursive: true, force: true });
+    });
+    await mkdir(join(root, '.hidden'));
+    await mkdir(join(root, 'alpha'));
+    await mkdir(join(root, 'beta', '.git'), { recursive: true });
+    await writeFile(join(root, 'notes.txt'), 'hello\n');
+    return root;
+  }
+
+  function breadcrumbsFor(root: string): Array<{ name: string; path: string }> {
+    const breadcrumbs = [{ name: '/', path: '/' }];
+    const segments = root.split('/').filter((segment) => segment !== '');
+    for (const [index, segment] of segments.entries()) {
+      breadcrumbs.push({
+        name: segment,
+        path: `/${segments.slice(0, index + 1).join('/')}`,
+      });
+    }
+    return breadcrumbs;
+  }
+
+  it('lists sorted directories with git markers, breadcrumbs and parent', async () => {
+    const { daemonUrl } = await running();
+    const root = await browseFixture();
+    const response = await fetch(`${daemonUrl}/api/fs/dirs?path=${encodeURIComponent(root)}`, {
+      headers: headers(),
+    });
+    expect(response.status).toBe(200);
+    const body = await read(response);
+    expect(body.path).toBe(root);
+    expect(body.parent).toBe(dirname(root));
+    expect(body.breadcrumbs).toEqual(breadcrumbsFor(root));
+    expect(body.entries).toEqual([
+      { name: '.hidden', path: join(root, '.hidden'), isGit: false },
+      { name: 'alpha', path: join(root, 'alpha'), isGit: false },
+      { name: 'beta', path: join(root, 'beta'), isGit: true },
+    ]);
+    expect(body.truncated).toBe(false);
+  });
+
+  it('rejects a file path with a validation error', async () => {
+    const { daemonUrl } = await running();
+    const root = await browseFixture();
+    const response = await fetch(
+      `${daemonUrl}/api/fs/dirs?path=${encodeURIComponent(join(root, 'notes.txt'))}`,
+      { headers: headers() },
+    );
+    expect(response.status).toBe(400);
+    expect((await read(response)).error).toMatchObject({ code: 'validation' });
+  });
+
+  it('defaults a missing path to the home directory', async () => {
+    const { daemonUrl } = await running();
+    const response = await fetch(`${daemonUrl}/api/fs/dirs`, { headers: headers() });
+    expect(response.status).toBe(200);
+    const body = await read(response);
+    expect(body.path.startsWith('/')).toBe(true);
+    expect(Array.isArray(body.entries)).toBe(true);
+  });
+
+  it('requires authentication', async () => {
+    const { daemonUrl } = await running();
+    const response = await fetch(`${daemonUrl}/api/fs/dirs`);
+    expect(response.status).toBe(401);
+    expect((await read(response)).error.code).toBe('unauthorized');
   });
 });
 

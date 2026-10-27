@@ -77,7 +77,7 @@ function sendHtml(res: ServerResponse, html: string, cache: string): void {
 function fallbackHtml(): string {
   return [
     '<!doctype html><meta charset="utf-8"><title>reviewd — UI not built</title>',
-    '<style>body{font:16px/1.5 system-ui,sans-serif;max-width:44rem;margin:10vh auto;padding:0 1.5rem;color:#1b2825;background:#f6f8f7}code{background:#edf2f0;padding:.15rem .35rem;border-radius:4px}</style>',
+    '<style>body{font:16px/1.5 system-ui,sans-serif;max-width:44rem;margin:10vh auto;padding:0 1.5rem;color:#1f2328;background:#f6f8fa}code{background:#eaeef2;padding:.15rem .35rem;border-radius:4px}</style>',
     '<h1>reviewd is running</h1>',
     '<p>The browser UI has not been built yet. Build it with <code>pnpm build</code> and reload this page.</p>',
     '<p>For scripted clients use the authenticated API at <code>/api</code>; health is available at <code>/api/health</code>.</p>',

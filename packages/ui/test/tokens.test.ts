@@ -62,6 +62,13 @@ describe('design tokens', () => {
       expect(ratio(token(theme, 'on-selection'), token(theme, 'selection'))).toBeGreaterThanOrEqual(
         4.5,
       );
+      expect(ratio(token(theme, 'added-accent'), token(theme, 'added-bg'))).toBeGreaterThanOrEqual(
+        3,
+      );
+      expect(
+        ratio(token(theme, 'removed-accent'), token(theme, 'removed-bg')),
+      ).toBeGreaterThanOrEqual(3);
+      expect(ratio(token(theme, 'focus'), token(theme, 'surface'))).toBeGreaterThanOrEqual(3);
     });
 
     it(`${theme} control pairs meet WCAG non-text contrast`, () => {
@@ -81,25 +88,25 @@ describe('design tokens', () => {
   }
 
   it('keeps the design dark palette exact and derives a matching light theme', () => {
-    expect(token('dark', 'bg')).toBe('#101817');
-    expect(token('dark', 'surface')).toBe('#1b2825');
-    expect(token('dark', 'surface-raised')).toBe('#273532');
-    expect(token('dark', 'text')).toBe('#f3f7f6');
-    expect(token('dark', 'text-muted')).toBe('#a8bdb9');
-    expect(token('dark', 'border')).toBe('#536a65');
-    expect(token('dark', 'primary')).toBe('#6ae7ce');
-    expect(token('dark', 'on-primary')).toBe('#0f2420');
-    expect(token('dark', 'danger')).toBe('#e5685d');
-    expect(token('dark', 'on-danger')).toBe('#2f110e');
-    expect(token('dark', 'warning')).toBe('#e5a85d');
-    expect(token('dark', 'info')).toBe('#7c9cff');
+    expect(token('dark', 'bg')).toBe('#0d1117');
+    expect(token('dark', 'surface')).toBe('#161b22');
+    expect(token('dark', 'surface-raised')).toBe('#21262d');
+    expect(token('dark', 'text')).toBe('#e6edf3');
+    expect(token('dark', 'text-muted')).toBe('#9da7b3');
+    expect(token('dark', 'border')).toBe('#5b6572');
+    expect(token('dark', 'primary')).toBe('#58a6ff');
+    expect(token('dark', 'on-primary')).toBe('#08111f');
+    expect(token('dark', 'danger')).toBe('#ff7b72');
+    expect(token('dark', 'on-danger')).toBe('#2b0b0b');
+    expect(token('dark', 'warning')).toBe('#e3b341');
+    expect(token('dark', 'info')).toBe('#79c0ff');
 
     expect(token('light', 'bg')).toBe('#ffffff');
-    expect(token('light', 'surface')).toBe('#f6f8f7');
-    expect(token('light', 'text')).toBe('#0f1a18');
-    expect(token('light', 'text-muted')).toBe('#4e625d');
-    expect(token('light', 'primary')).toBe('#0b7a67');
-    expect(token('light', 'danger')).toBe('#b23a2f');
+    expect(token('light', 'surface')).toBe('#f6f8fa');
+    expect(token('light', 'text')).toBe('#1f2328');
+    expect(token('light', 'text-muted')).toBe('#57606a');
+    expect(token('light', 'primary')).toBe('#0969da');
+    expect(token('light', 'danger')).toBe('#b42318');
   });
 
   it('defaults to the dark palette and honors reduced motion', () => {

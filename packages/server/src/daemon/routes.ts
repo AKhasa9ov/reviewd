@@ -1,7 +1,9 @@
 import { randomBytes } from 'node:crypto';
-import { open, unlink } from 'node:fs/promises';
+import type { Dirent, Stats } from 'node:fs';
+import { open, readdir, stat, unlink } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { join } from 'node:path';
+import { homedir } from 'node:os';
+import { dirname, isAbsolute, join, parse, resolve, sep } from 'node:path';
 import {
   CORE_VERSION,
   GitError,
@@ -844,6 +846,58 @@ export async function handle(
     return;
   }
 
+  if (path === '/api/fs/dirs' && method === 'GET') {
+    const raw = url.searchParams.get('path');
+    const trimmed = raw === null ? '' : raw.trim();
+    const requested = trimmed === '' ? homedir() : trimmed;
+    if (requested.includes('\0')) {
+      throw new ApiError('validation', 'path must not contain NUL bytes');
+    }
+    if (requested.length > 4096) {
+      throw new ApiError('validation', 'path is too long');
+    }
+    if (!isAbsolute(requested)) {
+      throw new ApiError('validation', 'path must be absolute');
+    }
+    const target = resolve(requested);
+    let info: Stats;
+    try {
+      info = await stat(target);
+    } catch (error) {
+      throw directoryError(error, target);
+    }
+    if (!info.isDirectory()) {
+      throw new ApiError('validation', `not a directory: ${target}`);
+    }
+    let dirents: Dirent[];
+    try {
+      dirents = await readdir(target, { withFileTypes: true });
+    } catch (error) {
+      throw directoryError(error, target);
+    }
+    const entries: DirectoryEntry[] = [];
+    for (const entry of dirents) {
+      if (!(await entryIsDirectory(target, entry))) continue;
+      const entryPath = join(target, entry.name);
+      entries.push({
+        name: entry.name,
+        path: entryPath,
+        isGit: await hasGitEntry(entryPath),
+      });
+    }
+    entries.sort((left, right) => left.name.localeCompare(right.name));
+    const truncated = entries.length > MAX_DIRECTORY_ENTRIES;
+    if (truncated) entries.length = MAX_DIRECTORY_ENTRIES;
+    sendJson(res, 200, {
+      path: target,
+      parent: target === parse(target).root ? null : dirname(target),
+      breadcrumbs: breadcrumbsFor(target),
+      entries,
+      truncated,
+    } satisfies DirectoryListing);
+    return;
+  }
+
   if (path === '/api/repos/commits' && method === 'GET') {
     const repoPath = url.searchParams.get('path');
     const base = url.searchParams.get('base');
@@ -906,6 +960,74 @@ export async function handle(
   }
 
   throw new ApiError('not-found', `unknown route: ${method} ${path}`);
+}
+
+const MAX_DIRECTORY_ENTRIES = 500;
+
+interface DirectoryEntry {
+  name: string;
+  path: string;
+  isGit: boolean;
+}
+
+interface DirectoryListing {
+  path: string;
+  parent: string | null;
+  breadcrumbs: Array<{ name: string; path: string }>;
+  entries: DirectoryEntry[];
+  truncated: boolean;
+}
+
+function nodeErrorCode(error: unknown): string | undefined {
+  if (typeof error !== 'object' || error === null || !('code' in error)) return undefined;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === 'string' ? code : undefined;
+}
+
+function directoryError(error: unknown, target: string): ApiError {
+  switch (nodeErrorCode(error)) {
+    case 'ENOENT':
+      return new ApiError('validation', `directory does not exist: ${target}`);
+    case 'EACCES':
+      return new ApiError('validation', `permission denied: ${target}`);
+    case 'ENOTDIR':
+      return new ApiError('validation', `not a directory: ${target}`);
+    default:
+      return new ApiError('validation', `cannot read directory: ${target}`);
+  }
+}
+
+/** Symlinks are included only when they resolve to a directory; their children are not visited. */
+async function entryIsDirectory(parent: string, entry: Dirent): Promise<boolean> {
+  if (entry.isDirectory()) return true;
+  if (!entry.isSymbolicLink()) return false;
+  try {
+    return (await stat(join(parent, entry.name))).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+/** Worktrees use a `.git` file instead of a directory. */
+async function hasGitEntry(directory: string): Promise<boolean> {
+  try {
+    const info = await stat(join(directory, '.git'));
+    return info.isDirectory() || info.isFile();
+  } catch {
+    return false;
+  }
+}
+
+function breadcrumbsFor(target: string): Array<{ name: string; path: string }> {
+  const { root } = parse(target);
+  const breadcrumbs = [{ name: '/', path: root }];
+  let current = root;
+  for (const segment of target.slice(root.length).split(sep)) {
+    if (segment === '') continue;
+    current = join(current, segment);
+    breadcrumbs.push({ name: segment, path: current });
+  }
+  return breadcrumbs;
 }
 
 function assertGitRef(value: string, label: string): string {

@@ -165,8 +165,11 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
   const [tab, setTab] = useState<ReviewTab>(() => {
     const explicit = new URL(liveLocation, 'http://local').searchParams.get('tab');
-    return explicit === null && restoredDraft !== null ? 'files' : parseTab(explicit);
+    return explicit === null ? 'files' : parseTab(explicit);
   });
+  const explicitTabRef = useRef(
+    new URL(liveLocation, 'http://local').searchParams.get('tab') !== null,
+  );
   const [delta, setDelta] = useState(false);
   const [fixFilter, setFixFilter] = useState<FixFilter>('all');
   const [activeFile, setActiveFile] = useState<string | undefined>(deep.file);
@@ -315,7 +318,14 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
   }, [view, deep.round]);
 
   useEffect(() => {
-    setTab(parseTab(new URL(liveLocation, 'http://local').searchParams.get('tab')));
+    const explicit = new URL(liveLocation, 'http://local').searchParams.get('tab');
+    if (explicit !== null) {
+      explicitTabRef.current = true;
+      setTab(parseTab(explicit));
+    } else if (explicitTabRef.current) {
+      explicitTabRef.current = false;
+      setTab('files');
+    }
   }, [liveLocation]);
 
   useEffect(() => {
@@ -1067,7 +1077,7 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
         </div>
       ) : null}
 
-      <div className="cr-detail-grid">
+      <div className={tab === 'files' ? 'cr-detail-grid cr-detail-grid-wide' : 'cr-detail-grid'}>
         <div className="cr-detail-main">
           <div className="cr-detail-tabs" role="tablist" aria-label="Review sections">
             {TABS.map((item) => {
@@ -1196,185 +1206,188 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
           </section>
         </div>
 
-        <aside className="cr-rail" aria-label="Review context">
-          <section className="cr-card cr-rail-card">
-            <div className="cr-card-head">
-              <span className="cr-card-title">Summary</span>
-              {report !== null ? (
+        {tab === 'files' ? null : (
+          <aside className="cr-rail" aria-label="Review context">
+            <section className="cr-card cr-rail-card">
+              <div className="cr-card-head">
+                <span className="cr-card-title">Summary</span>
+                {report !== null ? (
+                  <Badge
+                    tone={
+                      report.riskLevel === 'critical' || report.riskLevel === 'high'
+                        ? 'danger'
+                        : 'neutral'
+                    }
+                  >
+                    {report.riskLevel}
+                  </Badge>
+                ) : null}
+              </div>
+              <p className="cr-rail-copy">
+                {report?.summary ?? 'The reviewer has not produced a summary for this round yet.'}
+              </p>
+              <div className="cr-rail-meta">
+                <span>{review.comments.length} comments</span>
+                <span>{unresolvedComments(review).length} open</span>
+                <span>{review.rounds.length} rounds</span>
+              </div>
+            </section>
+
+            <section className="cr-card cr-rail-card">
+              <FixStatusBoard
+                counts={counts}
+                active={fixFilter}
+                onFilter={(filter) => {
+                  setFixFilter(filter);
+                  if (filter !== 'all') setTab('conversation');
+                }}
+                compact
+              />
+            </section>
+
+            <section className="cr-card cr-rail-card">
+              <div className="cr-card-head">
+                <span className="cr-card-title">Diff range</span>
+              </div>
+              <label className="cr-switch-row">
+                <input
+                  type="checkbox"
+                  checked={effectiveDelta}
+                  disabled={!canDelta}
+                  onChange={(event) => setDelta(event.target.checked)}
+                />
+                <span>
+                  <strong>Delta only</strong>
+                  <span className="cr-meta">
+                    {selectedRound !== null && selectedRound > 1
+                      ? `r${selectedRound} vs r${selectedRound - 1}`
+                      : 'Available from round 2'}
+                  </span>
+                </span>
+              </label>
+            </section>
+
+            <section className="cr-card cr-rail-card">
+              <div className="cr-card-head">
+                <span className="cr-card-title">Reviewer</span>
                 <Badge
                   tone={
-                    report.riskLevel === 'critical' || report.riskLevel === 'high'
+                    review.agent?.status === 'failed'
                       ? 'danger'
-                      : 'neutral'
+                      : review.agent?.status === 'running'
+                        ? 'warning'
+                        : review.agent?.status === 'done'
+                          ? 'success'
+                          : 'neutral'
                   }
                 >
-                  {report.riskLevel}
+                  {review.agent?.status ?? 'not run'}
                 </Badge>
-              ) : null}
-            </div>
-            <p className="cr-rail-copy">
-              {report?.summary ?? 'The reviewer has not produced a summary for this round yet.'}
-            </p>
-            <div className="cr-rail-meta">
-              <span>{review.comments.length} comments</span>
-              <span>{unresolvedComments(review).length} open</span>
-              <span>{review.rounds.length} rounds</span>
-            </div>
-          </section>
-
-          <section className="cr-card cr-rail-card">
-            <FixStatusBoard
-              counts={counts}
-              active={fixFilter}
-              onFilter={(filter) => {
-                setFixFilter(filter);
-                if (filter !== 'all') setTab('conversation');
-              }}
-              compact
-            />
-          </section>
-
-          <section className="cr-card cr-rail-card">
-            <div className="cr-card-head">
-              <span className="cr-card-title">Diff range</span>
-            </div>
-            <label className="cr-switch-row">
-              <input
-                type="checkbox"
-                checked={effectiveDelta}
-                disabled={!canDelta}
-                onChange={(event) => setDelta(event.target.checked)}
-              />
-              <span>
-                <strong>Delta only</strong>
-                <span className="cr-meta">
-                  {selectedRound !== null && selectedRound > 1
-                    ? `r${selectedRound} vs r${selectedRound - 1}`
-                    : 'Available from round 2'}
-                </span>
-              </span>
-            </label>
-          </section>
-
-          <section className="cr-card cr-rail-card">
-            <div className="cr-card-head">
-              <span className="cr-card-title">Reviewer</span>
-              <Badge
-                tone={
-                  review.agent?.status === 'failed'
-                    ? 'danger'
-                    : review.agent?.status === 'running'
-                      ? 'warning'
-                      : review.agent?.status === 'done'
-                        ? 'success'
-                        : 'neutral'
-                }
-              >
-                {review.agent?.status ?? 'not run'}
-              </Badge>
-            </div>
-            {review.agent?.status === 'running' ? (
-              <>
-                <p className="cr-meta">
-                  Working on round {review.agent.round ?? selectedRound ?? '—'}.
-                </p>
-                <Button
-                  size="small"
-                  variant="secondary"
-                  loading={cancelPending}
-                  onClick={() => void cancelReviewer()}
-                >
-                  Cancel reviewer
-                </Button>
-              </>
-            ) : review.agent?.status === 'failed' ? (
-              <>
-                <p className="cr-meta">{review.agent.error ?? 'Reviewer failed.'}</p>
-                <p className="cr-meta">
-                  In-place retry is not exposed by this daemon version. Create a new round to run
-                  the reviewer again after the issue is fixed.
-                </p>
-                <Button
-                  size="small"
-                  variant="secondary"
-                  disabled={agentRunning}
-                  onClick={() => setRefreshOpen(true)}
-                >
-                  Create a new round
-                </Button>
-              </>
-            ) : report !== null ? (
-              <p className="cr-meta">
-                {report.findings.length} findings · {report.backend} backend · round {report.round}
-              </p>
-            ) : (
-              <p className="cr-meta">No reviewer report yet.</p>
-            )}
-          </section>
-
-          <section className="cr-card cr-rail-card">
-            <div className="cr-card-head">
-              <span className="cr-card-title">Delivery</span>
-              <Badge tone={feedback !== null || delivery !== null ? 'info' : 'neutral'}>
-                {feedback !== null || delivery !== null ? 'pending' : 'not sent'}
-              </Badge>
-            </div>
-            {feedback !== null ? (
-              <>
-                <p className="cr-meta">
-                  Submitted r{feedback.submission.round} · {feedback.submission.verdict}
-                </p>
-                <p className="cr-meta">
-                  Waiting for the agent session to acknowledge the feedback package.
-                </p>
-                <div className="cr-inline-actions">
+              </div>
+              {review.agent?.status === 'running' ? (
+                <>
+                  <p className="cr-meta">
+                    Working on round {review.agent.round ?? selectedRound ?? '—'}.
+                  </p>
                   <Button
                     size="small"
                     variant="secondary"
-                    onClick={() => void copyText(feedback.feedback.markdown, 'Feedback package')}
+                    loading={cancelPending}
+                    onClick={() => void cancelReviewer()}
                   >
-                    Copy package
+                    Cancel reviewer
                   </Button>
-                  <details className="cr-delivery-details">
-                    <summary>Preview</summary>
-                    <pre className="cr-code-block">{feedback.feedback.markdown}</pre>
-                  </details>
-                </div>
-              </>
-            ) : delivery !== null ? (
-              <>
+                </>
+              ) : review.agent?.status === 'failed' ? (
+                <>
+                  <p className="cr-meta">{review.agent.error ?? 'Reviewer failed.'}</p>
+                  <p className="cr-meta">
+                    In-place retry is not exposed by this daemon version. Create a new round to run
+                    the reviewer again after the issue is fixed.
+                  </p>
+                  <Button
+                    size="small"
+                    variant="secondary"
+                    disabled={agentRunning}
+                    onClick={() => setRefreshOpen(true)}
+                  >
+                    Create a new round
+                  </Button>
+                </>
+              ) : report !== null ? (
                 <p className="cr-meta">
-                  Round {delivery.round} · harness {delivery.harness}
+                  {report.findings.length} findings · {report.backend} backend · round{' '}
+                  {report.round}
                 </p>
-                <p className="cr-meta">
-                  Delivery is queued. The session will be resumed by the bridge.
-                </p>
-                <Button
-                  size="small"
-                  variant="secondary"
-                  onClick={() => void copyText(delivery.deliveryKey, 'Delivery key')}
-                >
-                  Copy delivery key
-                </Button>
-              </>
-            ) : (
-              <p className="cr-meta">
-                No feedback submitted. Submit a verdict to send unresolved comments back to the
-                agent.
-              </p>
-            )}
-          </section>
+              ) : (
+                <p className="cr-meta">No reviewer report yet.</p>
+              )}
+            </section>
 
-          <section className="cr-card cr-rail-card cr-shortcut-card">
-            <div className="cr-card-head">
-              <span className="cr-card-title">Shortcuts</span>
-              <button type="button" className="cr-link-button" onClick={() => setHelpOpen(true)}>
-                ?
-              </button>
-            </div>
-            <p className="cr-meta">c comment · r resolve · j/k files · [ ] rounds</p>
-          </section>
-        </aside>
+            <section className="cr-card cr-rail-card">
+              <div className="cr-card-head">
+                <span className="cr-card-title">Delivery</span>
+                <Badge tone={feedback !== null || delivery !== null ? 'info' : 'neutral'}>
+                  {feedback !== null || delivery !== null ? 'pending' : 'not sent'}
+                </Badge>
+              </div>
+              {feedback !== null ? (
+                <>
+                  <p className="cr-meta">
+                    Submitted r{feedback.submission.round} · {feedback.submission.verdict}
+                  </p>
+                  <p className="cr-meta">
+                    Waiting for the agent session to acknowledge the feedback package.
+                  </p>
+                  <div className="cr-inline-actions">
+                    <Button
+                      size="small"
+                      variant="secondary"
+                      onClick={() => void copyText(feedback.feedback.markdown, 'Feedback package')}
+                    >
+                      Copy package
+                    </Button>
+                    <details className="cr-delivery-details">
+                      <summary>Preview</summary>
+                      <pre className="cr-code-block">{feedback.feedback.markdown}</pre>
+                    </details>
+                  </div>
+                </>
+              ) : delivery !== null ? (
+                <>
+                  <p className="cr-meta">
+                    Round {delivery.round} · harness {delivery.harness}
+                  </p>
+                  <p className="cr-meta">
+                    Delivery is queued. The session will be resumed by the bridge.
+                  </p>
+                  <Button
+                    size="small"
+                    variant="secondary"
+                    onClick={() => void copyText(delivery.deliveryKey, 'Delivery key')}
+                  >
+                    Copy delivery key
+                  </Button>
+                </>
+              ) : (
+                <p className="cr-meta">
+                  No feedback submitted. Submit a verdict to send unresolved comments back to the
+                  agent.
+                </p>
+              )}
+            </section>
+
+            <section className="cr-card cr-rail-card cr-shortcut-card">
+              <div className="cr-card-head">
+                <span className="cr-card-title">Shortcuts</span>
+                <button type="button" className="cr-link-button" onClick={() => setHelpOpen(true)}>
+                  ?
+                </button>
+              </div>
+              <p className="cr-meta">c comment · r resolve · j/k files · [ ] rounds</p>
+            </section>
+          </aside>
+        )}
       </div>
 
       <SubmitDialog

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ApiClient } from '@dsh-code-review/ui';
@@ -39,6 +39,7 @@ beforeEach(() => {
 
 describe('review detail', () => {
   it('renders a deep-linked file, line, inline thread and fix signals', async () => {
+    const user = userEvent.setup();
     go('/review/rev_01?round=2&tab=files#file=src%2Fauth.ts&line=11');
     render(<App client={fakeClient()} />);
 
@@ -55,6 +56,7 @@ describe('review detail', () => {
     expect(
       screen.getAllByText('This should use the configured max attempts.').length,
     ).toBeGreaterThan(0);
+    await user.click(screen.getByRole('tab', { name: /Conversation/ }));
     expect(screen.getByRole('button', { name: '2 Addressed' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '1 Outdated' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '0 Needs decision' })).toBeInTheDocument();
@@ -78,6 +80,60 @@ describe('review detail', () => {
       'true',
     );
     expect(screen.queryByLabelText(/reviewer risk/)).not.toBeInTheDocument();
+  });
+
+  it('opens on the diff and wraps long lines by default', async () => {
+    const user = userEvent.setup();
+    go('/review/rev_01?round=2');
+    render(<App client={fakeClient()} />);
+    await screen.findByRole('heading', { name: 'Billing retry semantics' });
+
+    expect(screen.getByRole('tab', { name: /Files changed/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    const wrap = await screen.findByRole('button', { name: 'Wrap lines' });
+    expect(wrap).toHaveAttribute('aria-pressed', 'true');
+    expect(document.querySelector('.cr-diff-files')).toHaveClass('cr-diff-wrap');
+    await user.click(wrap);
+    expect(wrap).toHaveAttribute('aria-pressed', 'false');
+    expect(document.querySelector('.cr-diff-files')).not.toHaveClass('cr-diff-wrap');
+  });
+
+  it('updates the active file in the tree while the diff scrolls', async () => {
+    go('/review/rev_01?round=2&tab=files#file=src%2Fauth.ts&line=11');
+    render(<App client={fakeClient()} />);
+    await screen.findByRole('heading', { name: 'Billing retry semantics' });
+    await screen.findByRole('button', { name: 'Wrap lines' });
+
+    const rect = (top: number): DOMRect =>
+      ({
+        top,
+        bottom: top + 300,
+        left: 0,
+        right: 800,
+        width: 800,
+        height: 300,
+        x: 0,
+        y: top,
+        toJSON: () => ({}),
+      }) as DOMRect;
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      const file = this.dataset.file;
+      if (file === 'src/auth.ts') return rect(-400);
+      if (file === 'docs/retries.md') return rect(80);
+      return rect(500);
+    });
+
+    fireEvent.scroll(window);
+    await waitFor(() =>
+      expect(document.querySelector('.cr-tree-file[aria-current="true"]')).toHaveTextContent(
+        'retries.md',
+      ),
+    );
+    expect(window.location.hash).toBe('#file=src%2Fauth.ts&line=11');
   });
 
   it('posts a range comment from the diff composer', async () => {
@@ -141,6 +197,10 @@ describe('review detail', () => {
     expect(screen.getByRole('row', { name: /line 11, added:/ })).toContainElement(pins[0]!);
     expect(screen.getByRole('row', { name: /line 12, added:/ })).toContainElement(pins[1]!);
 
+    expect(screen.getAllByLabelText('major finding: Retry budget is hard-coded')).toHaveLength(1);
+    const inline = screen.getByLabelText('major finding: Retry budget is hard-coded');
+    expect(inline).toHaveTextContent('The retry count cannot be configured per environment.');
+    expect(inline).toHaveTextContent('Suggested change');
     await user.click(pins[0]!);
     expect(screen.getByRole('tab', { name: /Report/ })).toHaveAttribute('aria-selected', 'true');
     expect(await screen.findByText('Retry budget is hard-coded')).toBeInTheDocument();

@@ -129,6 +129,34 @@ describe('ApiClient', () => {
     await expect(promise).rejects.toMatchObject({ name: 'AbortError' });
   });
 
+  it('lists directories, omitting an empty path and forwarding the abort signal', async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({
+        path: '/srv',
+        parent: '/',
+        breadcrumbs: [
+          { name: '/', path: '/' },
+          { name: 'srv', path: '/srv' },
+        ],
+        entries: [{ name: 'repo', path: '/srv/repo', isGit: true }],
+        truncated: false,
+      }),
+    );
+    const client = clientWith(fetchImpl as unknown as typeof fetch);
+    const listing = await client.listDirectories();
+    expect(listing.entries[0]?.isGit).toBe(true);
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('/api/fs/dirs');
+    expect(init.method).toBe('GET');
+    expect(init.signal).toBeUndefined();
+
+    const controller = new AbortController();
+    await client.listDirectories('/srv/repo', controller.signal);
+    const [nextUrl, nextInit] = fetchImpl.mock.calls[1] as unknown as [string, RequestInit];
+    expect(nextUrl).toBe('/api/fs/dirs?path=%2Fsrv%2Frepo');
+    expect(nextInit.signal).toBe(controller.signal);
+  });
+
   it('supports auth, health, snapshot and events shapes', async () => {
     const fetchImpl = vi.fn(async (url: RequestInfo | URL) => {
       const value = String(url);

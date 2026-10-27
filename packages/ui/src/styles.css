@@ -1457,6 +1457,10 @@ body.cr-selecting-lines {
   min-width: 0;
 }
 
+.cr-detail-grid-wide {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .cr-detail-tabs {
   display: flex;
   gap: var(--cr-space-1);
@@ -2244,7 +2248,7 @@ body.cr-selecting-lines {
 .cr-diff-line {
   position: relative;
   display: grid;
-  grid-template-columns: 48px 48px 20px 22px minmax(0, 1fr) auto auto;
+  grid-template-columns: 48px 48px 20px 22px minmax(0, 1fr) auto;
   align-items: stretch;
   min-width: 560px;
   min-height: 20px;
@@ -2376,6 +2380,36 @@ body.cr-selecting-lines {
   white-space: pre;
 }
 
+.cr-diff-wrap .cr-diff-line,
+.cr-diff-wrap .cr-diff-gutter-head,
+.cr-diff-wrap .cr-hunk {
+  min-width: 0;
+}
+
+.cr-diff-wrap .cr-diff-text {
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.cr-diff-wrap .cr-diff-body {
+  overflow-x: hidden;
+}
+
+.cr-diff-wrap .cr-quote,
+.cr-diff-wrap .cr-thread-body,
+.cr-diff-wrap .cr-reply-body {
+  overflow-wrap: anywhere;
+}
+
+.cr-diff-actions-cell {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+}
+
 .cr-diff-comment {
   display: none;
   width: 24px;
@@ -2418,17 +2452,149 @@ body.cr-selecting-lines {
 .cr-inline-thread {
   display: grid;
   gap: var(--cr-space-2);
-  min-width: 560px;
-  padding: var(--cr-space-2) var(--cr-space-3) var(--cr-space-3) 116px;
+  min-width: 0;
+  padding: var(--cr-space-2) var(--cr-space-3) var(--cr-space-3) 140px;
   border-bottom: 1px solid var(--cr-border);
   background: var(--cr-bg);
 }
 
 .cr-inline-composer {
-  min-width: 560px;
-  padding: var(--cr-space-2) var(--cr-space-3) var(--cr-space-3) 116px;
+  min-width: 0;
+  padding: var(--cr-space-2) var(--cr-space-3) var(--cr-space-3) 140px;
   border-bottom: 1px solid var(--cr-border);
   background: var(--cr-bg);
+}
+
+.cr-inline-finding-row {
+  display: block;
+}
+
+.cr-inline-thread-cell {
+  display: grid;
+  gap: var(--cr-space-2);
+  min-width: 0;
+}
+
+.cr-inline-finding {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: var(--cr-space-2);
+  min-width: 0;
+  margin: var(--cr-space-1) var(--cr-space-3) var(--cr-space-2) 140px;
+  padding: var(--cr-space-3);
+  border: 1px solid color-mix(in srgb, var(--cr-warning) 40%, var(--cr-border));
+  border-left: 3px solid var(--cr-warning);
+  border-radius: var(--cr-radius-control);
+  background: color-mix(in srgb, var(--cr-warning) 7%, var(--cr-surface));
+}
+
+.cr-inline-finding.cr-risk-blocker {
+  border-color: color-mix(in srgb, var(--cr-danger) 50%, var(--cr-border));
+  border-left-color: var(--cr-danger);
+  background: color-mix(in srgb, var(--cr-danger) 8%, var(--cr-surface));
+}
+
+.cr-inline-finding.cr-risk-minor {
+  border-color: color-mix(in srgb, var(--cr-info) 45%, var(--cr-border));
+  border-left-color: var(--cr-info);
+  background: color-mix(in srgb, var(--cr-info) 7%, var(--cr-surface));
+}
+
+.cr-inline-finding.cr-risk-nit {
+  border-color: var(--cr-border);
+  border-left-color: var(--cr-text-muted);
+  background: var(--cr-surface);
+}
+
+.cr-inline-finding-severity {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--cr-warning);
+  color: var(--cr-bg);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.cr-inline-finding.cr-risk-blocker .cr-inline-finding-severity {
+  background: var(--cr-danger);
+  color: var(--cr-on-danger);
+}
+
+.cr-inline-finding.cr-risk-minor .cr-inline-finding-severity {
+  background: var(--cr-info);
+  color: var(--cr-bg);
+}
+
+.cr-inline-finding.cr-risk-nit .cr-inline-finding-severity {
+  background: var(--cr-surface-raised);
+  color: var(--cr-text-muted);
+}
+
+.cr-inline-finding-main {
+  display: grid;
+  gap: var(--cr-space-1);
+  min-width: 0;
+}
+
+.cr-inline-finding-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--cr-space-2);
+}
+
+.cr-inline-finding-head strong {
+  font-size: var(--cr-text-control);
+}
+
+.cr-inline-finding-rationale {
+  margin: 0;
+  color: var(--cr-text);
+  font-size: var(--cr-text-meta);
+  line-height: 1.5;
+}
+
+.cr-inline-finding-details {
+  min-width: 0;
+  color: var(--cr-text-muted);
+  font-size: var(--cr-text-meta);
+}
+
+.cr-inline-finding-details summary {
+  width: fit-content;
+  cursor: pointer;
+}
+
+.cr-inline-finding-evidence,
+.cr-inline-finding-suggestion pre {
+  max-width: 100%;
+  margin: var(--cr-space-2) 0 0;
+  overflow-x: auto;
+  padding: var(--cr-space-2);
+  border: 1px solid var(--cr-border);
+  border-radius: var(--cr-radius-control);
+  background: var(--cr-bg);
+  color: var(--cr-text);
+  font-family: var(--cr-font-mono);
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.cr-inline-finding-suggestion {
+  margin-top: var(--cr-space-2);
+}
+
+.cr-inline-finding-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--cr-space-2);
 }
 
 .cr-diff-empty,
@@ -3079,7 +3245,12 @@ body.cr-selecting-lines {
   .cr-inline-thread,
   .cr-inline-composer {
     padding-left: var(--cr-space-3);
-    min-width: 520px;
+    min-width: 0;
+  }
+
+  .cr-inline-finding {
+    margin-left: var(--cr-space-3);
+    margin-right: var(--cr-space-3);
   }
 
   .cr-signal {
@@ -3424,9 +3595,152 @@ body.cr-selecting-lines {
   gap: var(--cr-space-3);
 }
 
+.cr-path-control {
+  display: flex;
+  align-items: stretch;
+  gap: var(--cr-space-2);
+}
+
+.cr-path-control .cr-input {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.cr-path-control .cr-button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.cr-folder-path-form {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--cr-space-2);
+}
+
+.cr-folder-path-form .cr-field {
+  min-width: 0;
+  flex: 1 1 auto;
+  margin: 0;
+}
+
+.cr-folder-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--cr-space-2);
+}
+
+.cr-folder-breadcrumbs {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 220px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  font-family: var(--cr-font-mono);
+  font-size: 12px;
+}
+
+.cr-folder-crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.cr-folder-separator {
+  color: var(--cr-text-muted);
+}
+
+.cr-folder-crumb-button {
+  min-height: 30px;
+  padding: 2px 5px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--cr-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.cr-folder-crumb-button[aria-current='location'] {
+  color: var(--cr-text);
+  font-weight: 650;
+}
+
+.cr-folder-crumb-button:hover {
+  background: var(--cr-surface-raised);
+}
+
+.cr-folder-list {
+  display: grid;
+  max-height: min(42vh, 360px);
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  border: 1px solid var(--cr-border);
+  border-radius: var(--cr-radius-control);
+  list-style: none;
+}
+
+.cr-folder-entry {
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cr-space-3);
+  padding: var(--cr-space-2) var(--cr-space-3);
+  border: 0;
+  border-bottom: 1px solid var(--cr-border);
+  background: var(--cr-surface);
+  color: var(--cr-text);
+  font-family: var(--cr-font-mono);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cr-folder-list li:last-child .cr-folder-entry {
+  border-bottom: 0;
+}
+
+.cr-folder-entry:hover,
+.cr-folder-entry:focus-visible {
+  background: var(--cr-surface-raised);
+}
+
+.cr-folder-entry-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cr-folder-git-badge {
+  flex: 0 0 auto;
+  padding: 1px 7px;
+  border: 1px solid color-mix(in srgb, var(--cr-success) 45%, var(--cr-border));
+  border-radius: var(--cr-radius-pill);
+  color: var(--cr-success);
+  font-family: var(--cr-font-ui);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+
 @media (max-width: 860px) {
   .cr-repo-fields {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cr-path-control,
+  .cr-folder-path-form {
+    flex-wrap: wrap;
+  }
+
+  .cr-path-control .cr-button,
+  .cr-folder-path-form .cr-button {
+    width: 100%;
   }
 
   .cr-repo-row {

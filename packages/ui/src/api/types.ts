@@ -89,6 +89,25 @@ export interface RepoCommitsResponse {
   commits: RepoCommit[];
 }
 
+export interface DirectoryBreadcrumb {
+  name: string;
+  path: string;
+}
+
+export interface DirectoryEntry {
+  name: string;
+  path: string;
+  isGit: boolean;
+}
+
+export interface DirectoryListing {
+  path: string;
+  parent: string | null;
+  breadcrumbs: DirectoryBreadcrumb[];
+  entries: DirectoryEntry[];
+  truncated: boolean;
+}
+
 export interface HealthResponse {
   status: string;
   store: { writable: boolean };
