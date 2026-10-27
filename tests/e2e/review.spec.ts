@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { login, openReview } from './fixture.js';
+import { expectNoPageOverflow, login, openReview } from './fixture.js';
 
 test('lists reviews and completes comment, reply, resolve and submit from the real daemon', async ({
   page,
@@ -85,6 +85,49 @@ test('switches immutable rounds, toggles delta, and honors deep links', async ({
   );
   await expect(page.locator('.cr-diff-file[data-file="src/app.ts"]')).toBeVisible();
   await expect(page.locator('.cr-diff-line-selected').first()).toBeVisible();
+});
+
+test('opens the full file and switches between current and base versions', async ({ page }) => {
+  await openReview(page);
+  await page.getByRole('tab', { name: /Files changed/ }).click();
+  await page.getByRole('button', { name: /^r2 / }).click();
+  await expect(page.getByRole('button', { name: /^r2 / })).toHaveAttribute('aria-pressed', 'true');
+
+  await page.getByRole('button', { name: 'View full file for src/app.ts' }).click();
+  const dialog = page.getByRole('dialog', { name: 'src/app.ts' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('row', { name: /Line 2, added: return 3;/ })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Current' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+
+  await dialog.getByRole('button', { name: 'Base' }).click();
+  await expect(dialog.getByRole('row', { name: /Line 2, removed: return 1;/ })).toBeVisible();
+  await expect(dialog.getByRole('row', { name: /Line 2, added: return 3;/ })).toHaveCount(0);
+
+  await dialog.getByRole('button', { name: 'Close dialog' }).click();
+  await expect(dialog).toBeHidden();
+});
+
+test('keeps the full file dialog inside a 320px viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await openReview(page);
+  await page.getByRole('tab', { name: /Files changed/ }).click();
+  await page.getByRole('button', { name: 'View full file for src/app.ts' }).click();
+  const dialog = page.getByRole('dialog', { name: 'src/app.ts' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveCSS('opacity', '1');
+  const geometry = await dialog.evaluate((element) => ({
+    left: element.getBoundingClientRect().left,
+    right: element.getBoundingClientRect().right,
+    scrollWidth: element.scrollWidth,
+    clientWidth: element.clientWidth,
+  }));
+  expect(geometry.left).toBeGreaterThanOrEqual(0);
+  expect(geometry.right).toBeLessThanOrEqual(320);
+  expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth + 1);
+  await expectNoPageOverflow(page);
 });
 
 test('tracks the file in view while the diff scrolls', async ({ page }) => {

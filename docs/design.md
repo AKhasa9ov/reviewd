@@ -951,9 +951,10 @@ interface Config {
 - DSH panel: sidebar хоста + main; правая панель скрыта по умолчанию, открывается как sheet; всё в токенах хоста.
 - Список ревью: фильтры, поиск, строки с branch/scope, автор, возраст, статус, «N not fixed».
 - Деталь: header (base→head, SHA copy, round pills, verdict, Submit), tabs Conversation / Files changed / Report / Signals, file tree, diff, right rail (summary, fix status, agent, delivery, submit). Files changed открывается по умолчанию, если в URL нет `tab`.
-- Diff: длинные строки переносятся по умолчанию (тумблер Wrap lines), чтобы не было горизонтального скролла; inline-карточки findings и треды комментариев рендерятся сразу под строкой; file tree следует за вертикальным скроллом через `aria-current`.
+- Diff: длинные строки переносятся по умолчанию (тумблер Wrap lines), чтобы не было горизонтального скролла; inline-карточки findings и треды комментариев рендерятся сразу под строкой; file tree следует за вертикальным скроллом через `aria-current`. Кнопка «Full file» открывает read-only модалку полного файла, не ломая inline-треды и выбор строк в diff.
 - Settings: у каждого репозитория компактная иконка папки открывает локальный просмотр папок с хлебными крошками, переходом вверх и пометкой git-репозиториев; выбор папки заполняет Path on daemon и загружает ветки через `GET /api/repos/branches`, после чего Default target branch выбирается из выпадающего списка. Смена пути сбрасывает выбранную ветку; сохранённое значение вне списка остаётся доступным как `<ref> (saved)`.
-- Round pills показывают counts; дефолт rN — дельта с rN-1, тумблер «Full diff to base».
+- Round pills показывают counts; дефолт rN — дельта с rN-1, тумблер «Full diff to base». Delta доступна только с r2: на r1 кнопка disabled, рядом объяснение «Delta compares this round with the previous one» и CTA «Create the next round», открывающий существующий refresh-диалог. Если предыдущий снапшот раунда недоступен, показывается причина вместо молчаливо неработающего тумблера.
+- У каждого файла в diff есть кнопка «Full file»: read-only модалка с полным файлом, номерами строк и подсветкой добавленных/удалённых строк. Для modified/renamed доступен переключатель Current/Base; для added/untracked — Current, для deleted — Base. Файлы длиннее 2000 строк рендерятся порциями с кнопкой «Show all N lines». Для binary/oversized/truncated/unreadable показывается явное объяснение вместо пустого экрана.
 - Fix status board: Addressed / Not fixed / Outdated / Needs decision; клик фильтрует треды; у каждого пункта jump-to-line.
 - Тред: цитата кода, anchor history («line 42 → 57»), статусы, ответы, markdown preview.
 - Suggestion: «было/стало», Apply/Decline; Apply только при совпадении head/worktree, иначе disabled + причина + «Send to agent».
@@ -970,7 +971,7 @@ interface Config {
 
 ### 15.5 A11y и клавиатура
 
-- WCAG AA: контраст 4.5/3, семантика, `aria-current` для активного файла и строки, dialog focus trap + Escape + restore, tabs `aria-selected`, diff line labels («line 57, added»), live-region для тостов/ошибок.
+- WCAG AA: контраст 4.5/3, семантика, `aria-current` для активного файла и строки, dialog focus trap + Escape + restore, tabs `aria-selected`, diff line labels («line 57, added»), live-region для тостов/ошибок. Full-file dialog ведёт себя как остальные диалоги (focus trap, Escape, restore), таблица строк имеет row/cell и line labels, на 320px контент переносится без горизонтального скролла.
 - Diff table: direct children — только `row`, строки — только `cell`; inline findings/треды/composer оборачиваются в row + cell, чтобы `aria-required-children` проходил.
 - Keyboard: Tab-порядок; `c` комментарий, `r` resolve, `j/k` файлы, `[/]` раунды, `?` help, `g l` — список; одиночные клавиши инертны в input/textarea/contenteditable и отключаемы (`data-shortcuts-off`).
 - Touch: ≥44×44 на coarse pointer, ≥8px между целями, никаких hover-only.

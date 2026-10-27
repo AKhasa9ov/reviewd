@@ -56,6 +56,22 @@ test.describe('@a11y accessibility', () => {
     await page.getByTestId('theme-toggle').first().click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     await expectNoSeriousAxe(page, 'detail dark');
+
+    await page.getByRole('button', { name: 'View full file for src/app.ts' }).click();
+    const fileDialog = page.getByRole('dialog', { name: 'src/app.ts' });
+    await expect(fileDialog).toBeVisible();
+    await expect(fileDialog).toHaveCSS('opacity', '1');
+    await expectNoSeriousAxe(page, 'full file dialog dark');
+    await fileDialog.getByRole('button', { name: 'Close dialog' }).click();
+    await expect(fileDialog).toBeHidden();
+
+    await page.getByTestId('theme-toggle').first().click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    await page.getByRole('button', { name: 'View full file for src/app.ts' }).click();
+    await expect(fileDialog).toBeVisible();
+    await expect(fileDialog).toHaveCSS('opacity', '1');
+    await expectNoSeriousAxe(page, 'full file dialog light');
+    await fileDialog.getByRole('button', { name: 'Close dialog' }).click();
   });
 
   test('submit dialog has no serious axe findings in dark, light and mobile', async ({ page }) => {
@@ -126,5 +142,11 @@ test.describe('@a11y accessibility', () => {
     await page.goto(`${fx.baseUrl}/review/${encodeURIComponent(fx.reviewId)}`);
     await expect(page.getByTestId('review-detail')).toBeVisible();
     await expectNoSeriousAxe(page, 'detail 320');
+
+    await page.getByRole('button', { name: 'View full file for src/app.ts' }).click();
+    const fileDialog = page.getByRole('dialog', { name: 'src/app.ts' });
+    await expect(fileDialog).toBeVisible();
+    await expect(fileDialog).toHaveCSS('opacity', '1');
+    await expectNoSeriousAxe(page, 'full file dialog 320');
   });
 });

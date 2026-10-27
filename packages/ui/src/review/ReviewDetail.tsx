@@ -420,6 +420,16 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
 
   const selectedRound = round;
   const canDelta = selectedRound !== null && selectedRound > 1 && previousSnapshot !== null;
+  const deltaHint =
+    selectedRound === null
+      ? undefined
+      : selectedRound > 1
+        ? snapshotLoading
+          ? 'Loading the previous round…'
+          : previousSnapshot === null
+            ? 'The previous round snapshot is unavailable.'
+            : undefined
+        : 'Delta compares this round with the previous one.';
   const changed = useMemo(
     () => (snapshot === null ? new Set<string>() : deltaPaths(snapshot, previousSnapshot)),
     [snapshot, previousSnapshot],
@@ -892,6 +902,9 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
       comments={filteredComments}
       round={selectedRound ?? 1}
       delta={effectiveDelta}
+      canDelta={canDelta}
+      deltaHint={deltaHint}
+      onRequestNextRound={() => setRefreshOpen(true)}
       changedPaths={changed}
       findings={report !== null && report.round === selectedRound ? report.findings : []}
       activeFile={activeFile}

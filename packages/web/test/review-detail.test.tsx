@@ -100,6 +100,49 @@ describe('review detail', () => {
     expect(document.querySelector('.cr-diff-files')).not.toHaveClass('cr-diff-wrap');
   });
 
+  it('explains why Delta is gated in round 1 and offers the next round', async () => {
+    const user = userEvent.setup();
+    go('/review/rev_01?round=1&tab=files');
+    render(<App client={fakeClient()} />);
+    await screen.findByRole('heading', { name: 'Billing retry semantics' });
+
+    expect(await screen.findByRole('button', { name: 'Delta' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Full diff to base' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByText(/Delta compares this round with the previous one/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Create the next round' }));
+    expect(screen.getByRole('dialog', { name: 'Re-review this branch' })).toBeInTheDocument();
+  });
+
+  it('opens the full file with changed lines and switches to the base version', async () => {
+    const user = userEvent.setup();
+    go('/review/rev_01?round=2&tab=files#file=src%2Fauth.ts&line=11');
+    render(<App client={fakeClient()} />);
+    await screen.findByRole('heading', { name: 'Billing retry semantics' });
+    await screen.findByRole('row', { name: /line 11, added:/ });
+
+    await user.click(screen.getByRole('button', { name: 'View full file for src/auth.ts' }));
+    const dialog = await screen.findByRole('dialog', { name: 'src/auth.ts' });
+    expect(
+      within(dialog).getByRole('row', { name: /Line 11, added: const retry = attempt < 3;/ }),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Current' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+
+    await user.click(within(dialog).getByRole('button', { name: 'Base' }));
+    expect(
+      within(dialog).getByRole('row', { name: /Line 11, removed: const retry = attempt < 2;/ }),
+    ).toBeInTheDocument();
+    expect(within(dialog).queryByRole('row', { name: /Line 11, added:/ })).not.toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole('button', { name: 'Close dialog' }));
+    expect(screen.queryByRole('dialog', { name: 'src/auth.ts' })).not.toBeInTheDocument();
+  });
+
   it('updates the active file in the tree while the diff scrolls', async () => {
     go('/review/rev_01?round=2&tab=files#file=src%2Fauth.ts&line=11');
     render(<App client={fakeClient()} />);

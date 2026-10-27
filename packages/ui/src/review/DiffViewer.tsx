@@ -11,7 +11,9 @@ import type {
 import { Badge, EmptyState, Skeleton } from '../primitives/Feedback.js';
 import { Button } from '../primitives/Button.js';
 import { Input } from '../primitives/Field.js';
+import { FileIcon } from '../icons.js';
 import { CommentThread } from './CommentThread.js';
+import { FullFileDialog } from './FullFileDialog.js';
 import {
   buildDiffRows,
   commentsAtLine,
@@ -27,6 +29,9 @@ export interface DiffViewerProps {
   comments: readonly Comment[];
   round: number;
   delta: boolean;
+  canDelta: boolean;
+  deltaHint?: string | undefined;
+  onRequestNextRound?: (() => void) | undefined;
   changedPaths: ReadonlySet<string>;
   findings?: readonly Finding[];
   activeFile?: string | undefined;
@@ -237,6 +242,7 @@ function DiffFileSection({
   dragRange,
   findings,
   onJump,
+  onViewFullFile,
   onSelectLine,
   onLineDragStart,
   onLineDragEnter,
@@ -260,6 +266,7 @@ function DiffFileSection({
   dragRange: DragRange | null;
   findings: readonly Finding[];
   onJump: DiffViewerProps['onJump'];
+  onViewFullFile: (file: FileDiff) => void;
   onSelectLine: DiffViewerProps['onSelectLine'];
   onLineDragStart: (file: FileDiff, side: Side, line: number, event: ReactMouseEvent) => void;
   onLineDragEnter: (file: FileDiff, side: Side, line: number) => void;
@@ -342,6 +349,17 @@ function DiffFileSection({
         {file.binary ? <Badge tone="neutral">binary</Badge> : null}
         {file.truncated === true ? <Badge tone="warning">truncated</Badge> : null}
         {file.ignored === true ? <Badge tone="neutral">ignored</Badge> : null}
+        <Button
+          variant="secondary"
+          size="small"
+          className="cr-diff-full-file"
+          aria-label={`View full file for ${file.path}`}
+          title="View full file"
+          onClick={() => onViewFullFile(file)}
+        >
+          <FileIcon size={14} />
+          Full file
+        </Button>
       </header>
 
       {open ? (
@@ -652,6 +670,9 @@ export function DiffViewer({
   comments,
   round,
   delta,
+  canDelta,
+  deltaHint,
+  onRequestNextRound,
   changedPaths,
   findings = [],
   activeFile,
@@ -676,6 +697,7 @@ export function DiffViewer({
   const [dragRange, setDragRange] = useState<DragRange | null>(null);
   const [wrap, setWrap] = useState(true);
   const [currentFile, setCurrentFile] = useState<string | undefined>(activeFile);
+  const [fullFile, setFullFile] = useState<FileDiff | null>(null);
   const filesRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
   const suppressClickRef = useRef(false);
@@ -760,7 +782,6 @@ export function DiffViewer({
       : visibleFiles.filter((file) => file.path.toLowerCase().includes(query));
   const groups = groupByDirectory(filteredFiles);
   const fileKey = filteredFiles.map((file) => file.path).join('\u0000');
-  const canDelta = round > 1;
 
   useEffect(() => {
     const root = filesRef.current;
@@ -932,7 +953,8 @@ export function DiffViewer({
             <button
               type="button"
               className="cr-segmented-button"
-              aria-pressed={delta}
+              aria-pressed={delta && canDelta}
+              aria-describedby={!canDelta && deltaHint !== undefined ? 'cr-delta-hint' : undefined}
               disabled={!canDelta}
               onClick={() => onDeltaChange(true)}
             >
@@ -950,6 +972,16 @@ export function DiffViewer({
           <span className="cr-meta cr-diff-scope-note">
             {delta && canDelta ? `r${round} vs r${round - 1}` : 'base → head'}
           </span>
+          {!canDelta && deltaHint !== undefined ? (
+            <span className="cr-diff-delta-note" id="cr-delta-hint">
+              {deltaHint}
+              {round <= 1 && onRequestNextRound !== undefined ? (
+                <button type="button" className="cr-link-button" onClick={onRequestNextRound}>
+                  Create the next round
+                </button>
+              ) : null}
+            </span>
+          ) : null}
           <div className="cr-segmented" role="group" aria-label="Code display">
             <button
               type="button"
@@ -1018,6 +1050,7 @@ export function DiffViewer({
                 dragRange={dragRange}
                 findings={findings}
                 onJump={onJump}
+                onViewFullFile={setFullFile}
                 onSelectLine={onSelectLine}
                 onLineDragStart={beginLineDrag}
                 onLineDragEnter={enterLine}
@@ -1035,6 +1068,9 @@ export function DiffViewer({
           </div>
         )}
       </div>
+      {fullFile !== null ? (
+        <FullFileDialog key={fullFile.path} file={fullFile} onClose={() => setFullFile(null)} />
+      ) : null}
     </div>
   );
 }
