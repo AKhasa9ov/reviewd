@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { runWorkerLoop, WorkerRunError } from '../src/index.js';
-import type { JobLease, WorkerApi, WorkerLoopOptions } from '../src/index.js';
+import type { JobLease, RunnerResult, WorkerApi, WorkerLoopOptions } from '../src/index.js';
 
 interface Call {
   method: 'GET' | 'POST';
@@ -253,4 +253,140 @@ describe('runWorkerLoop', () => {
     expect(nextCalls).toBe(2);
     expect(warnings.some((message) => /stale/i.test(message) && /stop/i.test(message))).toBe(true);
   });
+
+  it('re-registers again when a successful poll resets the stale guard', async () => {
+    const controller = new AbortController();
+    const calls: Call[] = [];
+    const steps: Array<'stale' | 'ok'> = ['stale', 'ok', 'stale', 'ok'];
+    let nextCalls = 0;
+    let registrations = 0;
+    const api: WorkerApi = {
+      async get<T>(path: string): Promise<T> {
+        calls.push({ method: 'GET', path });
+        if (!path.includes('/api/jobs/next')) return null as T;
+        const step = steps[nextCalls];
+        nextCalls += 1;
+        if (step === undefined) {
+          // Safety valve: an unbounded re-register loop must fail the assertions
+          // below rather than hanging the test suite.
+          controller.abort();
+          return null as T;
+        }
+        if (step === 'ok') return null as T;
+        throw Object.assign(new Error('unknown worker'), {
+          status: 401,
+          code: 'unauthorized',
+        });
+      },
+      async post<T>(path: string, body: unknown): Promise<T> {
+        calls.push({ method: 'POST', path, body });
+        if (path === '/api/workers/register') {
+          registrations += 1;
+          return { id: (body as { id: string }).id } as T;
+        }
+        return {} as T;
+      },
+    };
+
+    await runWorkerLoop(
+      options(api, { run: async () => ({ report: { schemaVersion: 1 } }) }),
+      controller.signal,
+    );
+
+    // stale -> register #2 -> successful poll -> stale -> register #3.
+    expect(registrations).toBe(3);
+    expect(nextCalls).toBe(5);
+  });
+
+  it('heartbeats on the configured interval and stops after abort', async () => {
+    vi.useFakeTimers();
+    try {
+      const controller = new AbortController();
+      const calls: Call[] = [];
+      const api: WorkerApi = {
+        async get<T>(path: string): Promise<T> {
+          calls.push({ method: 'GET', path });
+          if (!path.includes('/api/jobs/next')) return null as T;
+          // Model a long poll that only settles when the abort signal fires.
+          return new Promise<T>((resolve) => {
+            if (controller.signal.aborted) {
+              resolve(null as T);
+              return;
+            }
+            controller.signal.addEventListener('abort', () => resolve(null as T), { once: true });
+          });
+        },
+        async post<T>(path: string, body: unknown): Promise<T> {
+          calls.push({ method: 'POST', path, body });
+          if (path === '/api/workers/register') {
+            return { id: (body as { id: string }).id } as T;
+          }
+          return {} as T;
+        },
+      };
+      const heartbeats = (): Call[] =>
+        calls.filter((call) => call.path === '/api/workers/wkr_test/heartbeat');
+
+      const loop = runWorkerLoop(
+        options(api, { run: async () => ({ report: { schemaVersion: 1 } }) }),
+        controller.signal,
+      );
+      await vi.advanceTimersByTimeAsync(1);
+      expect(calls[0]).toMatchObject({ method: 'POST', path: '/api/workers/register' });
+      expect(heartbeats()).toHaveLength(0);
+
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(heartbeats()).toHaveLength(1);
+
+      controller.abort();
+      await loop;
+      await vi.advanceTimersByTimeAsync(3_000);
+      expect(heartbeats()).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stops without posting a failure when a non-cooperative runner ignores the abort', async () => {
+    const controller = new AbortController();
+    const calls: Call[] = [];
+    let cancelCalls = 0;
+    let markStarted: () => void = () => undefined;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    const api: WorkerApi = {
+      async get<T>(path: string): Promise<T> {
+        calls.push({ method: 'GET', path });
+        if (!path.includes('/api/jobs/next')) return null as T;
+        return lease() as T;
+      },
+      async post<T>(path: string, body: unknown): Promise<T> {
+        calls.push({ method: 'POST', path, body });
+        if (path === '/api/workers/register') {
+          return { id: (body as { id: string }).id } as T;
+        }
+        return {} as T;
+      },
+    };
+    const runner: WorkerLoopOptions['runner'] = {
+      run: async () => {
+        markStarted();
+        // Ignores the signal on purpose: only the loop's own abort race can end this.
+        return new Promise<RunnerResult>(() => undefined);
+      },
+      cancel: () => {
+        cancelCalls += 1;
+        throw new Error('cancel blew up');
+      },
+    };
+
+    const loop = runWorkerLoop(options(api, runner), controller.signal);
+    await started;
+    controller.abort();
+    await loop;
+
+    expect(cancelCalls).toBe(1);
+    expect(calls.some((call) => call.path.endsWith('/fail'))).toBe(false);
+  }, 2_000);
 });

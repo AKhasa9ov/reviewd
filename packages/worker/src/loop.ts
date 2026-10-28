@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { isStaleWorkerError, normalizeRunnerResult, WorkerRunError } from './protocol.js';
-import type { JobLease, RunnerResult, WorkerLoopOptions } from './protocol.js';
+import type { HarnessRunner, JobLease, RunnerResult, WorkerLoopOptions } from './protocol.js';
+
+/** Marks a runner invocation that the loop abandoned because the signal aborted. */
+const ABORTED = Symbol('aborted');
 
 function wait(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
@@ -38,18 +41,50 @@ async function fail(
     .catch(() => undefined);
 }
 
+/**
+ * Run one reviewed job, but never let a runner that ignores the abort signal keep
+ * `runWorkerLoop` pending. The race resolves with `ABORTED` as soon as the signal
+ * fires; a runner that settles later is ignored (its rejection is still consumed).
+ */
+async function runAbortable(
+  runner: HarnessRunner,
+  lease: JobLease,
+  signal: AbortSignal,
+): Promise<RunnerResult | typeof ABORTED> {
+  if (signal.aborted) return ABORTED;
+  let onAbort: (() => void) | undefined;
+  const aborted = new Promise<typeof ABORTED>((resolve) => {
+    onAbort = () => resolve(ABORTED);
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+  try {
+    return await Promise.race([runner.run(lease, signal), aborted]);
+  } finally {
+    if (onAbort !== undefined) signal.removeEventListener('abort', onAbort);
+  }
+}
+
 async function runLease(
   options: WorkerLoopOptions,
   lease: JobLease,
   signal: AbortSignal,
 ): Promise<void> {
   if (signal.aborted) return;
-  const onAbort = (): void => options.runner.cancel?.();
+  const onAbort = (): void => {
+    try {
+      options.runner.cancel?.();
+    } catch (error) {
+      // A throwing cancel must not escape the abort listener and crash the worker.
+      options.logger?.warn?.(
+        `code-review: runner cancel failed: ${error instanceof Error ? error.message : 'unknown'}`,
+      );
+    }
+  };
   signal.addEventListener('abort', onAbort, { once: true });
   try {
-    let result: RunnerResult;
+    let result: RunnerResult | typeof ABORTED;
     try {
-      result = await options.runner.run(lease, signal);
+      result = await runAbortable(options.runner, lease, signal);
     } catch (error) {
       if (signal.aborted) return;
       const failure =
@@ -63,7 +98,9 @@ async function runLease(
       await fail(options, lease, failure.code, failure.message, failure.retryable, signal);
       return;
     }
-    if (signal.aborted) return;
+    // An aborted lease belongs to the daemon's lease expiry now; posting a failure
+    // here would race the abort and could not reach a live attempt.
+    if (result === ABORTED || signal.aborted) return;
 
     let normalized: ReturnType<typeof normalizeRunnerResult>;
     try {
