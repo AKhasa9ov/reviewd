@@ -3,11 +3,36 @@ import { join } from 'node:path';
 import { build } from 'esbuild';
 import { build as viteBuild } from 'vite';
 
-const coreEntry = join(import.meta.dirname, '..', 'packages/core/src/index.ts');
+const root = join(import.meta.dirname, '..');
+const coreEntry = join(root, 'packages/core/src/index.ts');
+const coreOut = join(root, 'packages/core/dist/index.js');
+const webConfig = join(root, 'packages/web/vite.config.ts');
+const cliEntry = join(root, 'packages/server/src/cli.ts');
+const cliOut = join(root, 'packages/server/dist/cli.js');
+const reviewdEntry = join(root, 'packages/server/src/reviewd.ts');
+const reviewdOut = join(root, 'packages/server/dist/reviewd.js');
+const dshEntry = join(root, 'packages/dsh/src/index.ts');
+const dshOut = join(root, 'packages/dsh/index.js');
+
+/**
+ * Builds the review SPA twice: once at `/` with token auth for the standalone
+ * daemon origin, and once at `/code-review/` with DSH-session auth for the fat
+ * package. The second output is generated and shipped inside `packages/dsh/web`.
+ */
+async function buildWeb(base, outDir, authMode) {
+  process.env.VITE_AUTH_MODE = authMode;
+  await viteBuild({
+    configFile: webConfig,
+    base,
+    define: { 'import.meta.env.VITE_AUTH_MODE': JSON.stringify(authMode) },
+    build: { outDir, emptyOutDir: true },
+  });
+}
 
 await build({
-  entryPoints: ['packages/core/src/index.ts'],
-  outfile: 'packages/core/dist/index.js',
+  absWorkingDir: root,
+  entryPoints: [coreEntry],
+  outfile: coreOut,
   bundle: true,
   platform: 'node',
   format: 'esm',
@@ -16,13 +41,13 @@ await build({
   logLevel: 'info',
 });
 
-await viteBuild({
-  configFile: join(import.meta.dirname, '..', 'packages/web/vite.config.ts'),
-});
+await buildWeb('/', join(root, 'packages/web/dist'), 'token');
+await buildWeb('/code-review/', join(root, 'packages/dsh/web'), 'dsh');
 
 await build({
-  entryPoints: ['packages/server/src/cli.ts'],
-  outfile: 'packages/server/dist/cli.js',
+  absWorkingDir: root,
+  entryPoints: [cliEntry],
+  outfile: cliOut,
   bundle: true,
   platform: 'node',
   format: 'esm',
@@ -32,11 +57,12 @@ await build({
   alias: { '@dsh-code-review/core': coreEntry },
 });
 
-await chmod('packages/server/dist/cli.js', 0o755);
+await chmod(cliOut, 0o755);
 
 await build({
-  entryPoints: ['packages/server/src/reviewd.ts'],
-  outfile: 'packages/server/dist/reviewd.js',
+  absWorkingDir: root,
+  entryPoints: [reviewdEntry],
+  outfile: reviewdOut,
   bundle: true,
   platform: 'node',
   format: 'esm',
@@ -46,14 +72,16 @@ await build({
   alias: { '@dsh-code-review/core': coreEntry },
 });
 
-await chmod('packages/server/dist/reviewd.js', 0o755);
+await chmod(reviewdOut, 0o755);
 await build({
-  entryPoints: ['packages/dsh/src/index.ts'],
-  outfile: 'packages/dsh/index.js',
+  absWorkingDir: root,
+  entryPoints: [dshEntry],
+  outfile: dshOut,
   bundle: true,
   platform: 'node',
   format: 'esm',
   target: 'node22',
   sourcemap: false,
   logLevel: 'info',
+  alias: { '@dsh-code-review/core': coreEntry },
 });

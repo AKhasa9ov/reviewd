@@ -1,9 +1,12 @@
 {
   "name": "@dsh-code-review/dsh",
   "version": "0.1.0",
-  "private": true,
   "description": "Code review panel, tools, reviewer worker and feedback delivery for DeepSeek Harness",
+  "license": "MIT",
   "type": "module",
+  "scripts": {
+    "prepack": "node ../../scripts/build.mjs"
+  },
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",
@@ -16,7 +19,9 @@
     "cordis.patch.yml",
     "locale/*.json",
     "icon.svg",
-    "README.md"
+    "web",
+    "README.md",
+    "LICENSE"
   ],
   "dsh": {
     "bundle": {

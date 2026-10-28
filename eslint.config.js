@@ -10,6 +10,7 @@ export default tseslint.config(
       '**/test-results/**',
       'coverage/**',
       'packages/dsh/index.js',
+      'packages/dsh/web/**',
       '.superpowers/**',
     ],
   },
@@ -27,6 +28,14 @@ export default tseslint.config(
       globals: {
         window: 'readonly',
         fetch: 'readonly',
+      },
+    },
+  },
+  {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      globals: {
+        process: 'readonly',
       },
     },
   },
