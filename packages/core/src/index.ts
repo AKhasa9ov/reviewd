@@ -1,6 +1,13 @@
 export const CORE_VERSION = '0.1.0';
 export { safeJoin, PathEscapeError } from './paths.js';
 export { buildSnapshot } from './diff/snapshot.js';
+export {
+  buildReviewManifest,
+  manifestFileFromDiff,
+  manifestFromSnapshot,
+  patchBytesFromHunks,
+  reviewManifest,
+} from './diff/manifest.js';
 export { readBlob } from './git/content.js';
 export type { BlobRead } from './git/content.js';
 export { DiffParseError, parseUnifiedDiff } from './diff/parse.js';
@@ -16,8 +23,12 @@ export type {
   DiffScope,
   FileDiff,
   FileStatus,
+  ManifestFile,
+  ManifestFileReason,
+  ManifestTotals,
   ParsedFile,
   ResolvedScope,
+  ReviewManifest,
   Snapshot,
   SnapshotOptions,
 } from './types.js';
@@ -68,12 +79,16 @@ export type {
   CommentId,
   CommentState,
   Confidence,
+  CoverageStatus,
+  CoverageTotals,
   CreateReviewInput,
+  FileCoverage,
   FindingDecision,
   FindingDecisionState,
   Outcome,
   OutcomeStatus,
   Reply,
+  ReviewCoverage,
   ReviewId,
   ReviewState,
   ReviewStatus,
@@ -90,6 +105,7 @@ export type {
 } from './review/types.js';
 export { AnchorError, captureAnchor, normalizeQuote, reanchor } from './review/anchors.js';
 export type { AnchorErrorCode, CaptureAnchorInput, ReanchorOptions } from './review/anchors.js';
+export { COVERAGE_STATUSES, initialCoverage, summarizeCoverage } from './review/coverage.js';
 export { deriveOutcome } from './review/outcomes.js';
 export { fold, ReviewFoldError } from './review/fold.js';
 export { ReviewLifecycle, ReviewLifecycleError } from './review/lifecycle.js';

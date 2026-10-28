@@ -1,8 +1,13 @@
 import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildSnapshot, readBlob } from '../src/index.js';
+import {
+  buildReviewManifest,
+  buildSnapshot,
+  manifestFromSnapshot,
+  readBlob,
+} from '../src/index.js';
 import type * as ContentModule from '../src/git/content.js';
-import type { Snapshot } from '../src/index.js';
+import type { DiffHunk, FileDiff, ResolvedScope, Snapshot } from '../src/index.js';
 import { makeRepo } from './helpers/repo.js';
 
 vi.mock('../src/git/content.js', async (importOriginal) => {
@@ -434,5 +439,176 @@ describe('buildSnapshot', () => {
     const result = await snapshot(repo.root);
     const paths = result.files.map((file) => file.path);
     expect(paths).toEqual([...paths].sort());
+  });
+});
+
+const manifestScope: ResolvedScope = {
+  kind: 'range',
+  repoRoot: '/tmp/repo',
+  baseRef: 'main',
+  headRef: 'feature',
+  baseSha: 'a'.repeat(40),
+  headSha: 'b'.repeat(40),
+  label: 'aaaaaaa..bbbbbbb',
+  worktreeDigest: 'b'.repeat(40),
+};
+
+function changedFile(index: number): FileDiff {
+  const hasHunks = index % 3 !== 0;
+  const hunk: DiffHunk = {
+    oldStart: 1,
+    oldLines: 1,
+    newStart: 1,
+    newLines: 2,
+    header: '',
+    lines: [
+      { kind: 'add', oldNo: null, newNo: 1, text: `line ${index}` },
+      { kind: 'context', oldNo: 1, newNo: 2, text: 'context' },
+    ],
+  };
+  return {
+    path: `src/file-${String(index).padStart(3, '0')}.ts`,
+    status: 'modified',
+    binary: false,
+    oversized: false,
+    added: hasHunks ? 1 : 0,
+    deleted: 0,
+    hunks: hasHunks ? [hunk] : [],
+    contentHash: null,
+  };
+}
+
+describe('review manifest', () => {
+  it('keeps all 600 changed files, including files beyond the render cap and files without hunks', () => {
+    const files = Array.from({ length: 600 }, (_, index) => changedFile(index));
+
+    const manifest = buildReviewManifest({ scope: manifestScope, files });
+
+    expect(manifest.schemaVersion).toBe(1);
+    expect(manifest.files).toHaveLength(600);
+    expect(manifest.files.map((file) => file.path)).toEqual(files.map((file) => file.path));
+    expect(manifest.files[500]?.path).toBe('src/file-500.ts');
+    expect(manifest.files.at(-1)?.path).toBe('src/file-599.ts');
+    expect(manifest.files.filter((file) => file.hunkCount === 0)).toHaveLength(200);
+    expect(manifest.totals).toEqual({
+      files: 600,
+      added: 400,
+      deleted: 0,
+      patchBytes: expect.any(Number),
+    });
+    expect(manifest.totals.patchBytes).toBeGreaterThan(0);
+    expect(manifest.warnings).toEqual([]);
+  });
+
+  it('records file metadata and why a patch is absent', () => {
+    const files: FileDiff[] = [
+      { ...changedFile(1), oldPath: 'src/old.ts', status: 'renamed' },
+      {
+        path: 'img.bin',
+        status: 'modified',
+        binary: true,
+        oversized: false,
+        added: 0,
+        deleted: 0,
+        hunks: [],
+        contentHash: null,
+      },
+      {
+        path: 'vendor/generated.ts',
+        status: 'modified',
+        binary: false,
+        oversized: false,
+        ignored: true,
+        added: 3,
+        deleted: 2,
+        hunks: [],
+        contentHash: null,
+      },
+      {
+        path: 'assets/large.txt',
+        status: 'added',
+        binary: false,
+        oversized: true,
+        added: 0,
+        deleted: 0,
+        hunks: [],
+        contentHash: null,
+      },
+      {
+        path: 'src/lost.ts',
+        status: 'modified',
+        binary: false,
+        oversized: false,
+        added: 0,
+        deleted: 0,
+        hunks: [],
+        contentHash: null,
+        truncated: true,
+        reason: 'diff-truncated',
+      },
+    ];
+
+    const manifest = buildReviewManifest({ scope: manifestScope, files });
+
+    expect(manifest.files[0]).toMatchObject({
+      path: 'src/file-001.ts',
+      oldPath: 'src/old.ts',
+      status: 'renamed',
+      binary: false,
+      ignored: false,
+      oversized: false,
+      added: 1,
+      deleted: 0,
+      hunkCount: 1,
+    });
+    expect(manifest.files[0]?.reason).toBeUndefined();
+    expect(manifest.files[0]?.patchBytes).toBeGreaterThan(0);
+    expect(manifest.files.find((file) => file.path === 'img.bin')?.reason).toBe('binary');
+    expect(manifest.files.find((file) => file.path === 'vendor/generated.ts')?.reason).toBe(
+      'ignored',
+    );
+    expect(manifest.files.find((file) => file.path === 'assets/large.txt')?.reason).toBe(
+      'per-file-cap',
+    );
+    expect(manifest.files.find((file) => file.path === 'src/lost.ts')?.reason).toBe(
+      'diff-truncated',
+    );
+    expect(manifest.files.every((file) => file.contentBytes === undefined)).toBe(true);
+  });
+
+  it('synthesizes a manifest from a legacy v1 snapshot with a legacy-truncated warning', () => {
+    const legacy: Snapshot = {
+      schemaVersion: 1,
+      scope: manifestScope,
+      files: [changedFile(1), changedFile(2)],
+      totals: { files: 2, added: 2, deleted: 0, truncated: true },
+      warnings: ['files-truncated'],
+    };
+
+    const manifest = manifestFromSnapshot(legacy);
+
+    expect(manifest.schemaVersion).toBe(1);
+    expect(manifest.scope).toEqual(manifestScope);
+    expect(manifest.files.map((file) => file.path)).toEqual(['src/file-001.ts', 'src/file-002.ts']);
+    expect(manifest.files.map((file) => file.hunkCount)).toEqual([1, 1]);
+    expect(manifest.totals.files).toBe(2);
+    expect(manifest.warnings).toEqual(['files-truncated', 'legacy-truncated']);
+  });
+
+  it('keeps the manifest carried by a v2 snapshot', () => {
+    const explicit = buildReviewManifest({ scope: manifestScope, files: [changedFile(1)] });
+    const current: Snapshot = {
+      schemaVersion: 2,
+      scope: manifestScope,
+      files: [],
+      manifest: explicit,
+      totals: { files: 1, added: 1, deleted: 0, truncated: false },
+      warnings: [],
+    };
+
+    const manifest = manifestFromSnapshot(current);
+
+    expect(manifest).toEqual(explicit);
+    expect(manifest.warnings).not.toContain('legacy-truncated');
   });
 });

@@ -1,5 +1,5 @@
 import type { Actor, ReviewId, RoundNo } from '../review/types.js';
-import type { Snapshot } from '../types.js';
+import type { ReviewManifest, Snapshot } from '../types.js';
 
 export type FindingSeverity = 'blocker' | 'major' | 'minor' | 'nit';
 export type FindingCategory =
@@ -120,6 +120,8 @@ export interface ReviewerJob {
   /** Complete markdown prompt handed to the reviewer. */
   prompt: string;
   snapshot: Snapshot;
+  /** Full changed-file manifest; absent when only a legacy v1 snapshot is available. */
+  manifest?: ReviewManifest;
 }
 
 export type FindingSink = (finding: Finding) => Promise<void> | void;

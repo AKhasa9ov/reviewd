@@ -119,7 +119,37 @@ export interface SubmissionRecord {
   createdAt: string;
 }
 
-export type AgentStatus = 'queued' | 'running' | 'done' | 'failed' | 'skipped';
+export type AgentStatus = 'queued' | 'running' | 'done' | 'partial' | 'failed' | 'skipped';
+
+/** Coverage of one changed file in a review round. */
+export type CoverageStatus =
+  | 'pending'
+  | 'deep-reviewed'
+  | 'light-reviewed'
+  | 'manifest-only'
+  | 'skipped'
+  | 'deferred'
+  | 'failed';
+
+export interface FileCoverage {
+  path: string;
+  status: CoverageStatus;
+  /** Why the file was not deep/light reviewed, when a reason applies. */
+  reason?: string;
+  /** Shard that owns the file, once review work has been assigned. */
+  shardId?: string;
+}
+
+export interface CoverageTotals {
+  files: number;
+  byStatus: Record<CoverageStatus, number>;
+}
+
+/** Coverage ledger for every file in the review manifest. */
+export interface ReviewCoverage {
+  files: FileCoverage[];
+  totals: CoverageTotals;
+}
 
 export interface AgentState {
   status: AgentStatus;
@@ -128,6 +158,8 @@ export interface AgentState {
   startedAt?: string;
   error?: string;
   findings?: Finding[];
+  /** Coverage ledger for the round; absent on legacy states. */
+  coverage?: ReviewCoverage;
 }
 
 export interface ReviewState {

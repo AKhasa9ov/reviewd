@@ -79,10 +79,60 @@ export interface FileDiff {
   contentHash: string | null;
 }
 
-export interface Snapshot {
+/** Why a manifest entry has no patch content. */
+export type ManifestFileReason =
+  | 'per-file-cap'
+  | 'binary'
+  | 'ignored'
+  | 'generated'
+  | 'legacy-truncated'
+  | 'diff-truncated'
+  | 'unreadable';
+
+/**
+ * One changed path in the complete manifest. Every changed path is listed here,
+ * even when its patch/content is omitted from the bounded render subset.
+ */
+export interface ManifestFile {
+  path: string;
+  oldPath?: string;
+  status: FileStatus;
+  binary: boolean;
+  ignored: boolean;
+  oversized: boolean;
+  added: number;
+  deleted: number;
+  hunkCount: number;
+  /** UTF-8 bytes of the parsed hunks, or 0 when no patch is available. */
+  patchBytes: number;
+  /** Raw content bytes when a source (such as numstat) provides them. */
+  contentBytes?: number;
+  reason?: ManifestFileReason;
+}
+
+export interface ManifestTotals {
+  files: number;
+  added: number;
+  deleted: number;
+  patchBytes: number;
+}
+
+/** Complete changed-file manifest; independent of the snapshot render budget. */
+export interface ReviewManifest {
   schemaVersion: 1;
   scope: ResolvedScope;
+  files: ManifestFile[];
+  totals: ManifestTotals;
+  warnings: string[];
+}
+
+export interface Snapshot {
+  /** v1 snapshots may omit `manifest`; v2 snapshots always carry one. */
+  schemaVersion: 1 | 2;
+  scope: ResolvedScope;
   files: FileDiff[];
+  /** Complete changed-file manifest; absent on legacy v1 snapshots. */
+  manifest?: ReviewManifest;
   totals: { files: number; added: number; deleted: number; truncated: boolean };
   warnings: string[];
 }
