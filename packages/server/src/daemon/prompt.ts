@@ -8,6 +8,8 @@ const TRUNCATION_MARKER = '[diff truncated: prompt budget reached]';
 export interface RenderedDiff {
   text: string;
   truncated: boolean;
+  /** Paths whose complete file header was appended to the rendered diff. */
+  includedFiles: string[];
 }
 
 function fileHeader(file: FileDiff): string[] {
@@ -49,6 +51,7 @@ export function renderBoundedDiff(
   limit: number = DIFF_PROMPT_LIMIT,
 ): RenderedDiff {
   const rendered: string[] = [];
+  const includedFiles: string[] = [];
   let size = 0;
   let truncated = false;
 
@@ -66,12 +69,15 @@ export function renderBoundedDiff(
   for (const file of files) {
     if (file.ignored === true) continue;
     let stopped = false;
+    let headerComplete = true;
     for (const line of fileHeader(file)) {
       if (!append(line)) {
+        headerComplete = false;
         stopped = true;
         break;
       }
     }
+    if (headerComplete) includedFiles.push(file.path);
     if (stopped) break;
     if (file.binary) continue;
     for (const line of hunkLines(file)) {
@@ -84,8 +90,12 @@ export function renderBoundedDiff(
   }
 
   const text = rendered.join('\n');
-  if (!truncated) return { text, truncated };
-  return { text: text === '' ? TRUNCATION_MARKER : `${text}\n${TRUNCATION_MARKER}`, truncated };
+  if (!truncated) return { text, truncated, includedFiles };
+  return {
+    text: text === '' ? TRUNCATION_MARKER : `${text}\n${TRUNCATION_MARKER}`,
+    truncated,
+    includedFiles,
+  };
 }
 
 export interface ReviewPromptContext {
@@ -112,6 +122,8 @@ export interface ReviewPromptInput {
 export interface ReviewPrompt {
   prompt: string;
   truncated: boolean;
+  /** Changed paths whose header made it into the prompt (partial hunks still count). */
+  includedFiles: string[];
 }
 
 /** Builds the single user message the reviewer agent receives for a job. */
@@ -193,5 +205,9 @@ export function buildReviewPrompt(input: ReviewPromptInput): ReviewPrompt {
   }
   if (input.files.length === 0) lines.push('The review contains no file changes.');
   else lines.push(rendered.text);
-  return { prompt: lines.join('\n'), truncated: rendered.truncated };
+  return {
+    prompt: lines.join('\n'),
+    truncated: rendered.truncated,
+    includedFiles: rendered.includedFiles,
+  };
 }

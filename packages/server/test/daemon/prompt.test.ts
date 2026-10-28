@@ -54,8 +54,9 @@ function bigFile(lines: number): FileDiff {
 
 describe('renderBoundedDiff', () => {
   it('renders unified diff headers and line prefixes instead of JSON', () => {
-    const { text, truncated } = renderBoundedDiff([file()]);
+    const { text, truncated, includedFiles } = renderBoundedDiff([file()]);
     expect(truncated).toBe(false);
+    expect(includedFiles).toEqual(['src/a.ts']);
     expect(text).toContain('diff --git a/src/a.ts b/src/a.ts');
     expect(text).toContain('--- a/src/a.ts');
     expect(text).toContain('+++ b/src/a.ts');
@@ -86,17 +87,24 @@ describe('renderBoundedDiff', () => {
     const binary = renderBoundedDiff([file({ path: 'logo.png', binary: true, hunks: [] })]);
     expect(binary.text).toContain('Binary files a/logo.png and b/logo.png differ');
     expect(binary.text).not.toContain('@@');
+    expect(binary.includedFiles).toEqual(['logo.png']);
 
     const ignored = renderBoundedDiff([file({ path: 'dist/app.js', ignored: true })]);
     expect(ignored.text).not.toContain('@@');
+    expect(ignored.includedFiles).toEqual([]);
   });
 
   it('caps the rendered text and appends a truncation marker', () => {
-    const { text, truncated } = renderBoundedDiff([bigFile(4000)], 5_000);
+    const { text, truncated, includedFiles } = renderBoundedDiff(
+      [bigFile(4000), file({ path: 'src/after.ts' })],
+      5_000,
+    );
     expect(truncated).toBe(true);
     expect(text.length).toBeLessThan(5_100);
     expect(text).toContain('diff --git a/src/big.ts b/src/big.ts');
     expect(text).toContain('[diff truncated');
+    expect(text).not.toContain('src/after.ts');
+    expect(includedFiles).toEqual(['src/big.ts']);
   });
 
   it('does not end mid-marker when the limit is zero', () => {
@@ -108,7 +116,7 @@ describe('renderBoundedDiff', () => {
 
 describe('buildReviewPrompt', () => {
   it('describes the review, the read-only contract and the strict JSON schema', () => {
-    const { prompt } = buildReviewPrompt({
+    const { prompt, includedFiles } = buildReviewPrompt({
       title: 'Add search',
       reviewId: 'rev_1',
       round: 2,
@@ -124,6 +132,7 @@ describe('buildReviewPrompt', () => {
     expect(prompt).toContain('ONLY one fenced');
     expect(prompt).toContain('"schemaVersion": 1');
     expect(prompt).toContain('diff --git a/src/a.ts b/src/a.ts');
+    expect(includedFiles).toEqual(['src/a.ts']);
   });
 
   it('gives a verification round the previous report and unresolved comments', () => {
@@ -161,17 +170,19 @@ describe('buildReviewPrompt', () => {
     expect(prompt).toContain('"schemaVersion": 1');
   });
 
-  it('honours a custom limit', () => {
-    const { prompt, truncated } = buildReviewPrompt({
+  it('honours a custom limit and reports only fully introduced files', () => {
+    const { prompt, truncated, includedFiles } = buildReviewPrompt({
       title: 'Big',
       reviewId: 'rev_3',
       round: 1,
       kind: 'initial',
-      files: [bigFile(4000)],
+      files: [bigFile(4000), file({ path: 'src/after.ts' })],
       diffLimit: 4_000,
     });
     expect(truncated).toBe(true);
     expect(prompt.length).toBeLessThan(6_000);
     expect(prompt).toContain('[diff truncated');
+    expect(prompt).not.toContain('src/after.ts');
+    expect(includedFiles).toEqual(['src/big.ts']);
   });
 });

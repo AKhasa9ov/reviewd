@@ -486,7 +486,14 @@ async function runRemote(
           const current = await client.get(`/api/reviews/${id}`);
           const status = (current.review as { agent?: { status?: string } } | undefined)?.agent
             ?.status;
-          if (status === 'done' || status === 'failed' || status === 'skipped') break;
+          if (
+            status === 'done' ||
+            status === 'partial' ||
+            status === 'failed' ||
+            status === 'skipped'
+          ) {
+            break;
+          }
           await new Promise((resolve) => setTimeout(resolve, 500));
         }
       }

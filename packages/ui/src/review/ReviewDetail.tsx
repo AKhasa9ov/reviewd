@@ -6,6 +6,7 @@ import type {
   Finding,
   FindingDecision,
   FindingDecisionState,
+  ReviewCoverage,
   ReviewView,
   Side,
   Snapshot,
@@ -87,6 +88,12 @@ const TABS: Array<{ id: ReviewTab; label: string }> = [
   { id: 'report', label: 'Report' },
   { id: 'signals', label: 'Signals' },
 ];
+
+function coverageLabel(coverage: ReviewCoverage): string {
+  const byStatus = coverage.totals.byStatus;
+  const reviewed = byStatus['deep-reviewed'] + byStatus['light-reviewed'];
+  return `Reviewed ${reviewed}/${coverage.totals.files} files · ${byStatus.skipped} skipped · ${byStatus['manifest-only']} manifest-only`;
+}
 
 const SHORTCUTS = [
   ['c', 'Comment on the selected line'],
@@ -1441,7 +1448,7 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
                   tone={
                     review.agent?.status === 'failed'
                       ? 'danger'
-                      : review.agent?.status === 'running'
+                      : review.agent?.status === 'running' || review.agent?.status === 'partial'
                         ? 'warning'
                         : review.agent?.status === 'done'
                           ? 'success'
@@ -1451,6 +1458,14 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
                   {review.agent?.status ?? 'not run'}
                 </Badge>
               </div>
+              {review.agent?.coverage !== undefined ? (
+                <p className="cr-meta">{coverageLabel(review.agent.coverage)}</p>
+              ) : null}
+              {review.agent?.status === 'partial' ? (
+                <p className="cr-notice cr-notice-warning">
+                  Coverage is incomplete: the reviewer did not inspect every changed file.
+                </p>
+              ) : null}
               {review.agent?.status === 'running' ? (
                 <>
                   <p className="cr-meta">

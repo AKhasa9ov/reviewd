@@ -18,6 +18,7 @@ import type {
   ReviewState,
   Round,
   ReviewId,
+  ReviewCoverage,
   SubmissionRecord,
 } from './types.js';
 import { createId } from './ids.js';
@@ -109,6 +110,11 @@ export interface AgentStartedData {
   backend: ReviewerBackendKind;
 }
 
+export interface AgentCoverageData {
+  coverage: ReviewCoverage;
+  round: number;
+}
+
 export interface AgentFindingData {
   finding: Finding;
   round: number;
@@ -141,6 +147,7 @@ export interface ReviewEventDataMap {
   'review/closed': ReviewClosedData;
   'review/submitted': ReviewSubmittedData;
   'agent/started': AgentStartedData;
+  'agent/coverage': AgentCoverageData;
   'agent/finding': AgentFindingData;
   'agent/report': AgentReportData;
   'agent/failed': AgentFailedData;
@@ -166,6 +173,7 @@ export const REVIEW_EVENT_TYPES: readonly ReviewEventType[] = [
   'review/closed',
   'review/submitted',
   'agent/started',
+  'agent/coverage',
   'agent/finding',
   'agent/report',
   'agent/failed',

@@ -1,5 +1,6 @@
+import { isCoverageComplete, promotePendingToLight } from './coverage.js';
 import type { ReviewEvent } from './events.js';
-import type { Comment, ReviewState } from './types.js';
+import type { AgentStatus, Comment, ReviewState } from './types.js';
 
 export class ReviewFoldError extends Error {
   constructor(message: string) {
@@ -156,8 +157,18 @@ export function fold(state: ReviewState, event: ReviewEvent): ReviewState {
       }
       break;
     }
+    case 'agent/coverage': {
+      next.agent = {
+        status: 'queued',
+        round: event.data.round,
+        coverage: structuredClone(event.data.coverage),
+        findings: [],
+      };
+      break;
+    }
     case 'agent/started': {
       next.agent = {
+        ...(next.agent?.coverage === undefined ? {} : { coverage: next.agent.coverage }),
         status: 'running',
         jobId: event.data.jobId,
         round: event.data.round,
@@ -173,12 +184,22 @@ export function fold(state: ReviewState, event: ReviewEvent): ReviewState {
       break;
     }
     case 'agent/report': {
+      const reportSkipped = event.data.report.skipped === true;
+      const coverage =
+        reportSkipped || next.agent?.coverage === undefined
+          ? next.agent?.coverage
+          : promotePendingToLight(next.agent.coverage);
+      let status: AgentStatus;
+      if (reportSkipped) status = 'skipped';
+      else if (coverage === undefined) status = 'done';
+      else status = isCoverageComplete(coverage) ? 'done' : 'partial';
       next.report = structuredClone(event.data.report);
       next.agent = {
         ...(next.agent ?? {}),
-        status: event.data.report.skipped === true ? 'skipped' : 'done',
+        status,
         round: event.data.report.round,
         findings: structuredClone(event.data.report.findings),
+        ...(coverage === undefined ? {} : { coverage }),
       };
       break;
     }

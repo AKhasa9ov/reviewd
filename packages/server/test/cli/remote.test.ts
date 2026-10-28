@@ -114,6 +114,42 @@ describe('remote CLI', () => {
     });
   });
 
+  it('stops waiting for a worker when the review becomes partial', async () => {
+    const { fetch, calls } = fakeFetch((call) => {
+      if (call.method === 'POST') {
+        return {
+          status: 201,
+          body: {
+            review: { review: { id: 'rev_1', reviewer: { backend: 'worker' } } },
+            url: 'http://ui/review/rev_1',
+            warnings: [],
+          },
+        };
+      }
+      return { body: { review: { id: 'rev_1', agent: { status: 'partial' } } } };
+    });
+    const { io } = capture();
+    const code = await runCli(
+      [
+        'start',
+        '--daemon',
+        'http://reviewd:3100',
+        '--repo',
+        '/repo',
+        '--title',
+        'T',
+        '--reviewer',
+        'worker',
+        '--wait-agent',
+        '--json',
+      ],
+      io,
+      deps(fetch, { CODE_REVIEW_TOKEN: 't'.repeat(32) }),
+    );
+    expect(code).toBe(0);
+    expect(calls.filter((call) => call.method === 'GET')).toHaveLength(1);
+  });
+
   it('reads status, comments, feedback and submits', async () => {
     const { fetch } = fakeFetch((call) => {
       if (call.method === 'GET' && call.url.endsWith('/api/reviews/rev_1')) {

@@ -43,6 +43,7 @@ export {
   ReviewEventError,
 } from './review/events.js';
 export type {
+  AgentCoverageData,
   AgentFailedData,
   AgentFindingData,
   AgentReportData,
@@ -105,7 +106,14 @@ export type {
 } from './review/types.js';
 export { AnchorError, captureAnchor, normalizeQuote, reanchor } from './review/anchors.js';
 export type { AnchorErrorCode, CaptureAnchorInput, ReanchorOptions } from './review/anchors.js';
-export { COVERAGE_STATUSES, initialCoverage, summarizeCoverage } from './review/coverage.js';
+export {
+  COVERAGE_STATUSES,
+  coverageFromPrompt,
+  initialCoverage,
+  isCoverageComplete,
+  promotePendingToLight,
+  summarizeCoverage,
+} from './review/coverage.js';
 export { deriveOutcome } from './review/outcomes.js';
 export { fold, ReviewFoldError } from './review/fold.js';
 export { ReviewLifecycle, ReviewLifecycleError } from './review/lifecycle.js';

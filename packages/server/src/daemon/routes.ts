@@ -8,6 +8,7 @@ import {
   CORE_VERSION,
   GitError,
   ReviewError,
+  coverageFromPrompt,
   createEvent,
   runGit,
   resolveRepoRoot,
@@ -199,7 +200,7 @@ async function enqueueWorkerJob(ctx: RouteContext, reviewId: string): Promise<vo
             },
           ];
     });
-  const { prompt } = buildReviewPrompt({
+  const { prompt, includedFiles } = buildReviewPrompt({
     title: view.review.title,
     reviewId,
     round: round.no,
@@ -217,6 +218,14 @@ async function enqueueWorkerJob(ctx: RouteContext, reviewId: string): Promise<vo
   });
   const initiator = view.review.initiator;
   const manifest = view.latestSnapshot?.manifest;
+  if (manifest !== undefined) {
+    // Record coverage before the job exists so a worker cannot lease a round
+    // whose unresolved manifest paths are still invisible to the API/UI.
+    await append(ctx, reviewId, 'agent/coverage', {
+      coverage: coverageFromPrompt(manifest, includedFiles),
+      round: round.no,
+    });
+  }
   ctx.jobs.enqueue({
     reviewId,
     round: round.no,
