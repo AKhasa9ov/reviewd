@@ -100,6 +100,25 @@ function initiatorFor(
   };
 }
 
+/**
+ * Browser-facing review URL. Embedded mode serves the SPA on the DSH origin, so
+ * the daemon's loopback URL is never returned to an agent or command. External
+ * mode keeps `publicUrl` when configured and the daemon URL otherwise.
+ */
+export function reviewUrlFor(
+  config: ReviewConfig,
+  reviewId: string,
+  fallback: string | undefined,
+): string | null {
+  const path = `/review/${encodeURIComponent(reviewId)}`;
+  if (config.embedded) {
+    const base = config.uiBase === '/' ? '' : config.uiBase.replace(/\/+$/, '');
+    return `${base}${path}`;
+  }
+  if (config.publicUrl !== undefined) return `${config.publicUrl.replace(/\/+$/, '')}${path}`;
+  return fallback ?? null;
+}
+
 function scopeFrom(args: Record<string, unknown>, base: string): Record<string, unknown> {
   if (typeof args.commit === 'string') return { kind: 'commit', commit: args.commit };
   if (typeof args.head === 'string') return { kind: 'range', baseRef: base, headRef: args.head };
@@ -159,7 +178,7 @@ export function createReviewTools(
           return {
             ok: true,
             reviewId: created.review.review.id,
-            url: created.url ?? null,
+            url: reviewUrlFor(config, created.review.review.id, created.url),
             status: 'open',
           };
         },

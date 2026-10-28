@@ -1,5 +1,6 @@
 import type { ReviewApiLike } from './api.js';
 import type { ReviewConfig } from './config.js';
+import { reviewUrlFor } from './tools.js';
 import type { PluginContext, ToolAgent } from './tools.js';
 
 export interface CommandInvocation {
@@ -48,9 +49,10 @@ export function createReviewCommand(
           invocation.signal,
         );
         const id = created.review.review.id;
+        const url = reviewUrlFor(config, id, created.url);
         return {
           kind: 'success' as const,
-          text: `Review ${id} started${created.url === undefined ? '' : `: ${created.url}`}`,
+          text: `Review ${id} started${url === null ? '' : `: ${url}`}`,
         };
       } catch (error) {
         return {

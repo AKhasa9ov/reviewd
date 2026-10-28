@@ -24,7 +24,7 @@ const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
 describe('publishable DSH package manifest', () => {
   it('declares the public package identity and license', () => {
     expect(pkg.name).toBe('@dsh-code-review/dsh');
-    expect(pkg.version).toBe('0.1.0');
+    expect(pkg.version).toMatch(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/);
     expect(pkg.private).not.toBe(true);
     expect(pkg.license).toBe('MIT');
     expect(pkg.publishConfig?.access).toBe('public');

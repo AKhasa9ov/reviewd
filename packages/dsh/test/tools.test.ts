@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { createReviewTools } from '../src/tools.js';
 import type { PluginContext } from '../src/tools.js';
 
-function setup() {
+function setup(overrides: Record<string, unknown> = {}) {
   const definitions: Array<Record<string, any>> = [];
   const ctx: PluginContext = {
     tools: {
@@ -41,7 +41,7 @@ function setup() {
     requestTimeoutMs: 1000,
     reviewerTimeoutMs: 600_000,
   };
-  createReviewTools(ctx, config, api);
+  createReviewTools(ctx, { ...config, ...overrides } as any, api);
   return { definitions, calls };
 }
 
@@ -63,6 +63,20 @@ describe('review tools', () => {
     });
     const rendered = start!.output.render({}, value) as Array<{ text: string }>;
     expect(JSON.parse(rendered[0]!.text)).toEqual(value);
+  });
+
+  it('returns the DSH-hosted SPA path in embedded mode instead of the loopback daemon URL', async () => {
+    const { definitions } = setup({ embedded: true, uiBase: '/code-review' });
+    const start = definitions.find((definition) => definition.name === 'review_start');
+    const value = await start!.execute(
+      {},
+      { agent: { id: 'a', session: { id: 's1' } }, signal: new AbortController().signal },
+    );
+    expect(value).toMatchObject({
+      ok: true,
+      reviewId: 'rev_1',
+      url: '/code-review/review/rev_1',
+    });
   });
 
   it('returns typed errors instead of throwing', async () => {

@@ -17,7 +17,9 @@ dsh plugin --profile web add @dsh-code-review/dsh
 ```
 
 This adds the package to the `web` profile. Restart the profile so the Host routes and
-loops load; DSH HMR can reload only the client half. From a local checkout, build and pack,
+loops load; DSH HMR can reload only the client half. The package is not yet published to
+the public registry; use the local tarball path below until the release is published. From
+a local checkout, build and pack,
 then install the tarball with the same command:
 
 ```bash
@@ -78,8 +80,9 @@ is optional and only changes browser-facing links. The bundle does not mount
 `/code-review` in this mode. The panel lists reviews through the same-origin proxy and
 links to the external review UI at `publicUrl` (or `daemonUrl`), which keeps its own token
 login and HttpOnly cookie. The configured `token` stays Host-only: the proxy replaces any
-browser Authorization header with the bearer and forwards only `idempotency-key` and
-`x-review-actor`; `/api/code-review/info` returns addresses without the token.
+browser Authorization header with the bearer. It forwards `accept`, `content-type`,
+`idempotency-key`, `x-review-actor` and `last-event-id` (for SSE), and never forwards the
+browser's own `authorization`; `/api/code-review/info` returns addresses without the token.
 
 Use the profile's own patch layer for these overrides; do not edit the package's
 `cordis.patch.yml`.
@@ -87,12 +90,15 @@ Use the profile's own patch layer for these overrides; do not edit the package's
 ## Tools and command
 
 - `review_start` — create a review for the session workspace, or an explicit repo and
-  base/head/commit.
+  base/head/commit. In embedded mode its `url` is the same-origin
+  `/code-review/review/<id>` path; external mode uses `publicUrl` when configured and the
+  daemon URL otherwise.
 - `review_status` — review, round count, comment count and agent report.
 - `review_refresh` — create the next round, re-anchor comments and queue verification.
 - `review_feedback` — read the latest submitted feedback without delivering it again.
-- `/review <title>` — create a worktree review for the current workspace and return its
-  URL.
+- `/review <title>` — create a worktree review for the current workspace and return the
+  same browser-facing URL as `review_start` (a `/code-review/review/<id>` path in embedded
+  mode).
 
 Tool failures return `{ok:false, error:{code,message}}` instead of throwing. The initiating
 DSH session is stored with the review so feedback can be routed after the turn ends.
@@ -103,7 +109,8 @@ DSH session is stored with the review so feedback can be routed after the turn e
 long-polls `/api/jobs/next`, creates a reviewer subagent in the job's workspace, and posts
 findings, a report and an acknowledgement. Reviewer model selection inherits the Host
 default; an explicit `reviewerModel` wins. A configured `reviewerPreset` is mounted
-explicitly.
+explicitly on the root reviewer agent. When the worker resolves the initiating DSH session,
+the reviewer is created as its child and does not mount a separate preset.
 
 The reviewer is read-only: every tool execution passes `tools.guard()`, which allows only
 `read`, `grep`, `glob`, `review_status` and `review_feedback`. Shell, write, network,
@@ -138,8 +145,9 @@ pre-review, or `command` when the daemon is configured for a command reviewer.
 ## Upgrade, uninstall and data retention
 
 Upgrade with `dsh plugin --profile web add @dsh-code-review/dsh@latest`, then restart the
-profile. Back up `storeDir` before upgrading; the event store is preserved and migrated in
-place.
+profile. Back up `storeDir` before upgrading; the event store is preserved. This release
+does not perform automatic event-schema migrations, so restore the backup if a future
+version changes the on-disk format.
 
 Uninstall with `dsh plugin --profile web remove @dsh-code-review/dsh`. Stopping the Host
 closes the embedded daemon and discards its in-memory token. Uninstalling does **not**
@@ -147,6 +155,7 @@ delete review data: remove `storeDir` (by default `$HOME/.local/share/dsh-code-r
 manually to erase it.
 
 There is no automatic retention or GC in embedded mode. Reviews remain until you delete
-the store. The daemon exposes authenticated `POST /api/gc`; in external mode
+the store or run GC manually. The authenticated `POST /api/gc` endpoint is also reachable
+in embedded mode through `/api/code-review/gc`; in external mode
 `review gc --older-than 90d` is the supported CLI. GC is irreversible, so take a backup
 first.

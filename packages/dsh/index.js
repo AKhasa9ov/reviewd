@@ -289,6 +289,211 @@ function configProblem(config) {
   return void 0;
 }
 
+// packages/dsh/src/tools.ts
+var OUTPUT_SCHEMA = { type: "object", additionalProperties: true };
+function textResult(value) {
+  return [{ type: "text", text: JSON.stringify(value, null, 2) }];
+}
+function failure(error) {
+  const code = typeof error === "object" && error !== null && "code" in error && typeof error.code === "string" ? error.code : "tool-error";
+  const message = error instanceof Error ? error.message : "review tool failed";
+  return { ok: false, error: { code, message } };
+}
+function tool(name2, description, parameters, run) {
+  return {
+    name: name2,
+    description,
+    parameters,
+    output: {
+      schema: OUTPUT_SCHEMA,
+      render: (_args, value) => textResult(value)
+    },
+    async execute(args, exec) {
+      try {
+        return await run(args, exec);
+      } catch (error) {
+        return failure(error);
+      }
+    }
+  };
+}
+function repoFor(ctx, config, agent) {
+  if (config.repoHint !== void 0) return config.repoHint;
+  if (config.cwd !== void 0) return config.cwd;
+  if (ctx.workingDirectory !== void 0 && agent?.session !== void 0) {
+    try {
+      return ctx.workingDirectory.get(agent.session);
+    } catch {
+    }
+  }
+  if (agent?.session?.header?.cwd !== void 0) return agent.session.header.cwd;
+  return process.cwd();
+}
+function initiatorFor(config, agent, cwd) {
+  const sessionId = agent?.session?.id ?? config.sessionId;
+  if (sessionId === void 0) return void 0;
+  return {
+    harness: "dsh",
+    sessionId,
+    cwd,
+    ...config.reviewerPreset === void 0 ? {} : { agentPreset: config.reviewerPreset }
+  };
+}
+function reviewUrlFor(config, reviewId, fallback) {
+  const path = `/review/${encodeURIComponent(reviewId)}`;
+  if (config.embedded) {
+    const base = config.uiBase === "/" ? "" : config.uiBase.replace(/\/+$/, "");
+    return `${base}${path}`;
+  }
+  if (config.publicUrl !== void 0) return `${config.publicUrl.replace(/\/+$/, "")}${path}`;
+  return fallback ?? null;
+}
+function scopeFrom(args, base) {
+  if (typeof args.commit === "string") return { kind: "commit", commit: args.commit };
+  if (typeof args.head === "string") return { kind: "range", baseRef: base, headRef: args.head };
+  return { kind: "worktree", baseRef: base };
+}
+function createReviewTools(ctx, config, api) {
+  return [
+    ctx.tools.register(
+      tool(
+        "review_start",
+        "Start a code review of the current workspace or a git range. Returns the review id and review URL.",
+        {
+          type: "object",
+          properties: {
+            title: { type: "string", description: "Short review title." },
+            repo: {
+              type: "string",
+              description: "Absolute repository path; defaults to the session workspace."
+            },
+            base: { type: "string", description: "Base ref, default main." },
+            head: { type: "string", description: "Head ref for a committed range." },
+            commit: { type: "string", description: "Review one commit." },
+            reviewer: {
+              type: "object",
+              properties: {
+                backend: { type: "string", enum: ["worker", "command", "none"] }
+              },
+              additionalProperties: false
+            }
+          },
+          additionalProperties: false
+        },
+        async (args, exec) => {
+          const repo = typeof args.repo === "string" && args.repo !== "" ? args.repo : repoFor(ctx, config, exec.agent);
+          const base = typeof args.base === "string" && args.base !== "" ? args.base : "main";
+          const initiator = initiatorFor(config, exec.agent, repo);
+          const body = {
+            repoRoot: repo,
+            title: typeof args.title === "string" && args.title !== "" ? args.title : "Code review",
+            scope: scopeFrom(args, base),
+            reviewer: args.reviewer ?? { backend: config.reviewerBackend },
+            ...initiator === void 0 ? {} : { initiator }
+          };
+          const created = await api.post(
+            "/api/reviews",
+            body,
+            exec.signal
+          );
+          return {
+            ok: true,
+            reviewId: created.review.review.id,
+            url: reviewUrlFor(config, created.review.review.id, created.url),
+            status: "open"
+          };
+        }
+      )
+    ),
+    ctx.tools.register(
+      tool(
+        "review_status",
+        "Read one review, including rounds, comments and agent status.",
+        {
+          type: "object",
+          properties: { reviewId: { type: "string" } },
+          required: ["reviewId"],
+          additionalProperties: false
+        },
+        async (args, exec) => {
+          if (typeof args.reviewId !== "string" || args.reviewId === "") {
+            return { ok: false, error: { code: "validation", message: "reviewId is required" } };
+          }
+          const view = await api.get(
+            `/api/reviews/${encodeURIComponent(args.reviewId)}`,
+            exec.signal
+          );
+          const review = view.review;
+          return {
+            ok: true,
+            reviewId: review.id,
+            title: review.title,
+            status: review.status,
+            rounds: Array.isArray(review.rounds) ? review.rounds.length : 0,
+            comments: Array.isArray(review.comments) ? review.comments.length : 0,
+            agent: review.agent ?? null,
+            report: view.report ?? null
+          };
+        }
+      )
+    ),
+    ctx.tools.register(
+      tool(
+        "review_refresh",
+        "Create the next review round from the current workspace state, re-anchor comments and queue reviewer verification.",
+        {
+          type: "object",
+          properties: { reviewId: { type: "string" } },
+          required: ["reviewId"],
+          additionalProperties: false
+        },
+        async (args, exec) => {
+          if (typeof args.reviewId !== "string" || args.reviewId === "") {
+            return { ok: false, error: { code: "validation", message: "reviewId is required" } };
+          }
+          const view = await api.post(
+            `/api/reviews/${encodeURIComponent(args.reviewId)}/refresh`,
+            {},
+            exec.signal
+          );
+          return {
+            ok: true,
+            reviewId: args.reviewId,
+            rounds: Array.isArray(view.review.rounds) ? view.review.rounds.length : 0
+          };
+        }
+      )
+    ),
+    ctx.tools.register(
+      tool(
+        "review_feedback",
+        "Read the latest submitted feedback for a review without delivering it again.",
+        {
+          type: "object",
+          properties: { reviewId: { type: "string" } },
+          required: ["reviewId"],
+          additionalProperties: false
+        },
+        async (args, exec) => {
+          if (typeof args.reviewId !== "string" || args.reviewId === "") {
+            return { ok: false, error: { code: "validation", message: "reviewId is required" } };
+          }
+          const view = await api.get(
+            `/api/reviews/${encodeURIComponent(args.reviewId)}/feedback`,
+            exec.signal
+          );
+          return {
+            ok: true,
+            reviewId: args.reviewId,
+            markdown: view.feedback?.markdown ?? "",
+            json: view.feedback?.json ?? null
+          };
+        }
+      )
+    )
+  ];
+}
+
 // packages/dsh/src/command.ts
 function createReviewCommand(ctx, config, api) {
   return ctx.commands.register({
@@ -320,9 +525,10 @@ function createReviewCommand(ctx, config, api) {
           invocation.signal
         );
         const id = created.review.review.id;
+        const url = reviewUrlFor(config, id, created.url);
         return {
           kind: "success",
-          text: `Review ${id} started${created.url === void 0 ? "" : `: ${created.url}`}`
+          text: `Review ${id} started${url === null ? "" : `: ${url}`}`
         };
       } catch (error) {
         return {
@@ -7759,202 +7965,6 @@ function resolveUiDir() {
     fileURLToPath2(new URL("../web", import.meta.url))
   ];
   return candidates.find((dir) => existsSync(join7(dir, "index.html"))) ?? null;
-}
-
-// packages/dsh/src/tools.ts
-var OUTPUT_SCHEMA = { type: "object", additionalProperties: true };
-function textResult(value) {
-  return [{ type: "text", text: JSON.stringify(value, null, 2) }];
-}
-function failure(error) {
-  const code = typeof error === "object" && error !== null && "code" in error && typeof error.code === "string" ? error.code : "tool-error";
-  const message = error instanceof Error ? error.message : "review tool failed";
-  return { ok: false, error: { code, message } };
-}
-function tool(name2, description, parameters, run) {
-  return {
-    name: name2,
-    description,
-    parameters,
-    output: {
-      schema: OUTPUT_SCHEMA,
-      render: (_args, value) => textResult(value)
-    },
-    async execute(args, exec) {
-      try {
-        return await run(args, exec);
-      } catch (error) {
-        return failure(error);
-      }
-    }
-  };
-}
-function repoFor(ctx, config, agent) {
-  if (config.repoHint !== void 0) return config.repoHint;
-  if (config.cwd !== void 0) return config.cwd;
-  if (ctx.workingDirectory !== void 0 && agent?.session !== void 0) {
-    try {
-      return ctx.workingDirectory.get(agent.session);
-    } catch {
-    }
-  }
-  if (agent?.session?.header?.cwd !== void 0) return agent.session.header.cwd;
-  return process.cwd();
-}
-function initiatorFor(config, agent, cwd) {
-  const sessionId = agent?.session?.id ?? config.sessionId;
-  if (sessionId === void 0) return void 0;
-  return {
-    harness: "dsh",
-    sessionId,
-    cwd,
-    ...config.reviewerPreset === void 0 ? {} : { agentPreset: config.reviewerPreset }
-  };
-}
-function scopeFrom(args, base) {
-  if (typeof args.commit === "string") return { kind: "commit", commit: args.commit };
-  if (typeof args.head === "string") return { kind: "range", baseRef: base, headRef: args.head };
-  return { kind: "worktree", baseRef: base };
-}
-function createReviewTools(ctx, config, api) {
-  return [
-    ctx.tools.register(
-      tool(
-        "review_start",
-        "Start a code review of the current workspace or a git range. Returns the review id and review URL.",
-        {
-          type: "object",
-          properties: {
-            title: { type: "string", description: "Short review title." },
-            repo: {
-              type: "string",
-              description: "Absolute repository path; defaults to the session workspace."
-            },
-            base: { type: "string", description: "Base ref, default main." },
-            head: { type: "string", description: "Head ref for a committed range." },
-            commit: { type: "string", description: "Review one commit." },
-            reviewer: {
-              type: "object",
-              properties: {
-                backend: { type: "string", enum: ["worker", "command", "none"] }
-              },
-              additionalProperties: false
-            }
-          },
-          additionalProperties: false
-        },
-        async (args, exec) => {
-          const repo = typeof args.repo === "string" && args.repo !== "" ? args.repo : repoFor(ctx, config, exec.agent);
-          const base = typeof args.base === "string" && args.base !== "" ? args.base : "main";
-          const initiator = initiatorFor(config, exec.agent, repo);
-          const body = {
-            repoRoot: repo,
-            title: typeof args.title === "string" && args.title !== "" ? args.title : "Code review",
-            scope: scopeFrom(args, base),
-            reviewer: args.reviewer ?? { backend: config.reviewerBackend },
-            ...initiator === void 0 ? {} : { initiator }
-          };
-          const created = await api.post(
-            "/api/reviews",
-            body,
-            exec.signal
-          );
-          return {
-            ok: true,
-            reviewId: created.review.review.id,
-            url: created.url ?? null,
-            status: "open"
-          };
-        }
-      )
-    ),
-    ctx.tools.register(
-      tool(
-        "review_status",
-        "Read one review, including rounds, comments and agent status.",
-        {
-          type: "object",
-          properties: { reviewId: { type: "string" } },
-          required: ["reviewId"],
-          additionalProperties: false
-        },
-        async (args, exec) => {
-          if (typeof args.reviewId !== "string" || args.reviewId === "") {
-            return { ok: false, error: { code: "validation", message: "reviewId is required" } };
-          }
-          const view = await api.get(
-            `/api/reviews/${encodeURIComponent(args.reviewId)}`,
-            exec.signal
-          );
-          const review = view.review;
-          return {
-            ok: true,
-            reviewId: review.id,
-            title: review.title,
-            status: review.status,
-            rounds: Array.isArray(review.rounds) ? review.rounds.length : 0,
-            comments: Array.isArray(review.comments) ? review.comments.length : 0,
-            agent: review.agent ?? null,
-            report: view.report ?? null
-          };
-        }
-      )
-    ),
-    ctx.tools.register(
-      tool(
-        "review_refresh",
-        "Create the next review round from the current workspace state, re-anchor comments and queue reviewer verification.",
-        {
-          type: "object",
-          properties: { reviewId: { type: "string" } },
-          required: ["reviewId"],
-          additionalProperties: false
-        },
-        async (args, exec) => {
-          if (typeof args.reviewId !== "string" || args.reviewId === "") {
-            return { ok: false, error: { code: "validation", message: "reviewId is required" } };
-          }
-          const view = await api.post(
-            `/api/reviews/${encodeURIComponent(args.reviewId)}/refresh`,
-            {},
-            exec.signal
-          );
-          return {
-            ok: true,
-            reviewId: args.reviewId,
-            rounds: Array.isArray(view.review.rounds) ? view.review.rounds.length : 0
-          };
-        }
-      )
-    ),
-    ctx.tools.register(
-      tool(
-        "review_feedback",
-        "Read the latest submitted feedback for a review without delivering it again.",
-        {
-          type: "object",
-          properties: { reviewId: { type: "string" } },
-          required: ["reviewId"],
-          additionalProperties: false
-        },
-        async (args, exec) => {
-          if (typeof args.reviewId !== "string" || args.reviewId === "") {
-            return { ok: false, error: { code: "validation", message: "reviewId is required" } };
-          }
-          const view = await api.get(
-            `/api/reviews/${encodeURIComponent(args.reviewId)}/feedback`,
-            exec.signal
-          );
-          return {
-            ok: true,
-            reviewId: args.reviewId,
-            markdown: view.feedback?.markdown ?? "",
-            json: view.feedback?.json ?? null
-          };
-        }
-      )
-    )
-  ];
 }
 
 // packages/dsh/src/delivery.ts

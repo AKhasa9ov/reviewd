@@ -151,12 +151,15 @@ no token to configure.
 ## Tools and command
 
 - `review_start` — create a review for the session workspace, or an explicit repo and
-  base/head/commit. The initiator is `{harness:'dsh', sessionId, cwd}`.
+  base/head/commit. The initiator is `{harness:'dsh', sessionId, cwd}`. Embedded mode
+  returns the same-origin `/code-review/review/<id>` path, never the loopback daemon URL;
+  external mode uses `publicUrl` when configured.
 - `review_status` — review, round count, comment count, agent report.
 - `review_refresh` — create the next round, re-anchor comments and queue verification.
 - `review_feedback` — read the latest submitted feedback without delivering it again.
-- `/review <instruction>` — create a worktree review for the current workspace and
-  return the review URL.
+- `/review <title>` — create a worktree review for the current workspace and return the
+  same browser-facing review URL as `review_start` (the title is the rest of the command
+  input).
 
 Tool failures return a JSON string with `{ok:false, error:{code,message}}` instead of
 throwing. Creating a review stores the initiator in `review/created`, so the daemon can
@@ -175,8 +178,10 @@ becoming a retry loop against a dead port.
 The subagent:
 
 - runs in the review's workspace cwd; a configured `reviewerPreset` is mounted
-  explicitly because `agents.create({meta: {agentPreset}})` only labels the session and
-  does not compose the preset's tools/model by itself;
+  explicitly on a root reviewer because `agents.create({meta: {agentPreset}})` only labels
+  the session and does not compose the preset's tools/model by itself. If the worker
+  resolves the initiating DSH session, the reviewer is created as a child agent and no
+  separate preset is mounted;
 - is strictly read-only: every tool execution passes through `tools.guard()`, which
   allows only `read`, `grep`, `glob`, `review_status` and `review_feedback`; shell,
   write, network, delegation and review-mutating tools fail closed. Global
@@ -219,15 +224,17 @@ directory. The store holds the append-only event log, replay caches, snapshots, 
 settings and the single-writer lock; it survives restarts, upgrades and package removal.
 
 Upgrade with `dsh plugin --profile web add @dsh-code-review/dsh@latest`, then restart the
-profile. Back up `storeDir` first; the daemon applies compatible event-schema migrations at
-startup and refuses an incompatible store with an actionable error. Uninstall with
+profile. Back up `storeDir` first; the event store is preserved, but this release does not
+perform automatic event-schema migrations. Keep the backup if a future version changes the
+on-disk format. Uninstall with
 `dsh plugin --profile web remove @dsh-code-review/dsh`. Stopping the Host closes the
 embedded daemon and discards its in-memory token. Uninstalling does **not** delete review
 data; remove `storeDir` manually to erase it.
 
 There is no automatic retention or GC in embedded mode. Reviews remain until the store is
-deleted. An external daemon exposes authenticated `POST /api/gc` and the
-`review gc --older-than 90d` CLI; GC is irreversible, so take a backup first. See
+deleted or GC is run manually. The authenticated `POST /api/gc` endpoint is also exposed in
+embedded mode through `/api/code-review/gc`; an external daemon additionally supports the
+`review gc --older-than 90d` CLI. GC is irreversible, so take a backup first. See
 [docs/ops.md](ops.md) for the full retention, backup and upgrade procedure.
 
 ## Security notes
@@ -254,9 +261,10 @@ The package name is `@dsh-code-review/dsh` (version `0.1.0`, MIT, public access)
 manifest's repository, homepage and bugs URLs currently point at
 `https://github.com/dsh-code-review/dsh-code-review`; **confirm those final public URLs
 before npm publish** and update all three fields together if the repository moves. The
-package has not been published to npm and has not been submitted to dsh.so. dsh.so expects
-the public npm package URL after publish (not a local tarball or ZIP); a listing may stay
-"Declared/unverified" until it is independently install-tested.
+package has not been published to npm and has not been submitted to dsh.so. The dsh.so
+submit form asks for the public source repository URL (GitHub/Gitee/GitLab), not a local
+tarball or ZIP; provide the npm package URL as supporting metadata where the form allows
+it. A listing may stay "Declared/unverified" until it is independently install-tested.
 
 ## Verification
 
@@ -267,11 +275,12 @@ the public npm package URL after publish (not a local tarball or ZIP); a listing
   `src/`, `test/`, `node_modules/` or `*.map`.
 - `packages/dsh/test/integration.test.ts` starts a real daemon, creates a review with an
   initiator, submits feedback and asserts one queued prompt plus an acknowledged delivery.
-- `pnpm test:e2e` covers external mode. The live fat-package check used a disposable
+- `pnpm test:e2e` covers the standalone daemon and its token UI. It does not load the DSH
+  plugin or an `embedded: false` DSH profile; the external-mode Host/proxy paths are covered
+  by unit tests, not a live external profile. The live fat-package check used a disposable
   profile: panel without a token, review creation, `/code-review/review/<id>` in a new tab,
   comments and deep-link reload, findings in the report and inline view, proxy SSE, and
-  cleanup of both DSH and daemon ports on shutdown. External mode was covered by e2e, not a
-  second live profile.
+  cleanup of both DSH and daemon ports on shutdown.
 - After install, `dsh plugin --profile web why @dsh-code-review/dsh` should show the
   package in the profile, and the Host should expose `review_start` in
   `cordis_inspect_query`.

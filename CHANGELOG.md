@@ -13,7 +13,7 @@ versions may contain breaking changes.
   `/code-review` base path. The embedded SPA authenticates with the DSH session and has no
   review-token form or browser-visible daemon token; external mode (`embedded: false`)
   keeps the daemon-origin UI and token login. Install and upgrade with
-  `dsh plugin --profile web add @dsh-code-review/dsh`.
+  `dsh plugin --profile web add @dsh-code-review/dsh@latest`.
 
 ### Fixed
 
