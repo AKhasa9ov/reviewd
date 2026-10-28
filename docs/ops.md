@@ -175,7 +175,7 @@ history.
 ## 7. Upgrade and rollback
 
 1. Back up `/data`.
-2. Read `CHANGELOG.md` for migration notes.
+2. Read `CHANGELOG.md` for release notes.
 3. Pull/build the new image and recreate:
 
 ```bash
@@ -185,9 +185,10 @@ docker compose ps
 curl -fsS http://127.0.0.1:3100/api/health
 ```
 
-The daemon applies compatible event schema migrations at startup and refuses an
-incompatible store with an actionable error. If startup fails, do not delete `/data`:
-restore the previous image and the backup.
+This release does not run automatic event-schema migrations. Read `CHANGELOG.md` for
+release notes before upgrading; if startup fails, do not delete `/data` — restore the
+previous image and the backup. A future release that changes the on-disk format must
+document its migration or restore procedure here.
 
 Rollback:
 
