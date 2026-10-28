@@ -387,8 +387,10 @@ C4 можно делать после C1, не дожидаясь C5. C5 не т
   `ToolHandlers` и регистрируем их нативно; MCP остаётся для Codex/Claude/Pi.
 - **CLI flags Codex/Claude/Pi:** неизвестны без live; adapter использует
   command template + capability detection, а не hardcoded флаги в core.
-- **Large PR:** auto-review по-прежнему ограничен контекстом харнеса; ответственность
-  за chunking/limit — harness. reviewd не режет diff скрытно.
+- **Large PR:** reviewd владеет полным manifest, coverage ledger и детерминированным
+  tier/shard-планом; harness владеет исполнением и effort → concrete limits.
+  reviewd не режет diff скрытно; при неполном покрытии review получает `partial`.
+  Детали: [review quality v2](./2026-10-28-review-quality-v2.md).
 - **Backward compatibility:** существующий `@dsh-code-review/dsh` и `review` CLI
   должны сохранить команды; extraction `review` bin требует deprecation-плана.
 - **MCP job tools:** риск случайного claim; по умолчанию выключены.
