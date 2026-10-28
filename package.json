@@ -19,6 +19,7 @@
   "packageManager": "pnpm@11.22.0",
   "scripts": {
     "build": "node scripts/build.mjs",
+    "fat:verify": "node scripts/verify-fat-package.mjs",
     "format": "prettier --check .",
     "format:write": "prettier --write .",
     "lint": "eslint .",
