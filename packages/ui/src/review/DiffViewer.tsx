@@ -14,12 +14,12 @@ import { Button } from '../primitives/Button.js';
 import { Input } from '../primitives/Field.js';
 import { FileIcon } from '../icons.js';
 import { CommentThread } from './CommentThread.js';
-import { FindingDecisionControls } from './FindingDecisionControls.js';
 import type {
   FindingDecisionControlsProps,
   FindingDecisionError,
 } from './FindingDecisionControls.js';
 import { FullFileDialog, type FullFileController } from './FullFileDialog.js';
+import { InlineFinding, severityLetter } from './InlineFinding.js';
 import {
   buildDiffRows,
   commentsAtLine,
@@ -116,103 +116,6 @@ function findingsOnLine(
       finding.unanchored !== true &&
       line >= finding.lineStart &&
       line <= finding.lineEnd,
-  );
-}
-
-function severityLetter(severity: Finding['severity']): string {
-  return severity === 'blocker'
-    ? 'B'
-    : severity === 'major'
-      ? 'M'
-      : severity === 'minor'
-        ? 'm'
-        : 'n';
-}
-
-function severityTone(severity: Finding['severity']): 'danger' | 'warning' | 'info' | 'neutral' {
-  return severity === 'blocker'
-    ? 'danger'
-    : severity === 'major'
-      ? 'warning'
-      : severity === 'minor'
-        ? 'info'
-        : 'neutral';
-}
-
-interface InlineFindingProps {
-  finding: Finding;
-  decision?: FindingDecision | undefined;
-  readOnly?: boolean;
-  pending?: boolean;
-  error?: string | null;
-  onDecide?: FindingDecisionControlsProps['onDecide'];
-  onOpenFinding?: ((finding: Finding) => void) | undefined;
-}
-
-function InlineFinding({
-  finding,
-  decision,
-  readOnly = false,
-  pending = false,
-  error,
-  onDecide,
-  onOpenFinding,
-}: InlineFindingProps): JSX.Element {
-  const lines =
-    finding.lineStart === finding.lineEnd
-      ? `line ${finding.lineStart}`
-      : `lines ${finding.lineStart}–${finding.lineEnd}`;
-  return (
-    <article
-      role="cell"
-      className={`cr-inline-finding cr-risk-${finding.severity}`}
-      aria-label={`${finding.severity} finding: ${finding.title}`}
-    >
-      <span className="cr-inline-finding-severity" aria-hidden="true">
-        {severityLetter(finding.severity)}
-      </span>
-      <div className="cr-inline-finding-main">
-        <header className="cr-inline-finding-head">
-          <strong>{finding.title}</strong>
-          <span className="cr-meta">
-            {finding.category} · {lines} · agent
-          </span>
-        </header>
-        <p className="cr-inline-finding-rationale">{finding.rationale}</p>
-        {finding.evidence.trim() !== '' || finding.suggestion !== undefined ? (
-          <details className="cr-inline-finding-details">
-            <summary>Evidence and suggestion</summary>
-            {finding.evidence.trim() !== '' ? (
-              <pre className="cr-inline-finding-evidence">{finding.evidence}</pre>
-            ) : null}
-            {finding.suggestion !== undefined ? (
-              <div className="cr-inline-finding-suggestion">
-                <span className="cr-suggestion-caption">Suggested change</span>
-                <pre>{finding.suggestion.replacement}</pre>
-              </div>
-            ) : null}
-          </details>
-        ) : null}
-        <div className="cr-inline-finding-actions">
-          <Badge tone={severityTone(finding.severity)}>{finding.severity}</Badge>
-          {onOpenFinding !== undefined ? (
-            <button type="button" className="cr-link-button" onClick={() => onOpenFinding(finding)}>
-              Open in report
-            </button>
-          ) : null}
-        </div>
-        {onDecide !== undefined ? (
-          <FindingDecisionControls
-            finding={finding}
-            decision={decision}
-            readOnly={readOnly}
-            pending={pending}
-            error={error ?? null}
-            onDecide={onDecide}
-          />
-        ) : null}
-      </div>
-    </article>
   );
 }
 
@@ -1194,6 +1097,19 @@ export function DiffViewer({
           activeCommentId={activeCommentId}
           readOnly={readOnly}
           controllerRef={fullFileControllerRef}
+          findings={findings}
+          findingDecisions={findingDecisions}
+          onDecideFinding={onDecideFinding}
+          decidingFindingId={decidingFindingId}
+          findingDecisionError={findingDecisionError}
+          {...(onOpenFinding === undefined
+            ? {}
+            : {
+                onOpenFinding: (finding: Finding) => {
+                  setFullFile(null);
+                  onOpenFinding(finding);
+                },
+              })}
           onClose={() => setFullFile(null)}
           onOpenComposer={(side, start, end) =>
             onOpenComposer(fullFile.file, side, start, end, 'full')

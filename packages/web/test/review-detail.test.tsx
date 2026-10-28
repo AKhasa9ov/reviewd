@@ -208,6 +208,27 @@ describe('review detail', () => {
     expect(screen.queryByRole('dialog', { name: 'src/auth.ts' })).not.toBeInTheDocument();
   });
 
+  it('opens the report from an agent finding in the full file dialog', async () => {
+    const user = userEvent.setup();
+    go('/review/rev_01?round=2&tab=files#file=src%2Fauth.ts&line=11');
+    render(<App client={fakeClient()} />);
+    await screen.findByRole('heading', { name: 'Billing retry semantics' });
+    await screen.findByRole('row', { name: /line 11, added:/ });
+
+    await user.click(screen.getByRole('button', { name: 'View full file for src/auth.ts' }));
+    const dialog = await screen.findByRole('dialog', { name: 'src/auth.ts' });
+    const finding = within(dialog).getByLabelText('major finding: Retry budget is hard-coded');
+    expect(finding).toHaveTextContent('The retry count cannot be configured per environment.');
+
+    await user.click(within(finding).getByRole('button', { name: 'Open in report' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'src/auth.ts' })).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole('tab', { name: /Report/ })).toHaveAttribute('aria-selected', 'true');
+    const reportFinding = document.getElementById('finding-f1');
+    await waitFor(() => expect(reportFinding).toHaveFocus());
+  });
+
   it('posts a range comment on base lines outside the diff and keeps the full file open', async () => {
     const user = userEvent.setup();
     go('/review/rev_01?round=2&tab=files#file=src%2Fauth.ts&line=11');

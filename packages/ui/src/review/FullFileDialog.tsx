@@ -4,13 +4,26 @@ import type {
   MouseEvent as ReactMouseEvent,
   MutableRefObject,
 } from 'react';
-import type { Comment, CommentState, FileDiff, Side } from '@dsh-code-review/core';
+import type {
+  Comment,
+  CommentState,
+  FileDiff,
+  Finding,
+  FindingDecision,
+  Side,
+} from '@dsh-code-review/core';
 import { Button } from '../primitives/Button.js';
 import { Dialog } from '../primitives/Dialog.js';
 import { CommentThread } from './CommentThread.js';
+import type {
+  FindingDecisionControlsProps,
+  FindingDecisionError,
+} from './FindingDecisionControls.js';
+import { InlineFinding } from './InlineFinding.js';
 import { commentsAtLine } from './model.js';
 
 const MAX_FULL_FILE_LINES = 2000;
+const EMPTY_FINDING_DECISIONS = new Map<string, FindingDecision>();
 const numberFormat = new Intl.NumberFormat('en-US');
 
 interface FullFileComposer {
@@ -34,6 +47,12 @@ interface FullFileDialogProps {
   activeCommentId?: string | undefined;
   readOnly?: boolean;
   controllerRef?: MutableRefObject<FullFileController | null> | undefined;
+  findings?: readonly Finding[];
+  findingDecisions?: ReadonlyMap<string, FindingDecision>;
+  onDecideFinding?: FindingDecisionControlsProps['onDecide'];
+  decidingFindingId?: string | undefined;
+  findingDecisionError?: FindingDecisionError | null;
+  onOpenFinding?: (finding: Finding) => void;
   onClose: () => void;
   onOpenComposer?: (side: Side, lineStart: number, lineEnd: number) => void;
   onCancelComposer?: () => void;
@@ -97,6 +116,12 @@ export function FullFileDialog({
   activeCommentId,
   readOnly = false,
   controllerRef,
+  findings = [],
+  findingDecisions = EMPTY_FINDING_DECISIONS,
+  onDecideFinding,
+  decidingFindingId,
+  findingDecisionError,
+  onOpenFinding,
   onClose,
   onOpenComposer,
   onCancelComposer,
@@ -338,6 +363,30 @@ export function FullFileDialog({
     );
   }
 
+  function findingRows(no: number): JSX.Element[] {
+    if (activeSide !== 'new') return [];
+    return findings
+      .filter(
+        (finding) =>
+          finding.file === file.path && finding.unanchored !== true && finding.lineStart === no,
+      )
+      .map((finding) => (
+        <div className="cr-full-file-finding" role="row" key={finding.id}>
+          <InlineFinding
+            finding={finding}
+            decision={findingDecisions.get(finding.id)}
+            readOnly={readOnly}
+            pending={decidingFindingId === finding.id}
+            error={
+              findingDecisionError?.findingId === finding.id ? findingDecisionError.message : null
+            }
+            onDecide={onDecideFinding}
+            onOpenFinding={onOpenFinding}
+          />
+        </div>
+      ));
+  }
+
   return (
     <Dialog open title={file.path} description={description} onClose={handleDialogClose}>
       <div className="cr-file-view">
@@ -460,6 +509,7 @@ export function FullFileDialog({
                         ) : null}
                       </span>
                     </div>
+                    {findingRows(no)}
                     {threadFor(no)}
                     {composer !== null &&
                     composer.side === activeSide &&

@@ -2281,6 +2281,20 @@ body.cr-selecting-lines {
   background: var(--cr-surface-raised);
 }
 
+.cr-full-file-finding {
+  display: block;
+  font-family: var(--cr-font-ui);
+}
+
+.cr-full-file-finding .cr-inline-finding {
+  margin: var(--cr-space-1) var(--cr-space-3) var(--cr-space-2);
+}
+
+.cr-full-file-finding .cr-inline-finding-head strong,
+.cr-full-file-finding .cr-inline-finding-rationale {
+  overflow-wrap: anywhere;
+}
+
 .cr-full-file-line-add {
   background: var(--cr-added-bg);
 }

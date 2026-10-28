@@ -100,7 +100,8 @@ review health
 The standalone UI supports real git diffs, file and line comments (including drag-selected
 full-file ranges and per-line full-file comments on current or base lines outside the diff),
 suggestions, rounds,
-delta/full views, finding accept/dismiss decisions with inline notes, review and comment
+delta/full views, inline agent findings with accept/dismiss decisions and notes in the diff
+and full-file view, review and comment
 editing/deletion, deep links, keyboard navigation, 320px layouts and light/dark themes.
 The browser suite runs axe WCAG 2.1 A/AA checks and fails on serious or critical findings.
 
