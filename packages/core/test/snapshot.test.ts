@@ -4,6 +4,7 @@ import {
   buildReviewManifest,
   buildSnapshot,
   manifestFromSnapshot,
+  patchBytesFromHunks,
   readBlob,
 } from '../src/index.js';
 import type * as ContentModule from '../src/git/content.js';
@@ -576,6 +577,51 @@ describe('review manifest', () => {
     expect(manifest.files.every((file) => file.contentBytes === undefined)).toBe(true);
   });
 
+  it('prefers the explicit reason, then ignored, over other no-patch flags', () => {
+    const files: FileDiff[] = [
+      {
+        path: 'assets/ignored-large.bin',
+        status: 'modified',
+        binary: false,
+        oversized: true,
+        ignored: true,
+        added: 0,
+        deleted: 0,
+        hunks: [],
+        contentHash: null,
+      },
+      {
+        path: 'src/unreadable-ignored.ts',
+        status: 'modified',
+        binary: false,
+        oversized: false,
+        ignored: true,
+        added: 0,
+        deleted: 0,
+        hunks: [],
+        contentHash: null,
+        reason: 'unreadable',
+      },
+    ];
+
+    const manifest = buildReviewManifest({ scope: manifestScope, files });
+
+    expect(manifest.files.find((file) => file.path === 'assets/ignored-large.bin')?.reason).toBe(
+      'ignored',
+    );
+    expect(manifest.files.find((file) => file.path === 'src/unreadable-ignored.ts')?.reason).toBe(
+      'unreadable',
+    );
+  });
+
+  it('measures patch bytes as a hunk-body lower bound', () => {
+    const file = changedFile(1);
+
+    expect(patchBytesFromHunks(file.hunks)).toBe(33);
+    const manifest = buildReviewManifest({ scope: manifestScope, files: [file] });
+    expect(manifest.files[0]?.patchBytes).toBe(33);
+  });
+
   it('synthesizes a manifest from a legacy v1 snapshot with a legacy-truncated warning', () => {
     const legacy: Snapshot = {
       schemaVersion: 1,
@@ -593,6 +639,22 @@ describe('review manifest', () => {
     expect(manifest.files.map((file) => file.hunkCount)).toEqual([1, 1]);
     expect(manifest.totals.files).toBe(2);
     expect(manifest.warnings).toEqual(['files-truncated', 'legacy-truncated']);
+    expect(legacy.warnings).toEqual(['files-truncated']);
+  });
+
+  it('does not mark a complete v1 snapshot as legacy-truncated', () => {
+    const complete: Snapshot = {
+      schemaVersion: 1,
+      scope: manifestScope,
+      files: [changedFile(1)],
+      totals: { files: 1, added: 1, deleted: 0, truncated: false },
+      warnings: [],
+    };
+
+    const manifest = manifestFromSnapshot(complete);
+
+    expect(manifest.files.map((file) => file.path)).toEqual(['src/file-001.ts']);
+    expect(manifest.warnings).toEqual([]);
   });
 
   it('keeps the manifest carried by a v2 snapshot', () => {
@@ -608,7 +670,7 @@ describe('review manifest', () => {
 
     const manifest = manifestFromSnapshot(current);
 
-    expect(manifest).toEqual(explicit);
+    expect(manifest).toBe(explicit);
     expect(manifest.warnings).not.toContain('legacy-truncated');
   });
 });

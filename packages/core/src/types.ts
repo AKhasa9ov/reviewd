@@ -103,9 +103,9 @@ export interface ManifestFile {
   added: number;
   deleted: number;
   hunkCount: number;
-  /** UTF-8 bytes of the parsed hunks, or 0 when no patch is available. */
+  /** UTF-8 bytes of the hunk bodies; a lower bound on full unified-diff bytes. */
   patchBytes: number;
-  /** Raw content bytes when a source (such as numstat) provides them. */
+  /** Raw content bytes when a source (such as numstat) provides them; absent means unknown. */
   contentBytes?: number;
   reason?: ManifestFileReason;
 }
@@ -114,6 +114,7 @@ export interface ManifestTotals {
   files: number;
   added: number;
   deleted: number;
+  /** Sum of the per-file hunk-body byte bounds, not full unified-diff bytes. */
   patchBytes: number;
 }
 

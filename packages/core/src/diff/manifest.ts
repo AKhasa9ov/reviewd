@@ -20,8 +20,9 @@ function hunkHeaderLine(hunk: DiffHunk): string {
 }
 
 /**
- * UTF-8 byte size of the parsed hunks. This is an approximation for sources
- * that no longer retain the original patch text (legacy snapshot synthesis).
+ * UTF-8 byte size of the parsed hunks. This is a lower bound on the full
+ * unified-diff bytes for a file (path/mode/index metadata is not retained);
+ * use raw diff bytes where an exact budget matters.
  */
 export function patchBytesFromHunks(hunks: readonly DiffHunk[]): number {
   let bytes = 0;
@@ -42,7 +43,12 @@ function reasonForFile(file: FileDiff): ManifestFileReason | undefined {
   return undefined;
 }
 
-/** Maps one bounded render entry to its complete-manifest entry. */
+/**
+ * Maps one bounded render entry to its complete-manifest entry.
+ *
+ * `FileDiff.truncated` and `FileDiff.encoding` are intentionally not manifest
+ * fields in R1. A missing `contentBytes` means "unknown", never "no content".
+ */
 export function manifestFileFromDiff(file: FileDiff): ManifestFile {
   const reason = reasonForFile(file);
   return {
@@ -103,12 +109,14 @@ export function buildReviewManifest(input: {
 
 /**
  * Returns the snapshot's own manifest when present. Legacy v1 snapshots only
- * retain the bounded render subset, so their synthesized manifest is explicitly
- * marked with a `legacy-truncated` warning.
+ * retain the bounded render subset, so a truncated one gets a
+ * `legacy-truncated` warning; a complete v1 snapshot already lists every path.
  */
 export function manifestFromSnapshot(snapshot: Snapshot): ReviewManifest {
   if (snapshot.manifest !== undefined) return snapshot.manifest;
   const warnings = [...snapshot.warnings];
-  if (!warnings.includes('legacy-truncated')) warnings.push('legacy-truncated');
+  if (snapshot.totals.truncated && !warnings.includes('legacy-truncated')) {
+    warnings.push('legacy-truncated');
+  }
   return buildReviewManifest({ scope: snapshot.scope, files: snapshot.files, warnings });
 }

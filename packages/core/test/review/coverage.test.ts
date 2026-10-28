@@ -106,4 +106,20 @@ describe('review coverage', () => {
     expect(totals.byStatus.failed).toBe(1);
     expect(files).toEqual([{ path: 'src/a.ts', status: 'failed', reason: 'boom' }]);
   });
+
+  it('ignores unknown persisted statuses instead of producing NaN', () => {
+    const files: FileCoverage[] = [
+      { path: 'src/a.ts', status: 'deep-reviewed' },
+      { path: 'src/legacy.ts', status: 'mystery' as unknown as FileCoverage['status'] },
+    ];
+
+    const totals = summarizeCoverage(files);
+
+    expect(totals.files).toBe(2);
+    expect(totals.byStatus['deep-reviewed']).toBe(1);
+    expect(totals.byStatus).not.toHaveProperty('mystery');
+    expect(Object.keys(totals.byStatus)).toEqual([...COVERAGE_STATUSES]);
+    expect(Object.values(totals.byStatus).every((count) => Number.isFinite(count))).toBe(true);
+    expect(Object.values(totals.byStatus).reduce((sum, count) => sum + count, 0)).toBe(1);
+  });
 });
