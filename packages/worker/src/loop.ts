@@ -1,0 +1,221 @@
+import { randomUUID } from 'node:crypto';
+import { isStaleWorkerError, normalizeRunnerResult, WorkerRunError } from './protocol.js';
+import type { JobLease, RunnerResult, WorkerLoopOptions } from './protocol.js';
+
+function wait(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal.aborted) {
+      resolve();
+      return;
+    }
+    const timer = setTimeout(resolve, ms);
+    signal.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      { once: true },
+    );
+  });
+}
+
+function jobPath(lease: JobLease, action: string): string {
+  return `/api/jobs/${encodeURIComponent(lease.id)}/${action}`;
+}
+
+async function fail(
+  options: WorkerLoopOptions,
+  lease: JobLease,
+  code: string,
+  message: string,
+  retryable: boolean,
+  signal: AbortSignal,
+): Promise<void> {
+  if (signal.aborted) return;
+  await options.api
+    .post(jobPath(lease, 'fail'), { attemptId: lease.attemptId, code, message, retryable }, signal)
+    .catch(() => undefined);
+}
+
+async function runLease(
+  options: WorkerLoopOptions,
+  lease: JobLease,
+  signal: AbortSignal,
+): Promise<void> {
+  if (signal.aborted) return;
+  const onAbort = (): void => options.runner.cancel?.();
+  signal.addEventListener('abort', onAbort, { once: true });
+  try {
+    let result: RunnerResult;
+    try {
+      result = await options.runner.run(lease, signal);
+    } catch (error) {
+      if (signal.aborted) return;
+      const failure =
+        error instanceof WorkerRunError
+          ? error
+          : new WorkerRunError(
+              'harness-failed',
+              error instanceof Error ? error.message : 'harness failed',
+              true,
+            );
+      await fail(options, lease, failure.code, failure.message, failure.retryable, signal);
+      return;
+    }
+    if (signal.aborted) return;
+
+    let normalized: ReturnType<typeof normalizeRunnerResult>;
+    try {
+      normalized = normalizeRunnerResult(result);
+    } catch (error) {
+      const failure =
+        error instanceof WorkerRunError
+          ? error
+          : new WorkerRunError(
+              'invalid-output',
+              error instanceof Error ? error.message : 'invalid runner output',
+              false,
+            );
+      await fail(options, lease, failure.code, failure.message, failure.retryable, signal);
+      return;
+    }
+
+    try {
+      if (normalized.findings.length > 0) {
+        await options.api.post(
+          jobPath(lease, 'findings'),
+          { attemptId: lease.attemptId, findings: normalized.findings },
+          signal,
+        );
+      }
+      await options.api.post(
+        jobPath(lease, 'report'),
+        { attemptId: lease.attemptId, report: normalized.report },
+        signal,
+      );
+      await options.api.post(jobPath(lease, 'ack'), { attemptId: lease.attemptId }, signal);
+    } catch (error) {
+      if (signal.aborted) return;
+      await fail(
+        options,
+        lease,
+        'report-failed',
+        error instanceof Error ? error.message : 'cannot submit review report',
+        true,
+        signal,
+      );
+    }
+  } finally {
+    signal.removeEventListener('abort', onAbort);
+  }
+}
+
+async function register(
+  options: WorkerLoopOptions,
+  baseId: string,
+  sleep: (ms: number, signal: AbortSignal) => Promise<void>,
+  signal: AbortSignal,
+): Promise<string | undefined> {
+  let delayMs = 1_000;
+  for (let attempt = 1; !signal.aborted; attempt += 1) {
+    try {
+      const registered = await options.api.post<{ id: string }>(
+        '/api/workers/register',
+        {
+          id: baseId,
+          name: options.identity.name ?? 'code-review-worker',
+          harness: options.identity.harness,
+        },
+        signal,
+      );
+      return registered.id;
+    } catch (error) {
+      if (signal.aborted) return undefined;
+      options.logger?.warn?.(
+        `code-review: worker registration failed (attempt ${attempt}, retrying in ${delayMs}ms): ${
+          error instanceof Error ? error.message : 'unknown'
+        }`,
+      );
+      await sleep(delayMs, signal);
+      delayMs = Math.min(delayMs * 2, 30_000);
+    }
+  }
+  return undefined;
+}
+
+/** Register, long-poll, heartbeat, and run jobs until the signal aborts. */
+export async function runWorkerLoop(
+  options: WorkerLoopOptions,
+  signal: AbortSignal,
+): Promise<void> {
+  if (signal.aborted) return;
+  const sleep = options.sleep ?? wait;
+  const baseId = options.identity.id ?? options.randomId?.() ?? `wkr_${randomUUID()}`;
+  // A stale error is worth one re-registration. If the freshly registered id is
+  // rejected again before any successful poll, the credential is permanently
+  // bad (for example a 403 from a misconfigured token), so re-registering again
+  // would only spin. This flag marks that we already used our one retry.
+  let reregistered = false;
+
+  while (!signal.aborted) {
+    const workerId = await register(options, baseId, sleep, signal);
+    if (workerId === undefined) return;
+
+    const heartbeat = setInterval(
+      () => {
+        void options.api
+          .post(`/api/workers/${encodeURIComponent(workerId)}/heartbeat`, {}, signal)
+          .catch(() => undefined);
+      },
+      Math.max(100, options.heartbeatMs),
+    );
+    heartbeat.unref?.();
+
+    let stale = false;
+    try {
+      while (!signal.aborted) {
+        try {
+          const lease = await options.api.get<JobLease | null>(
+            `/api/jobs/next?workerId=${encodeURIComponent(workerId)}&wait=${
+              options.leaseWaitSeconds ?? 25
+            }`,
+            signal,
+          );
+          // Any successful poll proves the registration works, so a later stale
+          // error earns a new re-registration.
+          reregistered = false;
+          if (lease === null) {
+            if (!signal.aborted) await sleep(options.pollMs, signal);
+            continue;
+          }
+          await runLease(options, lease, signal);
+        } catch (error) {
+          if (signal.aborted) return;
+          if (isStaleWorkerError(error)) {
+            if (reregistered) {
+              options.logger?.warn?.(
+                'code-review: worker registration is still stale after re-registering; stopping worker loop',
+              );
+              return;
+            }
+            stale = true;
+            break;
+          }
+          options.logger?.warn?.(
+            `code-review: worker poll failed: ${
+              error instanceof Error ? error.message : 'unknown'
+            }`,
+          );
+          await sleep(options.pollMs, signal);
+        }
+      }
+    } finally {
+      clearInterval(heartbeat);
+    }
+
+    if (!stale) return;
+    reregistered = true;
+    options.logger?.warn?.('code-review: worker registration is stale; registering again');
+  }
+}
