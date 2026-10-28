@@ -149,6 +149,12 @@ export interface CoverageTotals {
 export interface ReviewCoverage {
   files: FileCoverage[];
   totals: CoverageTotals;
+  /**
+   * True when the manifest itself is known to be incomplete (for example a
+   * truncated raw/numstat listing). Such a ledger cannot prove full coverage
+   * even if every known path has a final status.
+   */
+  incomplete?: boolean;
 }
 
 export interface AgentState {

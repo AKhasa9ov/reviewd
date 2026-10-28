@@ -92,7 +92,19 @@ const TABS: Array<{ id: ReviewTab; label: string }> = [
 function coverageLabel(coverage: ReviewCoverage): string {
   const byStatus = coverage.totals.byStatus;
   const reviewed = byStatus['deep-reviewed'] + byStatus['light-reviewed'];
-  return `Reviewed ${reviewed}/${coverage.totals.files} files · ${byStatus.skipped} skipped · ${byStatus['manifest-only']} manifest-only`;
+  const counts: Array<[string, number]> = [
+    ['pending', byStatus.pending],
+    ['deferred', byStatus.deferred],
+    ['failed', byStatus.failed],
+    ['skipped', byStatus.skipped],
+    ['manifest-only', byStatus['manifest-only']],
+  ];
+  const parts = [`Reviewed ${reviewed}/${coverage.totals.files} files`];
+  for (const [label, count] of counts) {
+    if (count > 0) parts.push(`${count} ${label}`);
+  }
+  if (coverage.incomplete === true) parts.push('manifest incomplete');
+  return parts.join(' · ');
 }
 
 const SHORTCUTS = [

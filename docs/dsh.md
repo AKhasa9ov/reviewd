@@ -193,11 +193,13 @@ The subagent:
   truncation marker) and an exact report schema, then returns one JSON report;
 - works under honest coverage: the daemon records every changed path in the manifest (up
   to its 64 MiB metadata listing cap) and marks the round `done` only when no known path
-  is pending or skipped. A large review can be `partial` under the current single-agent
-  prompt; the panel shows the coverage summary (`Reviewed X/Y files`, skipped and
-  manifest-only counts). `partial` means the rest of the range was not in the reviewer's
-  context, not that the review failed. A `manifest-listing-truncated` warning means the
-  manifest itself hit the cap, so even `done` is not a full-coverage claim;
+  is pending, deferred, failed or skipped, and the manifest is complete. A large review
+  can be `partial` under the current single-agent prompt; the panel shows the coverage
+  summary (`Reviewed X/Y files`, plus pending/deferred/failed/skipped/manifest-only
+  counts when non-zero). `partial` means the rest of the range was not in the reviewer's
+  context, not that the review failed. A `manifest-listing-truncated` warning marks the
+  ledger `incomplete`, so the round stays `partial` rather than pretending the known
+  manifest is the whole range;
 - reads the report from the durable session log (`agent.session.snapshotEvents()`),
   falling back to the newest earlier parseable report if the last message is prose;
 - must return `schemaVersion: 1`; anything else is rejected as non-retryable

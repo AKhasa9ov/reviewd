@@ -26,6 +26,7 @@ import type {
   ReviewService,
   ReviewerConfig,
   ReviewStore,
+  Snapshot,
   SubmitInput,
 } from '@dsh-code-review/core';
 import { ApiError } from './errors.js';
@@ -162,7 +163,7 @@ function object(value: unknown, field: string): Record<string, unknown> {
 }
 
 async function append(
-  ctx: RouteContext,
+  ctx: Pick<RouteContext, 'store' | 'hub' | 'now'>,
   reviewId: string,
   type: Parameters<typeof createEvent>[0]['type'],
   data: unknown,
@@ -179,10 +180,65 @@ async function append(
   await ctx.hub.sync(reviewId);
 }
 
+/** Coverage only applies to honest v2 snapshots; v1 snapshots stay legacy. */
+export function coverageForSnapshot(
+  snapshot: Snapshot | null | undefined,
+  includedPaths: readonly string[],
+) {
+  if (snapshot?.schemaVersion !== 2 || snapshot.manifest === undefined) return undefined;
+  return coverageFromPrompt(snapshot.manifest, includedPaths);
+}
+
+type OrphanContext = Pick<RouteContext, 'service' | 'store' | 'hub' | 'jobs' | 'now'>;
+
+function hasActiveWorkerJob(ctx: OrphanContext, reviewId: string): boolean {
+  return ctx.jobs
+    .listReview(reviewId)
+    .some((job) => job.status === 'queued' || job.status === 'leased');
+}
+
+/**
+ * A persisted queued/running worker agent without an in-memory job cannot be
+ * driven by this daemon (after a restart or cancel-before-lease). Clear it so
+ * refresh/re-scope is not permanently blocked by a ghost `agent-busy`.
+ */
+async function failOrphanedWorkerAgent(ctx: OrphanContext, reviewId: string): Promise<void> {
+  const view = await ctx.service.get(reviewId);
+  const status = view.review.agent?.status;
+  if (view.review.status === 'closed' || view.review.deletedAt !== undefined) return;
+  if (view.review.reviewer?.backend !== 'worker') return;
+  if (status !== 'queued' && status !== 'running') return;
+  if (hasActiveWorkerJob(ctx, reviewId)) return;
+  await append(ctx, reviewId, 'agent/failed', {
+    code: 'worker-lost',
+    message: 'worker job is no longer available to this daemon',
+  } as never);
+}
+
+/**
+ * Startup reconciliation: persisted worker agents are only trustworthy while
+ * this daemon still owns their job. Jobs live in memory, so anything left
+ * queued/running from a previous process is orphaned.
+ */
+export async function reconcileOrphanedWorkerAgents(ctx: OrphanContext): Promise<void> {
+  const first = await ctx.service.list({ limit: 100, offset: 0 });
+  for (let offset = 0; offset < first.total; offset += 100) {
+    const page = offset === 0 ? first : await ctx.service.list({ limit: 100, offset });
+    for (const summary of page.items) {
+      await failOrphanedWorkerAgent(ctx, summary.id).catch(() => {
+        // A review deleted or closed between list and reconcile is already inert.
+      });
+    }
+  }
+}
+
 async function enqueueWorkerJob(ctx: RouteContext, reviewId: string): Promise<void> {
   const view = await ctx.service.get(reviewId);
   const round = view.review.rounds.at(-1);
   if (round === undefined || view.review.reviewer?.backend !== 'worker') return;
+  // A repeated create/refresh with the same idempotency key must not enqueue a
+  // second job or reset coverage for a round this daemon already queued.
+  if (ctx.jobs.listReview(reviewId).some((job) => job.round === round.no)) return;
   const kind = view.report === null ? 'initial' : 'verify';
   const previousRound = round.no > 1 ? round.no - 1 : undefined;
   const unresolved = view.review.comments
@@ -218,11 +274,12 @@ async function enqueueWorkerJob(ctx: RouteContext, reviewId: string): Promise<vo
   });
   const initiator = view.review.initiator;
   const manifest = view.latestSnapshot?.manifest;
-  if (manifest !== undefined) {
+  const coverage = coverageForSnapshot(view.latestSnapshot, includedFiles);
+  if (coverage !== undefined) {
     // Record coverage before the job exists so a worker cannot lease a round
     // whose unresolved manifest paths are still invisible to the API/UI.
     await append(ctx, reviewId, 'agent/coverage', {
-      coverage: coverageFromPrompt(manifest, includedFiles),
+      coverage,
       round: round.no,
     });
   }
@@ -396,6 +453,7 @@ export async function handle(
           : { scope: object(body.scope, 'scope') as unknown as DiffScope }),
       };
       const before = body.scope === undefined ? null : await ctx.service.get(reviewId);
+      if (body.scope !== undefined) await failOrphanedWorkerAgent(ctx, reviewId);
       const view = await ctx.service.updateReview(reviewId, input, ctxFor(req, options.auth));
       if (before !== null && view.review.rounds.length > before.review.rounds.length) {
         await enqueueWorkerJob(ctx, reviewId);
@@ -586,6 +644,7 @@ export async function handle(
         body.scope === undefined
           ? undefined
           : (object(body.scope, 'scope') as unknown as DiffScope);
+      await failOrphanedWorkerAgent(ctx, reviewId);
       const view = await ctx.service.refresh(
         reviewId,
         scope === undefined ? {} : { scope },
@@ -664,10 +723,22 @@ export async function handle(
       return;
     }
     if (rest[0] === 'agent' && rest[1] === 'cancel' && method === 'POST') {
+      const view = await ctx.service.get(reviewId);
+      const workerActive =
+        view.review.reviewer?.backend === 'worker' &&
+        (view.review.agent?.status === 'queued' || view.review.agent?.status === 'running');
       ctx.jobs.cancelReview(reviewId);
       await ctx.service.cancelAgent(reviewId, ctxFor(req, options.auth)).catch((error: unknown) => {
         if (!(error instanceof ReviewError) || error.code !== 'conflict') throw error;
       });
+      if (workerActive) {
+        // Worker jobs are owned by this daemon's memory queue. A service-side
+        // cancel cannot append for them, so leave a durable terminal event.
+        await append(ctx, reviewId, 'agent/failed', {
+          code: 'canceled',
+          message: 'reviewer canceled by request',
+        } as never);
+      }
       await ctx.hub.sync(reviewId);
       sendJson(res, 200, { ok: true });
       return;
@@ -746,6 +817,13 @@ export async function handle(
     const attemptId = str(body.attemptId, 'attemptId');
     const job = ctx.jobs.attempt(jobId, attemptId);
     if (job === null) throw new ApiError('conflict', 'stale or unknown job attempt');
+    if (action !== 'ack' && job.status === 'canceled') {
+      // A worker may have posted results just as the user canceled. Ignore
+      // those results instead of reviving a canceled round or appending a
+      // second terminal event.
+      sendJson(res, 200, { accepted: false, canceled: true });
+      return;
+    }
     if (action === 'ack') {
       sendJson(res, 200, { ok: true, status: job.status });
       return;

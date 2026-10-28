@@ -231,6 +231,17 @@ describe('coverageFromPrompt', () => {
     expect(bridgeManifest).toEqual(before);
     expect(includedPaths).toEqual(includedBefore);
   });
+
+  it('marks the ledger incomplete when the manifest listing was truncated', () => {
+    const truncated: ReviewManifest = {
+      ...bridgeManifest,
+      warnings: ['manifest-listing-truncated'],
+    };
+
+    const coverage = coverageFromPrompt(truncated, ['src/a.ts', 'src/partial.ts']);
+
+    expect(coverage.incomplete).toBe(true);
+  });
 });
 
 describe('isCoverageComplete', () => {
@@ -292,6 +303,22 @@ describe('isCoverageComplete', () => {
 
     expect(isCoverageComplete(coverage)).toBe(false);
   });
+
+  it('rejects an incomplete manifest even when all known files are final', () => {
+    const coverage = ledger([{ path: 'src/a.ts', status: 'light-reviewed' }]);
+    coverage.incomplete = true;
+
+    expect(isCoverageComplete(coverage)).toBe(false);
+  });
+
+  it('does not let a non-policy manifest-only file prove completeness', () => {
+    expect(
+      isCoverageComplete(
+        ledger([{ path: 'src/a.ts', status: 'manifest-only', reason: 'render-budget' }]),
+      ),
+    ).toBe(false);
+    expect(isCoverageComplete(ledger([{ path: 'src/a.ts', status: 'manifest-only' }]))).toBe(false);
+  });
 });
 
 describe('promotePendingToLight', () => {
@@ -319,5 +346,15 @@ describe('promotePendingToLight', () => {
     expect(input).toEqual(before);
     expect(promoted).not.toBe(input);
     expect(promoted.files).not.toBe(input.files);
+  });
+
+  it('preserves the incomplete-manifest marker', () => {
+    const input = ledger([{ path: 'src/a.ts', status: 'pending' }]);
+    input.incomplete = true;
+
+    const promoted = promotePendingToLight(input);
+
+    expect(promoted.incomplete).toBe(true);
+    expect(promoted.files).toEqual([{ path: 'src/a.ts', status: 'light-reviewed' }]);
   });
 });

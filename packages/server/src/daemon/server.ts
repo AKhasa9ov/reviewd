@@ -21,7 +21,7 @@ import { RateLimiter } from './rate-limit.js';
 import { EventHub } from './sse.js';
 import { JobQueue } from './jobs.js';
 import { DeliveryQueue } from './deliveries.js';
-import { handle, mapError } from './routes.js';
+import { handle, mapError, reconcileOrphanedWorkerAgents } from './routes.js';
 import { resolveWebDir } from './static.js';
 import type { RouteContext } from './routes.js';
 import type { DaemonConfig, DaemonDeps, ReviewDaemon } from './types.js';
@@ -120,6 +120,11 @@ export async function startDaemon(
     deliveries,
     now,
   };
+
+  // Worker jobs live in this process's memory queue, so a daemon restart can
+  // leave reviews with a queued/running agent that no worker will ever lease.
+  // Clear those ghosts before serving so refresh/re-scope is unblocked.
+  await reconcileOrphanedWorkerAgents(ctx).catch(() => undefined);
 
   const handler = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const id = requestId(req);

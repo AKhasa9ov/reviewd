@@ -671,6 +671,170 @@ describe('daemon limits, leases and gc', () => {
     expect(none.status).toBe(204);
   });
 
+  it('ignores worker results that arrive after cancellation', async () => {
+    const { daemonUrl } = await running();
+    const checkout = await repo();
+    const created = await createReview(daemonUrl, { backend: 'worker' }, checkout.root);
+    const reviewId = created.body.review.review.id;
+    const registered = await read(
+      await fetch(`${daemonUrl}/api/workers/register`, {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ name: 'late-cancel-worker' }),
+      }),
+    );
+    const lease = await read(
+      await fetch(`${daemonUrl}/api/jobs/next?workerId=${registered.id}&wait=2`, {
+        headers: headers(),
+      }),
+    );
+    await fetch(`${daemonUrl}/api/reviews/${reviewId}/agent/cancel`, {
+      method: 'POST',
+      headers: headers(),
+      body: '{}',
+    });
+
+    const late = await fetch(`${daemonUrl}/api/jobs/${lease.job.id}/report`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({
+        attemptId: lease.job.attemptId,
+        report: {
+          schemaVersion: 1,
+          summary: 'Too late',
+          riskLevel: 'low',
+          findings: [],
+          questions: [],
+          tests: { ran: false, commands: [] },
+          verification: [],
+        },
+      }),
+    });
+    expect(late.status).toBe(200);
+    expect(await read(late)).toMatchObject({ accepted: false, canceled: true });
+
+    const view = await read(
+      await fetch(`${daemonUrl}/api/reviews/${reviewId}`, { headers: headers() }),
+    );
+    expect(view.review.agent.status).toBe('failed');
+    expect(view.report).toBeNull();
+  });
+
+  it('fails a worker agent canceled before it is leased and unblocks refresh', async () => {
+    const { daemonUrl } = await running();
+    const checkout = await repo();
+    const created = await createReview(daemonUrl, { backend: 'worker' }, checkout.root);
+    const reviewId = created.body.review.review.id;
+
+    const cancel = await fetch(`${daemonUrl}/api/reviews/${reviewId}/agent/cancel`, {
+      method: 'POST',
+      headers: headers(),
+      body: '{}',
+    });
+    expect(cancel.status).toBe(200);
+    const canceled = await read(
+      await fetch(`${daemonUrl}/api/reviews/${reviewId}`, { headers: headers() }),
+    );
+    expect(canceled.review.agent.status).toBe('failed');
+    expect(canceled.review.agent.error).toMatch(/canceled/);
+
+    await checkout.write('src/b.ts', 'next\n');
+    await checkout.commit('next scope');
+    const refresh = await fetch(`${daemonUrl}/api/reviews/${reviewId}/refresh`, {
+      method: 'POST',
+      headers: headers(),
+      body: '{}',
+    });
+    expect(refresh.status).toBe(200);
+    const refreshed = await read(refresh);
+    expect(refreshed.review.rounds.at(-1).no).toBe(2);
+    const queued = await read(
+      await fetch(`${daemonUrl}/api/reviews/${reviewId}`, { headers: headers() }),
+    );
+    expect(queued.review.agent.status).toBe('queued');
+    expect(queued.review.agent.round).toBe(2);
+  });
+
+  it('reconciles a worker agent orphaned by a daemon restart', async () => {
+    const storeDir = await mkdtemp(join(tmpdir(), 'reviewd-orphan-'));
+    cleanups.push(async () => {
+      await rm(storeDir, { recursive: true, force: true });
+    });
+    const checkout = await repo();
+    const first = await startWithStore(storeDir);
+    const created = await createReview(first.daemonUrl, { backend: 'worker' }, checkout.root);
+    const reviewId = created.body.review.review.id;
+    await checkout.write('src/b.ts', 'next\n');
+    await checkout.commit('next scope');
+    await first.daemon.close();
+
+    const second = await startWithStore(storeDir);
+    const reconciled = await read(
+      await fetch(`${second.daemonUrl}/api/reviews/${reviewId}`, { headers: headers() }),
+    );
+    expect(reconciled.review.agent.status).toBe('failed');
+    expect(reconciled.review.agent.error).toMatch(/no longer available/);
+
+    const update = await fetch(`${second.daemonUrl}/api/reviews/${reviewId}`, {
+      method: 'PATCH',
+      headers: headers(),
+      body: JSON.stringify({ scope: { kind: 'range', baseRef: 'main', headRef: 'HEAD' } }),
+    });
+    expect(update.status).toBe(200);
+    const updated = await read(update);
+    expect(updated.review.rounds.at(-1).no).toBe(2);
+    const queued = await read(
+      await fetch(`${second.daemonUrl}/api/reviews/${reviewId}`, { headers: headers() }),
+    );
+    expect(queued.review.agent.status).toBe('queued');
+    expect(queued.review.agent.round).toBe(2);
+  });
+
+  it('does not duplicate coverage or a job when create is replayed', async () => {
+    const { daemonUrl } = await running();
+    const checkout = await repo();
+    const payload = JSON.stringify({
+      repoRoot: checkout.root,
+      title: 'Idempotent review',
+      scope: { kind: 'range', baseRef: 'main', headRef: 'HEAD' },
+      reviewer: { backend: 'worker' },
+    });
+    const create = async () =>
+      await fetch(`${daemonUrl}/api/reviews`, {
+        method: 'POST',
+        headers: headers(TOKEN, { 'idempotency-key': 'create-once' }),
+        body: payload,
+      });
+    const first = await read(await create());
+    const second = await read(await create());
+    const reviewId = first.review.review.id;
+    expect(second.review.review.id).toBe(reviewId);
+
+    const events = await read(
+      await fetch(`${daemonUrl}/api/events?after=0&wait=0`, { headers: headers() }),
+    );
+    const coverageEvents = events.events.filter(
+      (entry: { event: { type: string } }) => entry.event.type === 'agent/coverage',
+    );
+    expect(coverageEvents).toHaveLength(1);
+
+    const registered = await read(
+      await fetch(`${daemonUrl}/api/workers/register`, {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ name: 'idempotent-worker' }),
+      }),
+    );
+    const lease = await fetch(`${daemonUrl}/api/jobs/next?workerId=${registered.id}&wait=2`, {
+      headers: headers(),
+    });
+    expect(lease.status).toBe(200);
+    const none = await fetch(`${daemonUrl}/api/jobs/next?workerId=${registered.id}&wait=0`, {
+      headers: headers(),
+    });
+    expect(none.status).toBe(204);
+  });
+
   it('drops invalid incremental findings and reports how many were rejected', async () => {
     const { daemonUrl } = await running();
     const checkout = await repo();

@@ -26,6 +26,12 @@ const SKIP_REASONS = new Set<ManifestFileReason>([
   'legacy-truncated',
 ]);
 
+/** Warnings that prove the manifest's changed-path listing itself was cut. */
+const INCOMPLETE_MANIFEST_WARNINGS = new Set([
+  'manifest-listing-truncated',
+  'untracked-list-truncated',
+]);
+
 /**
  * Counts file coverage by status without mutating the ledger. `files` counts
  * every ledger entry; unknown persisted statuses are excluded from `byStatus`
@@ -91,7 +97,12 @@ export function coverageFromPrompt(
     }
     return { path: file.path, status: 'skipped', reason: skipReason(file) };
   });
-  return { files, totals: summarizeCoverage(files) };
+  const incomplete = manifest.warnings.some((warning) => INCOMPLETE_MANIFEST_WARNINGS.has(warning));
+  return {
+    files,
+    totals: summarizeCoverage(files),
+    ...(incomplete ? { incomplete: true } : {}),
+  };
 }
 
 /**
@@ -100,6 +111,7 @@ export function coverageFromPrompt(
  * are treated as incomplete: they prove the ledger cannot be trusted.
  */
 export function isCoverageComplete(coverage: ReviewCoverage): boolean {
+  if (coverage.incomplete === true) return false;
   const computed = summarizeCoverage(coverage.files);
   const knownCount = COVERAGE_STATUSES.reduce((sum, status) => sum + computed.byStatus[status], 0);
   if (knownCount !== coverage.files.length) return false;
@@ -109,7 +121,11 @@ export function isCoverageComplete(coverage: ReviewCoverage): boolean {
     0,
   );
   if (persistedCount !== coverage.files.length) return false;
-  return coverage.files.every((file) => !UNRESOLVED_STATUSES.has(file.status));
+  return coverage.files.every((file) => {
+    if (UNRESOLVED_STATUSES.has(file.status)) return false;
+    if (file.status !== 'manifest-only') return true;
+    return file.reason !== undefined && POLICY_REASONS.has(file.reason as ManifestFileReason);
+  });
 }
 
 /**
@@ -121,5 +137,9 @@ export function promotePendingToLight(coverage: ReviewCoverage): ReviewCoverage 
   const files = coverage.files.map((file): FileCoverage =>
     file.status === 'pending' ? { ...file, status: 'light-reviewed' } : { ...file },
   );
-  return { files, totals: summarizeCoverage(files) };
+  return {
+    files,
+    totals: summarizeCoverage(files),
+    ...(coverage.incomplete === true ? { incomplete: true } : {}),
+  };
 }

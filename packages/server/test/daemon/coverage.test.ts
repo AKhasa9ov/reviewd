@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { makeRepo } from '../../../core/test/helpers/repo.js';
 import type { TestRepo } from '../../../core/test/helpers/repo.js';
+import type { Snapshot } from '@dsh-code-review/core';
+import { coverageForSnapshot } from '../../src/daemon/routes.js';
 import { startDaemon } from '../../src/daemon/server.js';
 import type { ReviewDaemon } from '../../src/daemon/types.js';
 
@@ -253,5 +255,45 @@ describe('daemon review coverage', () => {
       'light-reviewed': 1,
       skipped: 0,
     });
+  });
+
+  it('does not attach coverage to legacy v1 snapshots', () => {
+    const manifest = {
+      schemaVersion: 1 as const,
+      scope: {
+        kind: 'range' as const,
+        repoRoot: '/tmp/repo',
+        baseSha: 'a'.repeat(40),
+        headSha: 'b'.repeat(40),
+        label: 'aaaaaaa..bbbbbbb',
+        worktreeDigest: 'b'.repeat(40),
+      },
+      files: [
+        {
+          path: 'src/a.ts',
+          status: 'modified' as const,
+          binary: false,
+          ignored: false,
+          oversized: false,
+          added: 1,
+          deleted: 0,
+          hunkCount: 1,
+          patchBytes: 10,
+        },
+      ],
+      totals: { files: 1, added: 1, deleted: 0, patchBytes: 10 },
+      warnings: [],
+    };
+
+    expect(
+      coverageForSnapshot({ schemaVersion: 1 } as unknown as Snapshot, ['src/a.ts']),
+    ).toBeUndefined();
+    expect(
+      coverageForSnapshot({ schemaVersion: 2 } as unknown as Snapshot, ['src/a.ts']),
+    ).toBeUndefined();
+    expect(
+      coverageForSnapshot({ schemaVersion: 2, manifest } as unknown as Snapshot, ['src/a.ts'])
+        ?.files,
+    ).toEqual([{ path: 'src/a.ts', status: 'pending' }]);
   });
 });

@@ -38,10 +38,42 @@ const partialView: ReviewView = {
   },
 };
 
-function fakeClient(): ApiClient {
+const unresolvedCoverage: ReviewCoverage = {
+  files: [
+    { path: 'src/reviewed.ts', status: 'light-reviewed' },
+    { path: 'src/pending.ts', status: 'pending' },
+    { path: 'src/deferred.ts', status: 'deferred', reason: 'shard-budget' },
+    { path: 'src/failed.ts', status: 'failed', reason: 'agent-error' },
+    { path: 'src/skipped.ts', status: 'skipped', reason: 'render-budget' },
+    { path: 'logo.png', status: 'manifest-only', reason: 'binary' },
+  ],
+  totals: {
+    files: 6,
+    byStatus: {
+      pending: 1,
+      'deep-reviewed': 0,
+      'light-reviewed': 1,
+      'manifest-only': 1,
+      skipped: 1,
+      deferred: 1,
+      failed: 1,
+    },
+  },
+  incomplete: true,
+};
+
+const unresolvedView: ReviewView = {
+  ...reviewView,
+  review: {
+    ...reviewView.review,
+    agent: { status: 'partial', round: 2, findings: [], coverage: unresolvedCoverage },
+  },
+};
+
+function fakeClient(view: ReviewView = partialView): ApiClient {
   return {
     listReviews: vi.fn(async () => ({ items: [], total: 0, limit: 50, offset: 0 })),
-    getReview: vi.fn(async () => partialView),
+    getReview: vi.fn(async () => view),
     getSnapshot: vi.fn(async (_id: string, round: number) =>
       round === 2 ? snapshotR2 : snapshotR1,
     ),
@@ -80,5 +112,16 @@ describe('review coverage', () => {
       screen.getByText('Reviewed 1/3 files · 1 skipped · 1 manifest-only'),
     ).toBeInTheDocument();
     expect(screen.getByText(/did not inspect every changed file/i)).toBeInTheDocument();
+  });
+
+  it('surfaces unresolved and incomplete coverage counts', async () => {
+    render(<App client={fakeClient(unresolvedView)} />);
+
+    await screen.findByRole('heading', { name: 'Billing retry semantics' });
+    expect(
+      screen.getByText(
+        'Reviewed 1/6 files · 1 pending · 1 deferred · 1 failed · 1 skipped · 1 manifest-only · manifest incomplete',
+      ),
+    ).toBeInTheDocument();
   });
 });

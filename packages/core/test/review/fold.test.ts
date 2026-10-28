@@ -114,13 +114,9 @@ describe('agent coverage fold', () => {
   });
 
   it('marks a complete round done after promoting pending files', () => {
-    const queued = fold(
-      baseState(),
-      event('agent/coverage', {
-        coverage: ledger(['pending', 'deep-reviewed', 'manifest-only']),
-        round: 1,
-      }),
-    );
+    const coverage = ledger(['pending', 'deep-reviewed', 'manifest-only']);
+    coverage.files[2]!.reason = 'generated';
+    const queued = fold(baseState(), event('agent/coverage', { coverage, round: 1 }));
 
     const reported = fold(queued, reportEvent());
 
@@ -131,6 +127,32 @@ describe('agent coverage fold', () => {
       'deep-reviewed': 1,
       'manifest-only': 1,
     });
+  });
+
+  it('keeps a round partial when the manifest listing itself was incomplete', () => {
+    const coverage = ledger(['pending']);
+    coverage.incomplete = true;
+    const queued = fold(baseState(), event('agent/coverage', { coverage, round: 1 }));
+
+    const reported = fold(queued, reportEvent());
+
+    expect(reported.agent?.status).toBe('partial');
+    expect(reported.agent?.coverage?.incomplete).toBe(true);
+    expect(reported.agent?.coverage?.totals.byStatus['light-reviewed']).toBe(1);
+  });
+
+  it('keeps a manifest-only file without a policy reason partial', () => {
+    const queued = fold(
+      baseState(),
+      event('agent/coverage', {
+        coverage: ledger(['pending', 'manifest-only']),
+        round: 1,
+      }),
+    );
+
+    const reported = fold(queued, reportEvent());
+
+    expect(reported.agent?.status).toBe('partial');
   });
 
   it('keeps a skipped report skipped even when coverage is incomplete', () => {
