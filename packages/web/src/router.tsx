@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import type { AnchorHTMLAttributes, MouseEvent, ReactNode } from 'react';
+import { BASE_PATH, normalizeBase, withBase } from './base.js';
 
 const NAVIGATE_EVENT = 'cr:navigate';
 const listeners = new Set<() => void>();
@@ -25,8 +26,9 @@ function emit(): void {
 }
 
 export function navigate(to: string, options: { replace?: boolean } = {}): void {
-  if (options.replace === true) window.history.replaceState({}, '', to);
-  else window.history.pushState({}, '', to);
+  const target = withBase(to);
+  if (options.replace === true) window.history.replaceState({}, '', target);
+  else window.history.pushState({}, '', target);
   emit();
 }
 
@@ -44,9 +46,17 @@ export type Route =
   | { name: 'settings' }
   | { name: 'not-found'; path: string };
 
-export function parseRoute(location: string): Route {
+export function parseRoute(location: string, base = BASE_PATH): Route {
   const url = new URL(location, 'http://local');
-  const pathname = url.pathname.replace(/\/+$/, '') || '/';
+  const normalizedBase = normalizeBase(base);
+  let pathname = url.pathname;
+  if (normalizedBase !== '') {
+    if (pathname === normalizedBase) pathname = '/';
+    else if (pathname.startsWith(`${normalizedBase}/`)) {
+      pathname = pathname.slice(normalizedBase.length);
+    }
+  }
+  pathname = pathname.replace(/\/+$/, '') || '/';
   if (pathname === '/') return { name: 'list' };
   if (pathname === '/new') return { name: 'new' };
   if (pathname === '/auth') return { name: 'auth' };
@@ -93,7 +103,7 @@ export function Link({ to, children, onClick, ...rest }: LinkProps): JSX.Element
   }
 
   return (
-    <a {...rest} href={to} onClick={handleClick}>
+    <a {...rest} href={withBase(to)} onClick={handleClick}>
       {children}
     </a>
   );

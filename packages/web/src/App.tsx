@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { createApiClient, ToastProvider, ThemeProvider } from '@dsh-code-review/ui';
 import type { ApiClient } from '@dsh-code-review/ui';
+import { AUTH_MODE, BASE_PATH } from './base.js';
 import { Shell } from './Shell.js';
 import { navigate, parseRoute, useLocation } from './router.js';
 import { ReviewListPage } from './pages/ReviewListPage.js';
@@ -23,11 +24,20 @@ export function App({ client }: AppProps = {}): JSX.Element {
     () =>
       client ??
       createApiClient({
-        onUnauthorized: (next) =>
-          navigate(`/auth?next=${encodeURIComponent(next)}`, { replace: true }),
+        baseUrl: BASE_PATH,
+        ...(AUTH_MODE === 'token'
+          ? {
+              onUnauthorized: (next: string) =>
+                navigate(`/auth?next=${encodeURIComponent(next)}`, { replace: true }),
+            }
+          : {}),
       }),
     [client],
   );
+
+  useEffect(() => {
+    if (AUTH_MODE === 'dsh' && route.name === 'auth') navigate('/', { replace: true });
+  }, [route.name]);
 
   return (
     <ThemeProvider>
@@ -35,7 +45,9 @@ export function App({ client }: AppProps = {}): JSX.Element {
         <Shell>
           {route.name === 'list' ? <ReviewListPage client={activeClient} /> : null}
           {route.name === 'new' ? <NewReviewPage client={activeClient} /> : null}
-          {route.name === 'auth' ? <AuthPage client={activeClient} /> : null}
+          {route.name === 'auth' && AUTH_MODE === 'token' ? (
+            <AuthPage client={activeClient} />
+          ) : null}
           {route.name === 'health' ? <HealthPage client={activeClient} /> : null}
           {route.name === 'settings' ? <SettingsPage client={activeClient} /> : null}
           {route.name === 'review' ? (

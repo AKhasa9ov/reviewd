@@ -25,3 +25,31 @@ describe('parseRoute', () => {
     expect(parseRoute('/review/a/b')).toEqual({ name: 'not-found', path: '/review/a/b' });
   });
 });
+
+describe('parseRoute below the SPA base', () => {
+  it('strips the configured base before matching', () => {
+    expect(parseRoute('/code-review/review/rev_1?round=2', '/code-review')).toEqual({
+      name: 'review',
+      id: 'rev_1',
+    });
+    expect(parseRoute('/code-review/review/rev%2F1/edit', '/code-review')).toEqual({
+      name: 'edit-review',
+      id: 'rev/1',
+    });
+    expect(parseRoute('/code-review/auth?next=%2Fnew', '/code-review')).toEqual({ name: 'auth' });
+    expect(parseRoute('/review/rev_1', '/')).toEqual({ name: 'review', id: 'rev_1' });
+  });
+
+  it('treats the bare base and its root as the review list', () => {
+    expect(parseRoute('/code-review', '/code-review')).toEqual({ name: 'list' });
+    expect(parseRoute('/code-review/', '/code-review/')).toEqual({ name: 'list' });
+    expect(parseRoute('/code-review/new/', '/code-review')).toEqual({ name: 'new' });
+  });
+
+  it('does not strip a path that only resembles the base', () => {
+    expect(parseRoute('/code-reviewer', '/code-review')).toEqual({
+      name: 'not-found',
+      path: '/code-reviewer',
+    });
+  });
+});
