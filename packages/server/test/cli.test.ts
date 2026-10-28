@@ -309,6 +309,10 @@ describe('review diff', () => {
     const snapshot = parseSnapshot(out);
     expect(snapshot.files.map((file) => file.path)).toEqual(['dist/000.txt', 'src/a.ts']);
     expect(snapshot.files.find((file) => file.path === 'dist/000.txt')?.ignored).toBe(true);
+    // Ignored paths stay in the render subset, so they are never render-budget omissions.
+    expect(snapshot.manifest?.files.find((file) => file.path === 'dist/000.txt')?.reason).toBe(
+      'ignored',
+    );
     expect(snapshot.totals.truncated).toBe(false);
     expect(snapshot.warnings).not.toContain('files-truncated');
   });

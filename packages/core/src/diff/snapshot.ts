@@ -275,6 +275,7 @@ interface ManifestSeed {
   added: number;
   deleted: number;
   ignored: boolean;
+  oversized: boolean;
   /** True when `added`/`deleted` came from the exact numstat listing. */
   fromNumstat: boolean;
   reason?: ManifestFileReason;
@@ -295,6 +296,7 @@ function rawSeeds(
       added: counts?.added ?? entry.added,
       deleted: counts?.deleted ?? entry.deleted,
       ignored: isIgnored(entry.path, ignore),
+      oversized: false,
       fromNumstat: counts !== undefined,
     };
     if (entry.oldPath !== undefined) seed.oldPath = entry.oldPath;
@@ -318,16 +320,21 @@ export function manifestEntry(input: {
 }): ManifestFile {
   const mapped = input.file === undefined ? undefined : manifestFileFromDiff(input.file);
   const ignored = input.seed.ignored || mapped?.ignored === true;
+  const oversized = input.seed.oversized || mapped?.oversized === true;
+  const binary = input.seed.binary || mapped?.binary === true;
   let reason = mapped?.reason ?? input.seed.reason;
-  if (input.renderExcluded && (reason === undefined || reason === 'per-file-cap')) {
-    reason = ignored ? 'ignored' : 'render-budget';
+  if (reason === undefined) {
+    if (ignored) reason = 'ignored';
+    else if (binary) reason = 'binary';
+    else if (oversized) reason = 'per-file-cap';
+    else if (input.renderExcluded) reason = 'render-budget';
   }
   const entry: ManifestFile = {
     path: input.seed.path,
     status: mapped?.status ?? input.seed.status,
-    binary: input.seed.binary || mapped?.binary === true,
+    binary,
     ignored,
-    oversized: mapped?.oversized ?? false,
+    oversized,
     added: input.seed.fromNumstat ? input.seed.added : (mapped?.added ?? input.seed.added),
     deleted: input.seed.fromNumstat ? input.seed.deleted : (mapped?.deleted ?? input.seed.deleted),
     hunkCount: mapped?.hunkCount ?? 0,
@@ -754,6 +761,7 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
         added: 0,
         deleted: 0,
         ignored,
+        oversized: false,
         fromNumstat: false,
       };
       seeds.set(path, seed);
@@ -806,6 +814,7 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
       added: file.added,
       deleted: file.deleted,
       ignored: file.ignored === true,
+      oversized: file.oversized,
       fromNumstat: false,
     };
     if (file.oldPath !== undefined) seed.oldPath = file.oldPath;

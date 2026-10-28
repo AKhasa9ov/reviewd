@@ -753,6 +753,7 @@ describe('review manifest', () => {
         added: 4,
         deleted: 1,
         ignored: true,
+        oversized: false,
         fromNumstat: true,
       },
       renderExcluded: true,
@@ -778,12 +779,57 @@ describe('review manifest', () => {
         added: 1,
         deleted: 0,
         ignored: false,
+        oversized: false,
         fromNumstat: true,
       },
       renderExcluded: true,
     });
 
     expect(entry).toMatchObject({ reason: 'render-budget', patchBytes: 0, hunkCount: 0 });
+  });
+
+  it('uses binary for an omitted binary manifest-only seed', () => {
+    const entry = manifestEntry({
+      seed: {
+        path: 'assets/logo.png',
+        status: 'added',
+        binary: true,
+        added: 0,
+        deleted: 0,
+        ignored: false,
+        oversized: false,
+        fromNumstat: true,
+      },
+      renderExcluded: true,
+    });
+
+    expect(entry).toMatchObject({ binary: true, reason: 'binary', patchBytes: 0 });
+  });
+
+  it('keeps per-file-cap for a render-excluded oversized entry', () => {
+    const seed = {
+      path: 'assets/large.txt',
+      status: 'modified' as const,
+      binary: false,
+      added: 0,
+      deleted: 0,
+      ignored: false,
+      oversized: true,
+      fromNumstat: true,
+    };
+    const file: FileDiff = {
+      path: seed.path,
+      status: seed.status,
+      binary: false,
+      oversized: true,
+      added: 0,
+      deleted: 0,
+      hunks: [],
+      contentHash: null,
+    };
+
+    expect(manifestEntry({ seed, file, renderExcluded: true }).reason).toBe('per-file-cap');
+    expect(manifestEntry({ seed, renderExcluded: true }).reason).toBe('per-file-cap');
   });
 
   it('measures patch bytes as a hunk-body lower bound', () => {
