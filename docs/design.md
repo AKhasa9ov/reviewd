@@ -24,7 +24,7 @@
 | D10 | Аккаунтов нет: общий токен, имя ревьюера в браузере | Малый scope; OIDC/роли — следующий change | принято |
 | D11 | Репозиторий `~/projects/dsh-code-review`, CLI `review`, пакеты `@dsh-code-review/*` | Рабочие имена до публичного релиза; проверить конфликты перед publish | принято |
 | D12 | TLS терминируется reverse proxy, не daemon | Меньше кода и рисков; cookie Secure по `X-Forwarded-Proto` | принято |
-| D13 | Retention 90 дней; лимиты 2 MiB diff / 500 файлов / 20k строк на файл | Достаточно для v1; настраивается | принято |
+| D13 | Retention 90 дней; лимиты рендера 2 MiB diff / 500 файлов / 20k строк на файл; манифест полный до 64 MiB listing-cap | Бюджет ограничивает рендер, а не список файлов; превышение listing-cap видно как warning; настраивается | принято |
 | D14 | Модель reviewer — явная в конфиге, fallback на модель инициатора | Предсказуемая стоимость и качество | принято |
 
 ---
@@ -127,9 +127,9 @@ client → POST /api/reviews {repo, scope, title, reviewer}
 reviewd → resolve baseSha/headSha, snapshot, event review/created + round/created
         → job queued (backend auto|worker|command|none)
         → 201 {review, url}
-worker (long-poll) → GET /api/jobs/next → {job, bundle}
+worker (long-poll) → GET /api/jobs/next → {job, bundle: {protocolVersion, promptVersion, prompt, diff, manifest}}
         → reviewer subagent → findings → POST findings/report
-        → event agent/ready → SSE → UI
+        → reviewd применяет coverage gate → agent.status partial | done → SSE → UI
 ```
 
 **Submit и доставка**
@@ -252,6 +252,14 @@ interface Review {
   status: 'open' | 'submitted' | 'closed';
   verdict?: 'approved' | 'changes_requested' | 'comment';
   currentRound: RoundNo;
+  agent?: {
+    status: 'queued' | 'running' | 'done' | 'partial' | 'failed' | 'skipped';
+    jobId?: string;
+    round?: RoundNo;
+    startedAt?: string;
+    error?: string;
+    coverage?: ReviewCoverage;              // R1: ledger по всем путям манифеста
+  };
   createdAt: string;
   updatedAt: string;
 }
@@ -265,23 +273,46 @@ interface Round {
   previousSnapshotId?: string;
   trigger: 'created' | 'refresh-agent' | 'refresh-human' | 'refresh-cli';
   stats: { files: number; added: number; deleted: number };
-  agent: {
-    status: 'queued' | 'running' | 'ready' | 'failed' | 'skipped';
-    backend: 'worker' | 'command' | 'none';
-    jobId?: string;
-    startedAt?: string; finishedAt?: string;
-    error?: { code: string; message: string };
-  };
   submissionId?: string;
 }
 
 interface Snapshot {
-  id: string;
-  reviewId: ReviewId;
-  round: RoundNo;
-  createdAt: string;
-  files: FileSnapshot[];
+  schemaVersion: 1 | 2;                    // v2 всегда несёт manifest
+  scope: ResolvedScope;
+  files: FileSnapshot[];                   // bounded render subset
+  manifest?: ReviewManifest;               // v2: все изменённые пути
   totals: { files: number; added: number; deleted: number; truncated: boolean };
+  warnings: string[];
+}
+
+interface ReviewManifest {
+  schemaVersion: 1;
+  scope: ResolvedScope;
+  files: ManifestFile[];                   // каждый изменённый путь, даже без патча
+  totals: { files: number; added: number; deleted: number; patchBytes: number };
+  warnings: string[];
+}
+
+interface ManifestFile {
+  path: string;
+  oldPath?: string;
+  status: 'added' | 'modified' | 'deleted' | 'renamed' | 'submodule' | 'untracked';
+  binary: boolean; ignored: boolean; oversized: boolean;
+  added: number; deleted: number;
+  hunkCount: number; patchBytes: number;
+  reason?: 'render-budget' | 'diff-truncated' | 'per-file-cap' | 'binary'
+    | 'ignored' | 'generated' | 'unreadable' | 'legacy-truncated';
+}
+
+interface ReviewCoverage {
+  files: Array<{
+    path: string;
+    status: 'pending' | 'deep-reviewed' | 'light-reviewed' | 'manifest-only'
+      | 'skipped' | 'deferred' | 'failed';
+    reason?: string;
+    shardId?: string;                      // появится в R3
+  }>;
+  totals: { files: number; byStatus: Record<string, number> };
 }
 
 interface FileSnapshot {
@@ -380,7 +411,7 @@ interface Submission {
 ### 6.2 Статусы
 
 - `Review.status`: `open` (можно комментировать/refresh) → `submitted` (отправлено, ждём правок; новый раунд разрешён) → `closed` (approved/закрыто вручную; комментарии read-only).
-- `Round.agent.status`: `queued → running → ready | failed | skipped`.
+- `Review.agent.status`: `queued → running → done | partial | failed | skipped`. `done` ставится только когда все пути известного манифеста финальны; любой `pending`/`skipped`/`deferred`/`failed` даёт `partial`. Legacy review без coverage сохраняет прежнее поведение (`done` после принятого отчёта). Warning `manifest-listing-truncated` означает, что сам манифест мог быть неполон из-за 64 MiB listing-cap, поэтому `done` в этом случае — покрытие известных путей, а не full-coverage claim.
 - `Comment.state`: `open ⇄ resolved`, `dismissed`.
 - `Suggestion.state`: `proposed → accepted | applied | declined`, `stale` при расхождении HEAD.
 - `Delivery.state`: `pending → sending → acked | failed` (в store: `delivery/*`).
@@ -401,6 +432,7 @@ interface Submission {
 | `round/created` | round + snapshot ref |
 | `agent/queued` | jobId, backend, attemptId |
 | `agent/started` | jobId, workerId, attemptId |
+| `agent/coverage` | coverage ledger, round; пишется один раз на раунд перед enqueue worker-job, если у снапшота есть manifest |
 | `agent/finding` | finding |
 | `agent/finding-rejected` | raw, reason |
 | `agent/report` | report |
@@ -475,7 +507,7 @@ Env: `GIT_TERMINAL_PROMPT=0`, `GIT_OPTIONAL_LOCKS=0`, `LC_ALL=C`, `GIT_CONFIG_NO
 ### 7.3 Парсинг и лимиты
 
 - Unified diff парсится в `FileSnapshot` + `Hunk`; поддержка rename (`similarity index`, `rename from/to`), `new file mode`, `deleted file mode`, `\ No newline at end of file`, binary (`Binary files ... differ`).
-- Лимиты по умолчанию: 2 MiB суммарного диффа, 20 000 строк на файл, 500 файлов в снапшоте, 1 MiB на файл контента для anchor; ignore globs (lockfile, dist, vendor, minified, generated) настраиваются. Oversized/ignored файлы показываются в дереве с причиной, но не рендерятся.
+- Лимиты по умолчанию: 2 MiB суммарного диффа, 20 000 строк на файл, 500 файлов в снапшоте, 1 MiB на файл контента для anchor; ignore globs (lockfile, dist, vendor, minified, generated) настраиваются. Это **бюджеты рендера**: они ограничивают `snapshot.files`, но не `snapshot.manifest`. Oversized/ignored/binary файлы показываются в дереве с причиной и остаются в манифесте в пределах 64 MiB listing-cap; превышение даёт warning `manifest-listing-truncated` и делает `totals.truncated` истинным.
 - CRLF: нормализация при парсинге якорей; отображение — с исходными line endings (маркер `CRLF`).
 - UTF-8 strict; невалидные байты → `binary`-подобный `encoding: 'unknown'`.
 - Симлинки: не читаются; путь с realpath вне repo → ошибка `path-escape`.
@@ -484,7 +516,7 @@ Env: `GIT_TERMINAL_PROMPT=0`, `GIT_OPTIONAL_LOCKS=0`, `LC_ALL=C`, `GIT_CONFIG_NO
 
 ### 7.4 Снапшот и устаревание
 
-Снапшот содержит `oldLines/newLines` для изменённых текстовых файлов в пределах лимита — это нужно для (а) повторного рендера дельты без git, (б) re-anchor. `worktreeDigest = sha256(status --porcelain=v2 -z + diff base)`; для `range` — `headSha`. UI сравнивает digest/headSha с текущим и показывает «изменения после снапшота; создать rN+1».
+Снапшот v2 (`schemaVersion: 2`) разделяет два объекта. `files` — bounded render subset с `oldLines/newLines` в пределах лимитов; он нужен для (а) повторного рендера дельты без git, (б) re-anchor. `manifest` — список всех изменённых путей (`git diff --raw` + `--numstat`, включая untracked), полный до 64 MiB listing-cap; у каждого файла есть статус, added/deleted и причина отсутствия патча (`render-budget`, `diff-truncated`, `per-file-cap`, `binary`, `ignored`, …). Если cap сработал, `snapshot.warnings` и `manifest.warnings` содержат `manifest-listing-truncated`, и манифест может быть неполон. `snapshot.totals.files/added/deleted` берутся из манифеста, а `truncated` означает неполный render subset **или** срабатывание listing-cap. В обычном 882-файловом случае listing-cap не достигается: манифест содержит 882/882 путей; пути за render subset получают `render-budget` (основная причина), а отдельные файлы, обрезанные глобальным diff-бюджетом, — `diff-truncated`. Legacy v1 снапшот читается; синтезированный манифест получает warning `legacy-truncated`. `worktreeDigest = sha256(status --porcelain=v2 -z + diff base)`; для `range` — `headSha`. UI сравнивает digest/headSha с текущим и показывает «изменения после снапшота; создать rN+1».
 
 ---
 
@@ -541,13 +573,17 @@ interface Job {
   attempt: number;
   leaseUntil: string;
   workerId?: string;
+  protocolVersion: number;                 // 1 (v0 = поле отсутствует, только миграция)
+  promptVersion: number;
+  manifest?: ReviewManifest;
   createdAt: string;
 }
 ```
 
 - Lease 60s, heartbeat каждые 20s; expiry → `queued` (attempt++), до 2 попыток.
 - Таймаут: 10 мин (конфиг); cancel → reviewer процесс/агент гасится, job `failed`.
-- Bundle отдаётся worker'у по API (не путями daemon): `{prompt, diff, schema, meta}`. Worker и daemon могут быть в разных машинах/контейнерах.
+- Bundle отдаётся worker'у по API (не путями daemon): `{protocolVersion, promptVersion, prompt, diff, manifest, schema, meta}`. Worker и daemon могут быть в разных машинах/контейнерах.
+- `protocolVersion: 1`, `promptVersion: 1` — текущий wire-контракт (R1). Отсутствие поля означает legacy v0 и допускается на время миграции с warning; неизвестная версия отклоняется worker'ом до запуска runner'а с non-retryable `protocol-mismatch`. Новые adapters (C2+) целятся только в v1. Модель/token-политика в job/bundle не передаётся.
 - Worker обязан работать в **своём** видимом worktree (`cwd` инициатора); daemon не передаёт ему локальные пути, кроме `repoHint` из initiator cwd.
 
 ### 9.2 Bundle и промпт
@@ -560,7 +596,9 @@ interface Job {
 4. «Спорные» вопросы — отдельным списком `questions`, если решение зависит от продукта/намерения.
 5. Выход: строго JSON по схеме; либо tool-вызовы, либо файл `REVIEW_OUTPUT`.
 
-`diff.json`: `{review, round, files[], signals[]}` — стабильный формат.
+`diff.json`: `{review, round, files[], signals[]}` — стабильный формат. В prompt попадает только bounded unified diff (60k символов); список файлов строится из манифеста, а не из render subset.
+
+**Coverage R1.** При enqueue worker-job reviewd строит coverage ledger из манифеста (полного до listing-cap) и путей, чьи заголовки реально попали в prompt: файл с hunks в prompt — `pending`; binary/generated/ignored — `manifest-only`; остальные — `skipped` с причиной. Принятый report переводит `pending` в `light-reviewed` (в контексте одного reviewer'а, не «глубоко проверен»). Если остался хотя бы один `skipped`/`pending`/`deferred`/`failed`, round становится `partial`; `done` возможен только при полном покрытии известного манифеста. При `manifest-listing-truncated` даже `done` не является full-coverage claim: неизвестные пути в ledger не попали. R1 не обещает полное ревью большого PR: 882-файловый диапазон при лимите prompt остаётся `partial`, пока R3 не введёт shards.
 
 ### 9.3 Output schema (v1)
 
@@ -767,7 +805,8 @@ Scope: <base>..<head> (<sha>)
 ### 11.4 Workers и leases
 
 - Worker ID случайный, хранится в памяти daemon; heartbeat каждые 20s; отсутствие 3 heartbeat → offline, jobs requeue.
-- Job не теряется: события `agent/queued/started/failed` в review log; raw-артефакты.
+- Job не теряется: события `agent/queued/started/coverage/failed` в review log; raw-артефакты.
+- Lease (`GET /api/jobs/next`) несёт `protocolVersion`/`promptVersion` на job и в `bundle`, а также `bundle.manifest`, если у снапшота он есть. `GET /api/reviews/:id` отдаёт `agent.coverage` (ledger + totals) для UI/CLI; отдельного endpoint для coverage нет.
 - Idempotency: `attemptId` + finding id; повторный POST с тем же id — no-op.
 
 ### 11.5 Store startup

@@ -11,6 +11,7 @@ import { manifestEntry } from '../src/diff/snapshot.js';
 import type * as ContentModule from '../src/git/content.js';
 import type * as GitRunModule from '../src/git/run.js';
 import type { DiffHunk, FileDiff, ResolvedScope, Snapshot } from '../src/index.js';
+import { LARGE_REVIEW_FILE_COUNT, seedLargeReview } from './helpers/large-review-fixture.js';
 import { makeRepo } from './helpers/repo.js';
 
 const listingControl = vi.hoisted(() => ({ truncateRaw: false, truncateNumstat: false }));
@@ -536,33 +537,18 @@ describe('buildSnapshot', () => {
   it('emits a complete 882-path manifest while the render subset stays capped', async () => {
     const repo = await makeRepo();
     cleanups.push(repo.cleanup);
-    await repo.write('base.txt', 'base\n');
-    await repo.commit('base');
-    await repo.git('checkout', '-b', 'feature');
-    for (let index = 0; index < 882; index += 1) {
-      const path = `src/file-${String(index).padStart(3, '0')}.ts`;
-      const lines = Array.from(
-        { length: 96 },
-        (_, line) => `file ${index} line ${line} ${'x'.repeat(24)}`,
-      );
-      await repo.write(path, `${lines.join('\n')}\n`);
-    }
-    await repo.commit('882 files');
+    const expectedPaths = await seedLargeReview(repo);
 
     const result = await snapshot(repo.root, { includeContent: false });
-    const expectedPaths = Array.from(
-      { length: 882 },
-      (_, index) => `src/file-${String(index).padStart(3, '0')}.ts`,
-    );
     const manifestPaths = result.manifest?.files.map((file) => file.path) ?? [];
     const renderPaths = new Set(result.files.map((file) => file.path));
 
     expect(result.schemaVersion).toBe(2);
-    expect(result.manifest?.files).toHaveLength(882);
+    expect(result.manifest?.files).toHaveLength(LARGE_REVIEW_FILE_COUNT);
     expect(manifestPaths).toEqual(expectedPaths);
-    expect(new Set(manifestPaths).size).toBe(882);
-    expect(result.totals.files).toBe(882);
-    expect(result.totals.added).toBe(882 * 96);
+    expect(new Set(manifestPaths).size).toBe(LARGE_REVIEW_FILE_COUNT);
+    expect(result.totals.files).toBe(LARGE_REVIEW_FILE_COUNT);
+    expect(result.totals.added).toBe(LARGE_REVIEW_FILE_COUNT * 96);
     expect(result.files.length).toBeLessThanOrEqual(500);
     const manifestSet = new Set(manifestPaths);
     expect(result.files.every((file) => manifestSet.has(file.path))).toBe(true);

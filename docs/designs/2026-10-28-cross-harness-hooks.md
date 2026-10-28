@@ -196,11 +196,14 @@ interface HarnessRunner {
 
 `ReviewJob` не содержит `model`, `maxTokens`, `reasoningEffort` и API keys.
 
-> **C1 — v0 (записанное решение).** C1 поставляет lease/runner-контракт как v0
-> без типизированных `protocolVersion` и `promptVersion`: текущий wire-контракт
-> reviewd их не передаёт. C2 обязан добавить и валидировать оба поля до того,
-> как какой-либо адаптер начнёт использовать общий worker package. Это
-> осознанное решение, а не пропущенное поле.
+> **Поправка R1 (2026-10-28).** Исходное решение C1 — v0 — больше не описывает
+> wire-контракт. R1.4/C1 уже передают `protocolVersion: 1` и `promptVersion: 1`
+> на job и в `bundle`; worker проверяет обе версии до запуска runner'а и
+> отклоняет неизвестную как non-retryable `protocol-mismatch`. v0 (отсутствие
+> полей) остаётся только путём миграции для старых worker'ов: он принимается с
+> warning и не получает новых полей. Новые adapters (C2+) целятся только в v1;
+> model/token limits в общий контракт не добавляются. См. `docs/design.md`
+> §9.1 и `packages/worker/README.md`.
 
 ### 6.4 Ошибки
 

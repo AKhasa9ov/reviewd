@@ -76,11 +76,11 @@ R3 заменит эту эвристику настоящим shard coverage. L
 
 ## 4. Ownership
 
-| Слой | Владеет |
-|---|---|
-| reviewd | manifest, tier/shard plan, coverage ledger, aggregation, terminal status |
-| harness adapter | model, tools, permissions, effort → concrete limits |
-| worker contract | portable job, manifest, shard, effort; без model/token policy |
+| Слой            | Владеет                                                                  |
+| --------------- | ------------------------------------------------------------------------ |
+| reviewd         | manifest, tier/shard plan, coverage ledger, aggregation, terminal status |
+| harness adapter | model, tools, permissions, effort → concrete limits                      |
+| worker contract | portable job, manifest, shard, effort; без model/token policy            |
 
 R1 не создаёт shards; R2 создаёт tier plan, R3 создаёт shard jobs. R1 только
 фиксирует данные и честный terminal status.

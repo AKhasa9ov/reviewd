@@ -154,7 +154,8 @@ no token to configure.
   base/head/commit. The initiator is `{harness:'dsh', sessionId, cwd}`. Embedded mode
   returns the same-origin `/code-review/review/<id>` path, never the loopback daemon URL;
   external mode uses `publicUrl` when configured.
-- `review_status` — review, round count, comment count, agent report.
+- `review_status` — review, round count, comment count, agent status and report. When
+  the round has a coverage ledger, `agent.coverage` carries per-file statuses and totals.
 - `review_refresh` — create the next round, re-anchor comments and queue verification.
 - `review_feedback` — read the latest submitted feedback without delivering it again.
 - `/review <title>` — create a worktree review for the current workspace and return the
@@ -190,6 +191,13 @@ The subagent:
   wins;
 - receives the job prompt with a bounded unified diff (60k characters, with an explicit
   truncation marker) and an exact report schema, then returns one JSON report;
+- works under honest coverage: the daemon records every changed path in the manifest (up
+  to its 64 MiB metadata listing cap) and marks the round `done` only when no known path
+  is pending or skipped. A large review can be `partial` under the current single-agent
+  prompt; the panel shows the coverage summary (`Reviewed X/Y files`, skipped and
+  manifest-only counts). `partial` means the rest of the range was not in the reviewer's
+  context, not that the review failed. A `manifest-listing-truncated` warning means the
+  manifest itself hit the cap, so even `done` is not a full-coverage claim;
 - reads the report from the durable session log (`agent.session.snapshotEvents()`),
   falling back to the newest earlier parseable report if the last message is prose;
 - must return `schemaVersion: 1`; anything else is rejected as non-retryable
