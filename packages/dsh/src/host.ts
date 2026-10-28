@@ -6,6 +6,7 @@ import type { ReviewConfig } from './config.js';
 import { createReviewCommand } from './command.js';
 import { startEmbeddedReview } from './embedded.js';
 import { createProxyHandler } from './proxy.js';
+import { createUiHandler, resolveUiDir } from './ui.js';
 import { createReviewTools } from './tools.js';
 import type { PluginContext } from './tools.js';
 import { runDeliveryLoop } from './delivery.js';
@@ -147,6 +148,29 @@ export function apply(ctx: HostContext, rawConfig: unknown): void {
   ctx.effect(() =>
     ctx.webServer.register({ kind: 'prefix', path: '/api/code-review', handler: gatedProxy }),
   );
+  if (embedded !== undefined) {
+    // The DSH session cookie already identifies the user, so the SPA is mounted on
+    // the Host origin and its API calls are proxied without exposing the daemon token.
+    // External mode keeps the daemon-origin UI and its own token login.
+    const uiProxy = createProxyHandler({
+      config,
+      prefix: `${config.uiBase}/api`,
+      ...(endpoint === undefined ? {} : { endpoint }),
+      uiBase: config.uiBase,
+    });
+    const ui = createUiHandler({
+      webDir: resolveUiDir(),
+      proxy: uiProxy,
+      basePath: config.uiBase,
+    });
+    ctx.effect(() =>
+      ctx.webServer.register({
+        kind: 'prefix',
+        path: config.uiBase,
+        handler: withConnectionGate(ctx.connection, ui),
+      }),
+    );
+  }
   ctx.effect(() => {
     const disposers = createReviewTools(ctx, config, api);
     return () => {

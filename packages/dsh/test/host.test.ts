@@ -1,14 +1,26 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type * as uiModule from '../src/ui.js';
+
+const uiWebDir = vi.hoisted(() => ({ value: '' }));
+vi.mock('../src/ui.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof uiModule>();
+  return {
+    ...actual,
+    resolveUiDir: () => (uiWebDir.value === '' ? null : uiWebDir.value),
+  };
+});
+
 import { apply, inject } from '../src/host.js';
 
 const contextDisposals: Array<() => Promise<void>> = [];
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => {
+  uiWebDir.value = '';
   for (const dispose of contextDisposals.splice(0).reverse()) await dispose();
   await Promise.all(
     cleanups
@@ -32,6 +44,7 @@ function createResponse(): {
       status = next;
       return res;
     },
+    setHeader: () => res,
     end: (chunk?: unknown) => {
       ended = true;
       if (typeof chunk === 'string') body += chunk;
@@ -48,6 +61,12 @@ function createResponse(): {
 interface RegisteredRoute {
   path: string;
   handler: (req: IncomingMessage, res: ServerResponse) => Promise<void>;
+}
+
+function routeAt(routes: RegisteredRoute[], path: string): RegisteredRoute {
+  const registered = routes.find((route) => route.path === path);
+  if (registered === undefined) throw new Error(`route ${path} was not registered`);
+  return registered;
 }
 
 function createContext(requestRejection: () => 401 | 403 | undefined = () => undefined) {
@@ -76,7 +95,7 @@ function createContext(requestRejection: () => 401 | 403 | undefined = () => und
     for (const disposer of disposers.splice(0).reverse()) await disposer();
   };
   contextDisposals.push(dispose);
-  return { ctx, getRegistered: () => routes.at(-1), dispose };
+  return { ctx, getRegistered: () => routes.at(-1), getRoutes: () => routes, dispose };
 }
 
 describe('host plugin connection gate', () => {
@@ -86,15 +105,14 @@ describe('host plugin connection gate', () => {
 
   it('rejects unauthorized requests to the code-review prefix', async () => {
     let checked = false;
-    const { ctx, getRegistered } = createContext(() => {
+    const { ctx, getRoutes } = createContext(() => {
       checked = true;
       return 401;
     });
     apply(ctx, { daemonUrl: 'http://127.0.0.1:3100', token: 'x'.repeat(32), worker: false });
-    const registered = getRegistered();
-    expect(registered?.path).toBe('/api/code-review');
+    const registered = routeAt(getRoutes(), '/api/code-review');
     const response = createResponse();
-    await registered!.handler(
+    await registered.handler(
       { headers: {}, method: 'GET', url: '/api/code-review/reviews' } as IncomingMessage,
       response.res,
     );
@@ -104,11 +122,11 @@ describe('host plugin connection gate', () => {
   });
 
   it('admits authorized requests to the code-review prefix', async () => {
-    const { ctx, getRegistered } = createContext(() => undefined);
+    const { ctx, getRoutes } = createContext(() => undefined);
     apply(ctx, { daemonUrl: 'http://127.0.0.1:1', token: 'x'.repeat(32), worker: false });
-    const registered = getRegistered();
+    const registered = routeAt(getRoutes(), '/api/code-review');
     const response = createResponse();
-    await registered!.handler(
+    await registered.handler(
       { headers: {}, method: 'GET', url: '/api/code-review/info' } as IncomingMessage,
       response.res,
     );
@@ -118,14 +136,14 @@ describe('host plugin connection gate', () => {
 
   it('does not exempt /info from the gate', async () => {
     let checked = false;
-    const { ctx, getRegistered } = createContext(() => {
+    const { ctx, getRoutes } = createContext(() => {
       checked = true;
       return 403;
     });
     apply(ctx, { daemonUrl: 'http://127.0.0.1:3100', token: 'x'.repeat(32), worker: false });
-    const registered = getRegistered();
+    const registered = routeAt(getRoutes(), '/api/code-review');
     const response = createResponse();
-    await registered!.handler(
+    await registered.handler(
       { headers: {}, method: 'GET', url: '/api/code-review/info' } as IncomingMessage,
       response.res,
     );
@@ -133,20 +151,25 @@ describe('host plugin connection gate', () => {
     expect(response.getStatus()).toBe(403);
     expect(response.isEnded()).toBe(true);
   });
+
+  it('registers only the panel proxy in external mode', () => {
+    const { ctx, getRoutes } = createContext();
+    apply(ctx, { daemonUrl: 'http://127.0.0.1:3100', token: 'x'.repeat(32), worker: false });
+    expect(getRoutes().map((route) => route.path)).toEqual(['/api/code-review']);
+  });
 });
 
 describe('host plugin embedded mode', () => {
   it('starts the daemon behind the panel proxy and closes it on dispose', async () => {
     const storeDir = await mkdtemp(join(tmpdir(), 'cr-host-'));
     cleanups.push(async () => rm(storeDir, { recursive: true, force: true }));
-    const { ctx, getRegistered, dispose } = createContext();
+    const { ctx, getRoutes, dispose } = createContext();
     apply(ctx, { embedded: true, storeDir, worker: false, reviewerBackend: 'none' });
 
-    const registered = getRegistered();
-    expect(registered?.path).toBe('/api/code-review');
+    const registered = routeAt(getRoutes(), '/api/code-review');
 
     const health = createResponse();
-    await registered!.handler(
+    await registered.handler(
       { headers: {}, method: 'GET', url: '/api/code-review/health' } as IncomingMessage,
       health.res,
     );
@@ -154,7 +177,7 @@ describe('host plugin embedded mode', () => {
     expect(JSON.parse(health.body())).toMatchObject({ status: 'ok' });
 
     const info = createResponse();
-    await registered!.handler(
+    await registered.handler(
       { headers: {}, method: 'GET', url: '/api/code-review/info' } as IncomingMessage,
       info.res,
     );
@@ -170,5 +193,38 @@ describe('host plugin embedded mode', () => {
 
     await dispose();
     await expect(fetch(`${infoBody.daemonUrl}/api/health`)).rejects.toThrow();
+  });
+
+  it('serves the embedded UI under /code-review behind the connection gate', async () => {
+    const storeDir = await mkdtemp(join(tmpdir(), 'cr-host-ui-'));
+    cleanups.push(async () => rm(storeDir, { recursive: true, force: true }));
+    const webDir = await mkdtemp(join(tmpdir(), 'cr-host-web-'));
+    await writeFile(join(webDir, 'index.html'), '<div id="root">host SPA</div>');
+    cleanups.push(async () => rm(webDir, { recursive: true, force: true }));
+    uiWebDir.value = webDir;
+
+    let rejection: 401 | 403 | undefined = 401;
+    const { ctx, getRoutes, dispose } = createContext(() => rejection);
+    apply(ctx, { embedded: true, storeDir, worker: false, reviewerBackend: 'none' });
+
+    const ui = routeAt(getRoutes(), '/code-review');
+    const unauthorized = createResponse();
+    await ui.handler(
+      { headers: {}, method: 'GET', url: '/code-review/review/rev_1' } as IncomingMessage,
+      unauthorized.res,
+    );
+    expect(unauthorized.getStatus()).toBe(401);
+
+    rejection = undefined;
+    const authorized = createResponse();
+    await ui.handler(
+      { headers: {}, method: 'GET', url: '/code-review/review/rev_1' } as IncomingMessage,
+      authorized.res,
+    );
+    expect(authorized.getStatus()).toBe(200);
+    expect(authorized.body()).toContain('host SPA');
+
+    await dispose();
+    uiWebDir.value = '';
   });
 });

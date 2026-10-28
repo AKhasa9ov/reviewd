@@ -10,6 +10,7 @@ vi.hoisted(() => {
 
 import { App } from '../src/App.js';
 import { navigate } from '../src/router.js';
+import { AppProviders } from '../src/Shell.js';
 
 const review: ReviewSummary = {
   id: 'rev_01',
@@ -89,5 +90,29 @@ describe('embedded DSH auth mode', () => {
     expect(window.location.pathname).toBe('/code-review/missing');
     navigate('/code-review/other');
     expect(window.location.pathname).toBe('/code-review/other');
+  });
+
+  it('marks the active navigation item below the base path', () => {
+    go('/code-review/settings');
+
+    render(
+      <AppProviders>
+        <div />
+      </AppProviders>,
+    );
+
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'Reviews' })).not.toHaveAttribute('aria-current');
+  });
+
+  it('marks Reviews current on the base root', () => {
+    render(
+      <AppProviders>
+        <div />
+      </AppProviders>,
+    );
+
+    expect(screen.getByRole('link', { name: 'Reviews' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'Settings' })).not.toHaveAttribute('aria-current');
   });
 });

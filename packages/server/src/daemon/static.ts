@@ -137,12 +137,23 @@ export async function resolveWebDir(explicit?: string): Promise<string | null> {
 /**
  * Serve the built SPA and its hashed assets. Returns false for API routes and unknown
  * paths so the caller can continue to the authenticated API router.
+ *
+ * `basePath` mounts the same build below a prefix (the embedded `/code-review` UI).
+ * It is stripped before the API/traversal guards so those checks still see the
+ * root-relative path; anything outside the prefix is left to the caller.
  */
 export async function serveStatic(
   pathname: string,
   res: ServerResponse,
   webDir: string | null,
+  basePath = '',
 ): Promise<boolean> {
+  const base = basePath.replace(/\/+$/, '');
+  if (base !== '') {
+    if (pathname === base) pathname = '/';
+    else if (pathname.startsWith(`${base}/`)) pathname = pathname.slice(base.length);
+    else return false;
+  }
   if (pathname.startsWith('/api/')) return false;
 
   if (webDir === null) {

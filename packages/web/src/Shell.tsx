@@ -15,6 +15,7 @@ import {
   Tooltip,
   useTheme,
 } from '@dsh-code-review/ui';
+import { BASE_PATH, normalizeBase } from './base.js';
 import { Link, useCloseOnNavigate, useLocation } from './router.js';
 
 const SIDEBAR_STORAGE_KEY = 'cr-sidebar-collapsed';
@@ -35,6 +36,19 @@ export interface ShellProps {
 function navCurrent(pathname: string, target: string): 'page' | undefined {
   if (target === '/') return pathname === '/' ? 'page' : undefined;
   return pathname === target || pathname.startsWith(`${target}/`) ? 'page' : undefined;
+}
+
+/**
+ * Nav targets are root-relative routes, but the location keeps the SPA's mount
+ * base (`/code-review/...` in the fat build), so strip it before comparing.
+ */
+function routePathname(location: string): string {
+  const pathname = new URL(location, 'http://local').pathname;
+  const base = normalizeBase(BASE_PATH);
+  if (base === '') return pathname;
+  if (pathname === base) return '/';
+  if (pathname.startsWith(`${base}/`)) return pathname.slice(base.length);
+  return pathname;
 }
 
 function ThemeToggle(): JSX.Element {
@@ -58,7 +72,7 @@ export function Shell({ children }: ShellProps): JSX.Element {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readCollapsedSidebar);
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
   const location = useLocation();
-  const routePath = new URL(location, 'http://local').pathname;
+  const routePath = routePathname(location);
   useCloseOnNavigate(closeDrawer);
 
   useEffect(() => {

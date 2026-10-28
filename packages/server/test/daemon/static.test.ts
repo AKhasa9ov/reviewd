@@ -1,9 +1,12 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:http';
+import type { ServerResponse } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { startDaemon } from '../../src/daemon/server.js';
-import { CSP, resolveWebDir } from '../../src/daemon/static.js';
+import { CSP, resolveWebDir, serveStatic } from '../../src/daemon/static.js';
 import type { ReviewDaemon } from '../../src/daemon/types.js';
 
 const TOKEN = 'test-token-0123456789abcdef0123456789';
@@ -113,6 +116,47 @@ describe('daemon SPA static serving', () => {
     expect(response.status).toBe(404);
     expect(await response.text()).not.toContain('reviewd SPA');
     securityHeaders(response);
+  });
+
+  it('serves the same SPA below /code-review', async () => {
+    const server = createServer(async (req, res) => {
+      if (!(await serveStatic(req.url ?? '/', res, fx.webDir, '/code-review'))) {
+        res.writeHead(404).end();
+      }
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    cleanups.push(
+      async () =>
+        await new Promise<void>((resolve) => {
+          server.close(() => resolve());
+        }),
+    );
+    const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+
+    const root = await fetch(`${base}/code-review/`);
+    expect(root.status).toBe(200);
+    expect(await root.text()).toContain('reviewd SPA');
+    securityHeaders(root);
+
+    const deep = await fetch(`${base}/code-review/review/rev_1`);
+    expect(deep.status).toBe(200);
+    expect(await deep.text()).toContain('reviewd SPA');
+
+    const asset = await fetch(`${base}/code-review/assets/app-abc123.js`);
+    expect(asset.status).toBe(200);
+    expect(asset.headers.get('content-type')).toContain('text/javascript');
+
+    const traversal = await fetch(`${base}/code-review/assets/..%2Findex.html`);
+    expect(traversal.status).toBe(404);
+    expect(await traversal.text()).not.toContain('reviewd SPA');
+
+    // Outside the configured base the daemon router keeps ownership of the path.
+    expect(await serveStatic('/elsewhere', {} as ServerResponse, fx.webDir, '/code-review')).toBe(
+      false,
+    );
+    expect(
+      await serveStatic('/code-review/api/health', {} as ServerResponse, fx.webDir, '/code-review'),
+    ).toBe(false);
   });
 
   it('keeps API health JSON and auth API behavior intact', async () => {

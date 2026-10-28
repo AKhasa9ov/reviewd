@@ -74,6 +74,19 @@ window.__ModuleLoader__.load({
       return body;
     }
 
+    function normalizedBase(value) {
+      return typeof value === 'string' ? value.replace(/\/+$/, '') : '';
+    }
+
+    /**
+     * The UI may live on the DSH origin (`info.uiBase`), a public URL, or the daemon
+     * itself. Normalizing the trailing slash keeps links from doubling it.
+     */
+    function reviewUrl(base, id) {
+      const prefix = normalizedBase(base);
+      return prefix === '' ? '' : prefix + '/review/' + encodeURIComponent(id);
+    }
+
     function useStyles() {
       return h(
         'style',
@@ -121,12 +134,17 @@ window.__ModuleLoader__.load({
         setState((current) => ({ ...current, status: 'loading', error: null }));
         try {
           const [page, info] = await Promise.all([request('/reviews?limit=50'), request('/info')]);
+          const source = info || {};
           setUiBase(
-            info && typeof info.publicUrl === 'string' && info.publicUrl !== ''
-              ? info.publicUrl
-              : info && typeof info.daemonUrl === 'string'
-                ? info.daemonUrl
-                : '',
+            normalizedBase(
+              typeof source.uiBase === 'string' && source.uiBase !== ''
+                ? source.uiBase
+                : typeof source.publicUrl === 'string' && source.publicUrl !== ''
+                  ? source.publicUrl
+                  : typeof source.daemonUrl === 'string'
+                    ? source.daemonUrl
+                    : '',
+            ),
           );
           setState({ status: 'ready', reviews: page.items || [], error: null });
         } catch (error) {
@@ -149,7 +167,10 @@ window.__ModuleLoader__.load({
             reviewer: { backend: 'worker' },
           };
           const result = await request('/reviews', { method: 'POST', body: JSON.stringify(body) });
-          setCreatedUrl(result.url || null);
+          const createdId =
+            result && result.review && result.review.review ? result.review.review.id : null;
+          const hosted = typeof createdId === 'string' ? reviewUrl(uiBase, createdId) : '';
+          setCreatedUrl(hosted !== '' ? hosted : (result && result.url) || null);
           setCreating(false);
           setRepo('');
           await load();
@@ -310,7 +331,7 @@ window.__ModuleLoader__.load({
                     'a',
                     {
                       className: 'cr-link',
-                      href: (uiBase || '') + '/review/' + encodeURIComponent(review.id),
+                      href: reviewUrl(uiBase, review.id),
                       target: '_blank',
                       rel: 'noreferrer',
                     },
