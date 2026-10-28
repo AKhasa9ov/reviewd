@@ -3,7 +3,14 @@
     - id: code-review
       name: '@dsh-code-review/dsh'
       config:
+        # Embedded mode starts the daemon in-process on an ephemeral loopback
+        # port and serves the review UI under uiBase. Set embedded: false to
+        # use the external daemonUrl below instead.
+        embedded: true
+        uiBase: /code-review
+        worker: true
+        reviewerBackend: worker
+        # External-daemon fallback. Ignored while embedded is true: the host
+        # generates its own bearer and never uses these values.
         daemonUrl: http://127.0.0.1:3100
         token: ''
-        worker: false
-        reviewerBackend: worker

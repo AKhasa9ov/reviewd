@@ -4,6 +4,8 @@ import { runDeliveryLoop } from '../src/delivery.js';
 import type { DeliveryRecord } from '../src/delivery.js';
 
 const config = {
+  embedded: false,
+  uiBase: '/code-review',
   daemonUrl: 'http://d',
   token: 't'.repeat(32),
   worker: false,

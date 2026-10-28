@@ -53,6 +53,8 @@ async function fixture(): Promise<{
 
 function config(daemonUrl: string) {
   return {
+    embedded: false,
+    uiBase: '/code-review',
     daemonUrl,
     token: TOKEN,
     worker: false,

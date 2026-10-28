@@ -1,4 +1,4 @@
-import type { ReviewApi } from './api.js';
+import type { ReviewApiLike } from './api.js';
 import type { ReviewConfig } from './config.js';
 
 export interface DeliveryInitiator {
@@ -33,7 +33,7 @@ export interface SessionControllerLike {
 
 export interface DeliveryDeps {
   config: ReviewConfig;
-  api: ReviewApi;
+  api: ReviewApiLike;
   sessionController?: SessionControllerLike;
   logger?: { warn?(message: string): void; info?(message: string): void };
   sleep?: (ms: number, signal: AbortSignal) => Promise<void>;

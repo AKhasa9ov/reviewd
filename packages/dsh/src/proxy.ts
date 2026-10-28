@@ -4,9 +4,23 @@ import type { ReviewConfig } from './config.js';
 const PREFIX = '/api/code-review';
 const MAX_BODY = 2 * 1024 * 1024;
 
+export interface ProxyEndpoint {
+  daemonUrl: string;
+  token: string;
+}
+
 export interface ProxyDeps {
   config: ReviewConfig;
   fetch?: typeof fetch;
+  /** Mount point of the proxy route; defaults to the panel prefix. */
+  prefix?: string;
+  /**
+   * Deferred daemon address and token. Embedded mode resolves its ephemeral
+   * port asynchronously; external mode falls back to `config`.
+   */
+  endpoint?: Promise<ProxyEndpoint>;
+  /** Same-origin UI base reported to the client when embedded. */
+  uiBase?: string;
 }
 
 function json(res: ServerResponse, status: number, code: string, message: string): void {
@@ -17,6 +31,20 @@ function json(res: ServerResponse, status: number, code: string, message: string
     'cache-control': 'no-store',
   });
   res.end(body);
+}
+
+/** Resolve the daemon target, mapping a failed embedded startup to a typed 503. */
+async function resolveEndpoint(
+  deps: ProxyDeps,
+  res: ServerResponse,
+): Promise<ProxyEndpoint | undefined> {
+  if (deps.endpoint === undefined) return deps.config;
+  try {
+    return await deps.endpoint;
+  } catch {
+    json(res, 503, 'daemon-unavailable', 'review daemon is not ready');
+    return undefined;
+  }
 }
 
 async function bodyOf(req: IncomingMessage): Promise<Buffer | undefined> {
@@ -33,24 +61,31 @@ async function bodyOf(req: IncomingMessage): Promise<Buffer | undefined> {
 }
 
 /**
- * Build a prefix route handler for `/api/code-review/*`.
+ * Build a prefix route handler for the review proxy (`/api/code-review/*` by
+ * default, or the embedded `/code-review/api/*`).
  * The browser never sees the daemon token: the Host adds the bearer header,
  * strips any client Authorization header, and never copies the token to a response.
  */
 export function createProxyHandler(deps: ProxyDeps) {
   const fetchImpl = deps.fetch ?? fetch;
+  const prefix = deps.prefix ?? PREFIX;
   return async function proxy(req: IncomingMessage, res: ServerResponse): Promise<void> {
     try {
       const url = req.url ?? '/';
-      const path = url.startsWith(PREFIX) ? url.slice(PREFIX.length) || '/' : '/';
+      const path = url.startsWith(prefix) ? url.slice(prefix.length) || '/' : '/';
       if (!path.startsWith('/')) {
         json(res, 400, 'bad-path', 'invalid proxy path');
         return;
       }
+      // Embedded mode resolves its ephemeral port and generated token lazily;
+      // a failed startup becomes a typed 503 instead of an unhandled rejection.
+      const endpoint = await resolveEndpoint(deps, res);
+      if (endpoint === undefined) return;
       if (path === '/info' && (req.method === 'GET' || req.method === 'HEAD')) {
         const body = JSON.stringify({
-          daemonUrl: deps.config.daemonUrl,
+          daemonUrl: endpoint.daemonUrl,
           ...(deps.config.publicUrl === undefined ? {} : { publicUrl: deps.config.publicUrl }),
+          ...(deps.uiBase === undefined ? {} : { uiBase: deps.uiBase }),
         });
         res.writeHead(200, {
           'content-type': 'application/json; charset=utf-8',
@@ -60,13 +95,13 @@ export function createProxyHandler(deps: ProxyDeps) {
         res.end(req.method === 'HEAD' ? undefined : body);
         return;
       }
-      if (deps.config.token === '') {
+      if (endpoint.token === '') {
         json(res, 503, 'not-configured', 'review daemon token is not configured');
         return;
       }
       const body = await bodyOf(req);
       const headers: Record<string, string> = {
-        authorization: `Bearer ${deps.config.token}`,
+        authorization: `Bearer ${endpoint.token}`,
         accept: typeof req.headers.accept === 'string' ? req.headers.accept : 'application/json',
       };
       if (req.headers['content-type'] !== undefined) {
@@ -86,7 +121,7 @@ export function createProxyHandler(deps: ProxyDeps) {
       const controller = new AbortController();
       res.on('close', () => controller.abort());
       const daemonPath = path === '/' ? '/api' : `/api${path}`;
-      const response = await fetchImpl(`${deps.config.daemonUrl}${daemonPath}`, {
+      const response = await fetchImpl(`${endpoint.daemonUrl}${daemonPath}`, {
         method: req.method ?? 'GET',
         headers,
         ...(body === undefined ? {} : { body: body as unknown as BodyInit }),

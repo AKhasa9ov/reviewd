@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { ReviewApiError, type ReviewApi } from './api.js';
+import { ReviewApiError } from './api.js';
+import type { ReviewApiLike } from './api.js';
 import type { ReviewConfig } from './config.js';
 
 /** Tools a reviewer may execute; everything else is denied by the guard. */
@@ -35,7 +36,7 @@ export interface WorkerAgentHandle {
 
 export interface WorkerDeps {
   config: ReviewConfig;
-  api: ReviewApi;
+  api: ReviewApiLike;
   agents?: {
     create(options: Record<string, unknown>): Promise<WorkerAgentHandle>;
   };

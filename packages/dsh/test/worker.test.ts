@@ -4,6 +4,8 @@ import { ReviewApiError } from '../src/api.js';
 import { extractReviewerReport, runWorkerLoop } from '../src/worker.js';
 
 const config = {
+  embedded: false,
+  uiBase: '/code-review',
   daemonUrl: 'http://d',
   token: 't'.repeat(32),
   worker: true,

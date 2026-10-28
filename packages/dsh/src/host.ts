@@ -1,8 +1,10 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { ReviewApi } from './api.js';
+import type { ReviewApiLike } from './api.js';
 import { configProblem, normalizeConfig } from './config.js';
 import type { ReviewConfig } from './config.js';
 import { createReviewCommand } from './command.js';
+import { startEmbeddedReview } from './embedded.js';
 import { createProxyHandler } from './proxy.js';
 import { createReviewTools } from './tools.js';
 import type { PluginContext } from './tools.js';
@@ -28,7 +30,7 @@ interface HostContext extends PluginContext {
   commands: { register(definition: AnyRecord): () => void };
   webServer: { register(route: AnyRecord): () => void };
   connection: ConnectionHandle;
-  effect(callback: () => (() => void) | void): () => void;
+  effect(callback: () => (() => void | Promise<void>) | void): () => void;
   get(service: string): unknown;
   logger?: { info?(message: string): void; warn?(message: string): void };
 }
@@ -62,7 +64,7 @@ function service<T>(ctx: HostContext, key: string): T | undefined {
   return value === undefined || value === null ? undefined : (value as T);
 }
 
-function startLoops(ctx: HostContext, config: ReviewConfig, api: ReviewApi): () => void {
+function startLoops(ctx: HostContext, config: ReviewConfig, api: ReviewApiLike): () => void {
   const controller = new AbortController();
   const agents = service<WorkerDeps['agents']>(ctx, 'agents');
   const sessionController = service<
@@ -106,8 +108,41 @@ export function apply(ctx: HostContext, rawConfig: unknown): void {
   if (problem !== undefined) {
     ctx.logger?.warn?.(`code-review: ${problem}; tools and panel will report not configured`);
   }
-  const api = new ReviewApi(config);
-  const proxy = createProxyHandler({ config });
+
+  const embedded = config.embedded
+    ? startEmbeddedReview(config, {
+        ...(config.storeDir === undefined ? {} : { storeDir: config.storeDir }),
+      })
+    : undefined;
+  if (embedded !== undefined) {
+    // Register lifetime cleanup before the route and loop effects: Cordis
+    // disposes a fiber's effects in reverse registration order, so worker and
+    // delivery loops abort before the daemon they poll closes.
+    ctx.effect(() => async () => {
+      await embedded.close().catch((error: unknown) => {
+        ctx.logger?.warn?.(
+          `code-review: embedded daemon did not close cleanly: ${
+            error instanceof Error ? error.message : 'unknown'
+          }`,
+        );
+      });
+    });
+  }
+  const endpoint =
+    embedded === undefined
+      ? undefined
+      : embedded.ready.then((daemon) => ({ daemonUrl: daemon.url, token: embedded.token }));
+  // A failed embedded startup is reported through the proxy as a typed 503;
+  // observe it here so it cannot surface as an unhandled rejection first.
+  if (endpoint !== undefined) void endpoint.catch(() => undefined);
+  // Tools, command and loops go through the deferred handle in embedded mode,
+  // so they can be registered before the ephemeral port is known.
+  const api: ReviewApiLike = embedded?.api ?? new ReviewApi(config);
+  const proxy = createProxyHandler({
+    config,
+    ...(endpoint === undefined ? {} : { endpoint }),
+    ...(embedded === undefined ? {} : { uiBase: config.uiBase }),
+  });
   const gatedProxy = withConnectionGate(ctx.connection, proxy);
   ctx.effect(() =>
     ctx.webServer.register({ kind: 'prefix', path: '/api/code-review', handler: gatedProxy }),

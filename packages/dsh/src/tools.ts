@@ -1,4 +1,4 @@
-import type { ReviewApi } from './api.js';
+import type { ReviewApiLike } from './api.js';
 import type { ReviewConfig } from './config.js';
 
 export interface ToolAgent {
@@ -109,7 +109,7 @@ function scopeFrom(args: Record<string, unknown>, base: string): Record<string, 
 export function createReviewTools(
   ctx: PluginContext,
   config: ReviewConfig,
-  api: ReviewApi,
+  api: ReviewApiLike,
 ): Array<() => void> {
   return [
     ctx.tools.register(

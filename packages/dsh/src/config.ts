@@ -1,6 +1,12 @@
 export type ReviewerBackend = 'worker' | 'command' | 'none';
 
 export interface ReviewConfig {
+  /** Run the review daemon in-process instead of proxying to an external `daemonUrl`. */
+  embedded: boolean;
+  /** Same-origin path where the full review UI is mounted when embedded. */
+  uiBase: string;
+  /** Embedded daemon data directory; defaults to the controller's user-data path. */
+  storeDir?: string;
   daemonUrl: string;
   /** Browser-reachable standalone UI origin; daemonUrl may be loopback-only. */
   publicUrl?: string;
@@ -20,6 +26,8 @@ export interface ReviewConfig {
 }
 
 export const DEFAULT_CONFIG: ReviewConfig = {
+  embedded: false,
+  uiBase: '/code-review',
   daemonUrl: 'http://127.0.0.1:3100',
   token: '',
   worker: false,
@@ -50,6 +58,11 @@ export function normalizeConfig(raw: unknown): ReviewConfig {
       : 'worker';
   const model = input.reviewerModel;
   return {
+    embedded: input.embedded === true,
+    uiBase: stringValue(input.uiBase, DEFAULT_CONFIG.uiBase).replace(/\/+$/, ''),
+    ...(typeof input.storeDir === 'string' && input.storeDir.trim() !== ''
+      ? { storeDir: input.storeDir.trim() }
+      : {}),
     daemonUrl: stringValue(input.daemonUrl, DEFAULT_CONFIG.daemonUrl).replace(/\/+$/, ''),
     ...(typeof input.publicUrl === 'string' && input.publicUrl.trim() !== ''
       ? { publicUrl: input.publicUrl.trim().replace(/\/+$/, '') }
@@ -85,6 +98,9 @@ export function normalizeConfig(raw: unknown): ReviewConfig {
 }
 
 export function configProblem(config: ReviewConfig): string | undefined {
+  // Embedded mode owns the daemon and generates its own bearer, so external
+  // daemon URL/token settings do not apply and must not block activation.
+  if (config.embedded) return undefined;
   if (config.daemonUrl === '') return 'daemonUrl is not configured';
   if (!/^https?:\/\//.test(config.daemonUrl)) return 'daemonUrl must be an http(s) URL';
   if (config.publicUrl !== undefined && !/^https?:\/\//.test(config.publicUrl)) {

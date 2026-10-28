@@ -28,6 +28,8 @@ function setup() {
     },
   } as any;
   const config = {
+    embedded: false,
+    uiBase: '/code-review',
     daemonUrl: 'http://daemon',
     token: 't'.repeat(32),
     worker: false,

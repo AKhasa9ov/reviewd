@@ -1,4 +1,4 @@
-import type { ReviewApi } from './api.js';
+import type { ReviewApiLike } from './api.js';
 import type { ReviewConfig } from './config.js';
 import type { PluginContext, ToolAgent } from './tools.js';
 
@@ -15,7 +15,7 @@ export interface CommandRuntime {
 export function createReviewCommand(
   ctx: PluginContext & { commands: CommandRuntime },
   config: ReviewConfig,
-  api: ReviewApi,
+  api: ReviewApiLike,
 ): () => void {
   return ctx.commands.register({
     name: 'review',
