@@ -329,6 +329,7 @@ function summary(state: ReviewState): ReviewSummary {
   return {
     id: state.id,
     title: state.title,
+    repoRoot: state.repoRoot,
     status: state.status,
     createdAt: state.createdAt,
     roundCount: state.rounds.length,

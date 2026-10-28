@@ -100,6 +100,7 @@ review health
 The standalone UI supports real git diffs, file and line comments (including drag-selected
 full-file ranges and per-line full-file comments on current or base lines outside the diff),
 suggestions, rounds,
+collapsible git-repository groups in the review list,
 delta/full views, inline agent findings with accept/dismiss decisions and notes in the diff
 and full-file view, review and comment
 editing/deletion, deep links, keyboard navigation, 320px layouts and light/dark themes.

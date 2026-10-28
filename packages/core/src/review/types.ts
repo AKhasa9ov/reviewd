@@ -170,6 +170,7 @@ export interface ReviewState {
 export interface ReviewSummary {
   id: ReviewId;
   title: string;
+  repoRoot: string;
   status: ReviewStatus;
   createdAt: string;
   roundCount: number;

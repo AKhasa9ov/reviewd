@@ -4,11 +4,13 @@ import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ApiClient, ReviewSummary } from '@dsh-code-review/ui';
 import { App } from '../src/App.js';
+import { repoName } from '../src/pages/ReviewListPage.js';
 import { latestFeedback, reviewView, snapshotR1, snapshotR2 } from './reviewFixtures.js';
 
 const review: ReviewSummary = {
   id: 'rev_01',
   title: 'Billing retry semantics',
+  repoRoot: '/srv/repo',
   status: 'open',
   createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
   roundCount: 2,
@@ -151,6 +153,133 @@ describe('review list', () => {
     expect(screen.getByText('rev_01')).toBeInTheDocument();
     await user.click(screen.getByRole('link', { name: 'All reviews' }));
     expect(screen.getByRole('heading', { name: 'Reviews' })).toBeInTheDocument();
+  });
+});
+
+describe('review repository groups', () => {
+  const webReview = {
+    ...review,
+    id: 'rev_web_1',
+    title: 'Web shell polish',
+    repoRoot: '/srv/apps/web',
+  };
+  const apiReview = {
+    ...review,
+    id: 'rev_api_1',
+    title: 'Auth callback state',
+    repoRoot: '/srv/apps/api',
+  };
+  const webReviewTwo = {
+    ...review,
+    id: 'rev_web_2',
+    title: 'Web routing table',
+    repoRoot: '/srv/apps/web',
+  };
+
+  function groupedClient(items: ReviewSummary[]): ApiClient {
+    return fakeClient({
+      listReviews: vi.fn(async () => ({ items, total: items.length, limit: 50, offset: 0 })),
+    });
+  }
+
+  it('groups reviews by exact repository with basenames, counts and order', async () => {
+    render(<App client={groupedClient([webReview, apiReview, webReviewTwo])} />);
+
+    const headings = await screen.findAllByRole('heading', { level: 2 });
+    expect(headings).toHaveLength(2);
+    expect(headings[0]).toHaveTextContent('/srv/apps/web');
+    expect(headings[1]).toHaveTextContent('/srv/apps/api');
+    expect(within(headings[0]!).getByText('web', { exact: true })).toBeInTheDocument();
+    expect(within(headings[0]!).getByText('2 reviews')).toBeInTheDocument();
+    expect(within(headings[1]!).getByText('api', { exact: true })).toBeInTheDocument();
+    expect(within(headings[1]!).getByText('1 review')).toBeInTheDocument();
+
+    const webRows = within(screen.getByRole('region', { name: /\/srv\/apps\/web/ })).getAllByRole(
+      'link',
+    );
+    expect(webRows).toHaveLength(2);
+    expect(webRows[0]).toHaveTextContent('Web shell polish');
+    expect(webRows[1]).toHaveTextContent('Web routing table');
+    expect(
+      within(screen.getByRole('region', { name: /\/srv\/apps\/api/ })).getByRole('link', {
+        name: /Auth callback state/,
+      }),
+    ).toBeVisible();
+  });
+
+  it('shows one group even when every review shares a repository', async () => {
+    render(<App client={fakeClient()} />);
+
+    const heading = await screen.findByRole('heading', { level: 2 });
+    expect(heading).toHaveTextContent('/srv/repo');
+    expect(within(heading).getByText('repo', { exact: true })).toBeInTheDocument();
+    expect(within(heading).getByText('1 review')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Billing retry semantics/ })).toBeVisible();
+  });
+
+  it('collapses one repository group without hiding the others and restores it', async () => {
+    const user = userEvent.setup();
+    render(<App client={groupedClient([webReview, apiReview])} />);
+
+    const webToggle = await screen.findByRole('button', { name: /\/srv\/apps\/web/ });
+    const rowsId = webToggle.getAttribute('aria-controls');
+    expect(rowsId).toBeTruthy();
+    expect(webToggle).toHaveAttribute('aria-expanded', 'true');
+    const rows = document.getElementById(rowsId!);
+    expect(rows).not.toHaveAttribute('hidden');
+
+    await user.click(webToggle);
+    expect(webToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(rows).toHaveAttribute('hidden');
+    expect(screen.queryByRole('link', { name: /Web shell polish/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Auth callback state/ })).toBeVisible();
+
+    await user.click(webToggle);
+    expect(webToggle).toHaveAttribute('aria-expanded', 'true');
+    expect(rows).not.toHaveAttribute('hidden');
+    expect(await screen.findByRole('link', { name: /Web shell polish/ })).toBeVisible();
+  });
+
+  it('removes an empty repository group while filtering and restores it when cleared', async () => {
+    const user = userEvent.setup();
+    render(<App client={groupedClient([webReview, apiReview])} />);
+
+    expect(await screen.findByRole('heading', { name: /\/srv\/apps\/web/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /\/srv\/apps\/api/ })).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Search reviews'), 'auth');
+    expect(screen.queryByRole('heading', { name: /\/srv\/apps\/web/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /\/srv\/apps\/api/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Auth callback state/ })).toBeVisible();
+
+    await user.clear(screen.getByLabelText('Search reviews'));
+    expect(await screen.findByRole('heading', { name: /\/srv\/apps\/web/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /\/srv\/apps\/api/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Web shell polish/ })).toBeVisible();
+  });
+
+  it('derives repository labels from unix, windows and root paths', async () => {
+    render(
+      <App
+        client={groupedClient([
+          { ...review, id: 'rev_slash', title: 'Trailing slash', repoRoot: '/srv/apps/web/' },
+          { ...review, id: 'rev_windows', title: 'Windows checkout', repoRoot: 'C:\\work\\api' },
+          { ...review, id: 'rev_root', title: 'Root checkout', repoRoot: '/' },
+        ])}
+      />,
+    );
+
+    const trailing = await screen.findByRole('heading', { name: /\/srv\/apps\/web\// });
+    expect(within(trailing).getByText('web', { exact: true })).toBeInTheDocument();
+    const windows = screen.getByRole('heading', { name: /C:\\work\\api/ });
+    expect(within(windows).getByText('api', { exact: true })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(3);
+    expect(screen.getByRole('link', { name: /Root checkout/ })).toBeVisible();
+    expect(repoName('/srv/apps/web/')).toBe('web');
+    expect(repoName('C:\\work\\api')).toBe('api');
+    expect(repoName('C:\\')).toBe('C:\\');
+    expect(repoName('/')).toBe('/');
+    expect(repoName('')).toBe('');
   });
 });
 

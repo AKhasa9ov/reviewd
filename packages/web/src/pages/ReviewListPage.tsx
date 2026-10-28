@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import type { ApiClient, ReviewSummary } from '@dsh-code-review/ui';
 import {
   Badge,
@@ -66,10 +66,57 @@ function ReviewRow({ review }: { review: ReviewSummary }): JSX.Element {
   );
 }
 
+/** Last path segment, with the original path as the fallback for roots and empty values. */
+export function repoName(repoRoot: string): string {
+  const trimmed = repoRoot.replace(/[\\/]+$/, '');
+  if (trimmed === '' || /^[A-Za-z]:$/.test(trimmed)) return repoRoot;
+  const separator = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
+  return trimmed.slice(separator + 1) || repoRoot;
+}
+
 function matchesQuery(review: ReviewSummary, query: string): boolean {
   const value = query.trim().toLowerCase();
   if (value === '') return true;
   return review.title.toLowerCase().includes(value) || review.id.toLowerCase().includes(value);
+}
+
+interface ReviewGroupProps {
+  repoRoot: string;
+  reviews: ReviewSummary[];
+  collapsed: boolean;
+  onToggle: (repoRoot: string) => void;
+}
+
+function ReviewGroup({ repoRoot, reviews, collapsed, onToggle }: ReviewGroupProps): JSX.Element {
+  const id = useId();
+  const headingId = `${id}-heading`;
+  const rowsId = `${id}-rows`;
+  const count = reviews.length === 1 ? '1 review' : `${reviews.length} reviews`;
+  return (
+    <section className="cr-review-group" aria-labelledby={headingId}>
+      <h2 className="cr-review-group-heading" id={headingId}>
+        <button
+          type="button"
+          className="cr-review-group-toggle"
+          aria-expanded={!collapsed}
+          aria-controls={rowsId}
+          onClick={() => onToggle(repoRoot)}
+        >
+          <span className="cr-review-group-chevron" aria-hidden="true" />
+          <span className="cr-review-group-name">{repoName(repoRoot)}</span>
+          <span className="cr-review-group-path" title={repoRoot}>
+            {repoRoot}
+          </span>
+          <span className="cr-review-group-count">{count}</span>
+        </button>
+      </h2>
+      <div className="cr-review-group-rows" id={rowsId} hidden={collapsed}>
+        {reviews.map((review) => (
+          <ReviewRow review={review} key={review.id} />
+        ))}
+      </div>
+    </section>
+  );
 }
 
 export interface ReviewListPageProps {
@@ -84,6 +131,7 @@ export function ReviewListPage({ client }: ReviewListPageProps): JSX.Element {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
 
   const load = useCallback(
     async (signal: AbortSignal) => {
@@ -118,6 +166,25 @@ export function ReviewListPage({ client }: ReviewListPageProps): JSX.Element {
     () => (reviews ?? []).filter((review) => matchesQuery(review, query)),
     [query, reviews],
   );
+
+  const groups = useMemo(() => {
+    const byRepo = new Map<string, ReviewSummary[]>();
+    for (const review of filtered) {
+      const rows = byRepo.get(review.repoRoot);
+      if (rows === undefined) byRepo.set(review.repoRoot, [review]);
+      else rows.push(review);
+    }
+    return [...byRepo.entries()];
+  }, [filtered]);
+
+  const toggleGroup = useCallback((repoRoot: string) => {
+    setCollapsedGroups((current) => {
+      const next = new Set(current);
+      if (next.has(repoRoot)) next.delete(repoRoot);
+      else next.add(repoRoot);
+      return next;
+    });
+  }, []);
 
   if (error !== null && reviews === null) {
     return (
@@ -224,8 +291,14 @@ export function ReviewListPage({ client }: ReviewListPageProps): JSX.Element {
             <span>Status</span>
             <span>Not fixed</span>
           </div>
-          {filtered.map((review) => (
-            <ReviewRow review={review} key={review.id} />
+          {groups.map(([repoRoot, groupReviews]) => (
+            <ReviewGroup
+              key={repoRoot}
+              repoRoot={repoRoot}
+              reviews={groupReviews}
+              collapsed={collapsedGroups.has(repoRoot)}
+              onToggle={toggleGroup}
+            />
           ))}
         </div>
       )}

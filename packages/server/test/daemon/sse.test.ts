@@ -28,6 +28,7 @@ class FakeService {
     const items: ReviewSummary[] = [...this.byId.keys()].map((id) => ({
       id,
       title: id,
+      repoRoot: '/srv/repo',
       status: 'open',
       createdAt: '2026-01-01T00:00:00.000Z',
       roundCount: 1,

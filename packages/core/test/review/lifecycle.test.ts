@@ -118,6 +118,7 @@ describe('ReviewLifecycle', () => {
       {
         id: review.id,
         title: 'Review state',
+        repoRoot: '/tmp/repo',
         status: 'open',
         createdAt: review.createdAt,
         roundCount: 0,
