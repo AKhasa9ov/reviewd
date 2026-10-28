@@ -57,6 +57,23 @@ Terminal gate:
 `AgentStatus` получает `partial`. Review не может стать `done` только потому, что
 пришёл report.
 
+### 3.1 R1 bridge без shards
+
+R1 ещё не умеет планировать shards, но обязан быть честным. Поэтому reviewd
+строит coverage из manifest и **prompt coverage** при enqueue:
+
+- файл с hunks, попавший в `Snapshot.files`, получает `pending`;
+- файл без hunks/за render-бюджетом получает `skipped` с причиной
+  (`render-budget`, `binary`, `ignored`) или `manifest-only` для policy-excluded;
+- после принятого report `pending` становится `light-reviewed` — это означает
+  «был в контексте единственного reviewer'а», а не «глубоко проверен»;
+- review становится `done` только если нет `skipped/failed/deferred/pending`;
+  иначе `partial`.
+
+R3 заменит эту эвристику настоящим shard coverage. Legacy review без coverage
+сохраняет `done`, чтобы не ломать исторические данные; новые snapshot v2 всегда
+несут coverage.
+
 ## 4. Ownership
 
 | Слой | Владеет |
