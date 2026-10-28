@@ -362,6 +362,53 @@ test('selects a comment range by dragging across diff lines', async ({ page }) =
   await expect(page.getByRole('form', { name: /Comment on lines 1–2/ })).toBeVisible();
 });
 
+test('selects a full-file range by dragging across line rows', async ({ page }) => {
+  await openReview(page);
+  await page.getByRole('tab', { name: /Files changed/ }).click();
+  await page.getByRole('button', { name: 'Full diff to base' }).click();
+  await expect(
+    page.getByRole('tabpanel', { name: 'Files changed' }).getByText('base → head'),
+  ).toBeVisible();
+
+  await page.getByRole('button', { name: 'View full file for src/config.ts' }).click();
+  const dialog = page.getByRole('dialog', { name: 'src/config.ts' });
+  await expect(dialog).toBeVisible();
+
+  const start = dialog.getByRole('row', { name: /Line 2, added: retries: 3,/ });
+  const via = dialog.getByRole('row', { name: /Line 3, unchanged: timeoutMs: 500,/ });
+  const end = dialog.getByRole('row', { name: /Line 4, unchanged: label: 'config',/ });
+  await expect(start).toBeVisible();
+  await expect(end).toBeVisible();
+
+  // Hovering first settles the dialog entrance animation before we take coordinates.
+  await start.hover();
+  const startBox = await start.boundingBox();
+  if (startBox === null) throw new Error('the start row has no box');
+  // Keep the pointer near the left edge so the drag never crosses the per-line + action.
+  const dragX = startBox.x + 40;
+  await page.mouse.move(dragX, startBox.y + startBox.height / 2);
+  await page.mouse.down();
+
+  // The first row change reveals the toolbar range button, which grows the toolbar
+  // and shifts rows down; measure the end row only after that layout has rendered.
+  const viaBox = await via.boundingBox();
+  if (viaBox === null) throw new Error('the via row has no box');
+  await page.mouse.move(dragX, viaBox.y + viaBox.height / 2);
+  await expect(dialog.locator('.cr-full-file-toolbar').getByRole('button')).toBeVisible();
+  const endBox = await end.boundingBox();
+  if (endBox === null) throw new Error('the end row has no box');
+  await page.mouse.move(dragX, endBox.y + endBox.height / 2, { steps: 2 });
+  await page.mouse.up();
+
+  await expect(dialog.getByRole('form', { name: 'Comment on lines 2–4' })).toBeVisible();
+  for (const no of [2, 3, 4]) {
+    await expect(dialog.getByRole('row', { name: new RegExp(`Line ${no},`) })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+  }
+});
+
 test('edits and deletes its own review and comment from the browser', async ({ page }) => {
   const fx = await login(page);
   const headers = {

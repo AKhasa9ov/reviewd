@@ -34,6 +34,18 @@ function file(overrides: Partial<FileDiff> = {}): FileDiff {
   };
 }
 
+function fourLineFile(): FileDiff {
+  return file({
+    path: 'src/drag.ts',
+    status: 'modified',
+    added: 0,
+    deleted: 0,
+    hunks: [],
+    oldLines: ['alpha', 'beta', 'gamma', 'delta'],
+    newLines: ['alpha', 'beta', 'gamma', 'delta'],
+  });
+}
+
 describe('FullFileDialog', () => {
   it('shows an explicit message for binary files without a version toggle', () => {
     render(
@@ -125,6 +137,189 @@ describe('FullFileDialog', () => {
 
     expect(row).toHaveAttribute('aria-selected', 'true');
     expect(onOpenComposer).toHaveBeenCalledWith('new', 2, 2);
+  });
+
+  it('keeps a stationary press unselected and still selects on click', () => {
+    const onOpenComposer = vi.fn();
+    render(
+      <FullFileDialog
+        file={fourLineFile()}
+        round={1}
+        onOpenComposer={onOpenComposer}
+        onClose={vi.fn()}
+      />,
+    );
+    const dialog = screen.getByRole('dialog', { name: 'src/drag.ts' });
+    const line1 = within(dialog).getByRole('row', { name: /Line 1, unchanged: alpha/ });
+
+    fireEvent.mouseDown(line1);
+    expect(document.body).toHaveClass('cr-selecting-lines');
+    fireEvent.mouseOver(line1);
+    expect(line1).toHaveAttribute('aria-selected', 'false');
+    expect(dialog.querySelector('.cr-full-file-toolbar button')).toBeNull();
+
+    fireEvent.mouseUp(window);
+    expect(document.body).not.toHaveClass('cr-selecting-lines');
+    fireEvent.click(line1);
+
+    expect(line1).toHaveAttribute('aria-selected', 'true');
+    expect(dialog.querySelector('.cr-full-file-toolbar button')).toHaveTextContent(
+      'Comment on line 1',
+    );
+    expect(onOpenComposer).not.toHaveBeenCalled();
+  });
+
+  it('selects a contiguous range by dragging and opens the composer on release', () => {
+    const onOpenComposer = vi.fn();
+    render(
+      <FullFileDialog
+        file={fourLineFile()}
+        round={1}
+        onOpenComposer={onOpenComposer}
+        onClose={vi.fn()}
+      />,
+    );
+    const dialog = screen.getByRole('dialog', { name: 'src/drag.ts' });
+    const line1 = within(dialog).getByRole('row', { name: /Line 1, unchanged: alpha/ });
+    const line2 = within(dialog).getByRole('row', { name: /Line 2, unchanged: beta/ });
+    const line3 = within(dialog).getByRole('row', { name: /Line 3, unchanged: gamma/ });
+    const line4 = within(dialog).getByRole('row', { name: /Line 4, unchanged: delta/ });
+
+    fireEvent.mouseDown(line1);
+    expect(document.body).toHaveClass('cr-selecting-lines');
+    fireEvent.mouseOver(line2);
+    fireEvent.mouseOver(line3);
+    fireEvent.mouseOver(line4);
+    expect(line1).toHaveAttribute('aria-selected', 'true');
+    expect(line4).toHaveAttribute('aria-selected', 'true');
+
+    fireEvent.mouseUp(window);
+
+    expect(document.body).not.toHaveClass('cr-selecting-lines');
+    expect(onOpenComposer).toHaveBeenCalledTimes(1);
+    expect(onOpenComposer).toHaveBeenCalledWith('new', 1, 4);
+    for (const row of [line1, line2, line3, line4]) {
+      expect(row).toHaveAttribute('aria-selected', 'true');
+    }
+    expect(within(dialog).getByRole('button', { name: 'Comment on lines 1–4' })).toBeVisible();
+  });
+
+  it('keeps a dragged range when the click that follows the drag lands on a row', () => {
+    const onOpenComposer = vi.fn();
+    render(
+      <FullFileDialog
+        file={fourLineFile()}
+        round={1}
+        onOpenComposer={onOpenComposer}
+        onClose={vi.fn()}
+      />,
+    );
+    const dialog = screen.getByRole('dialog', { name: 'src/drag.ts' });
+    const line1 = within(dialog).getByRole('row', { name: /Line 1, unchanged: alpha/ });
+    const line2 = within(dialog).getByRole('row', { name: /Line 2, unchanged: beta/ });
+    const line4 = within(dialog).getByRole('row', { name: /Line 4, unchanged: delta/ });
+
+    fireEvent.mouseDown(line1);
+    fireEvent.mouseOver(line2);
+    fireEvent.mouseOver(line4);
+    fireEvent.mouseUp(window);
+    expect(onOpenComposer).toHaveBeenCalledWith('new', 1, 4);
+
+    fireEvent.click(line4);
+
+    expect(onOpenComposer).toHaveBeenCalledTimes(1);
+    expect(line1).toHaveAttribute('aria-selected', 'true');
+    expect(line4).toHaveAttribute('aria-selected', 'true');
+    expect(within(dialog).getByRole('button', { name: 'Comment on lines 1–4' })).toBeVisible();
+  });
+
+  it('does not start a row drag from the per-line comment action', () => {
+    const onOpenComposer = vi.fn();
+    render(
+      <FullFileDialog
+        file={fourLineFile()}
+        round={1}
+        onOpenComposer={onOpenComposer}
+        onClose={vi.fn()}
+      />,
+    );
+    const dialog = screen.getByRole('dialog', { name: 'src/drag.ts' });
+    const line1 = within(dialog).getByRole('row', { name: /Line 1, unchanged: alpha/ });
+    const line4 = within(dialog).getByRole('row', { name: /Line 4, unchanged: delta/ });
+
+    fireEvent.mouseDown(within(line1).getByRole('button', { name: 'Comment on line 1' }));
+    fireEvent.mouseOver(line4);
+    fireEvent.mouseUp(window);
+
+    expect(onOpenComposer).not.toHaveBeenCalled();
+    expect(document.body).not.toHaveClass('cr-selecting-lines');
+    expect(line1).toHaveAttribute('aria-selected', 'false');
+    expect(line4).toHaveAttribute('aria-selected', 'false');
+  });
+
+  it('selects a dragged range but does not open a composer in a read-only dialog', () => {
+    const onOpenComposer = vi.fn();
+    render(
+      <FullFileDialog
+        file={fourLineFile()}
+        round={1}
+        readOnly
+        onOpenComposer={onOpenComposer}
+        onClose={vi.fn()}
+      />,
+    );
+    const dialog = screen.getByRole('dialog', { name: 'src/drag.ts' });
+    const line2 = within(dialog).getByRole('row', { name: /Line 2, unchanged: beta/ });
+    const line3 = within(dialog).getByRole('row', { name: /Line 3, unchanged: gamma/ });
+
+    fireEvent.mouseDown(line2);
+    fireEvent.mouseOver(line3);
+    fireEvent.mouseUp(window);
+
+    expect(onOpenComposer).not.toHaveBeenCalled();
+    expect(line2).toHaveAttribute('aria-selected', 'true');
+    expect(line3).toHaveAttribute('aria-selected', 'true');
+    expect(
+      within(dialog).queryByRole('button', { name: /Comment on lines/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('clears an in-flight drag when the file version changes', () => {
+    const onOpenComposer = vi.fn();
+    render(
+      <FullFileDialog file={file()} round={1} onOpenComposer={onOpenComposer} onClose={vi.fn()} />,
+    );
+    const dialog = screen.getByRole('dialog', { name: 'src/app.ts' });
+    const currentLine1 = within(dialog).getByRole('row', { name: /Line 1, unchanged:/ });
+    const currentLine2 = within(dialog).getByRole('row', { name: /Line 2, added:/ });
+
+    fireEvent.mouseDown(currentLine1);
+    fireEvent.mouseOver(currentLine2);
+    expect(document.body).toHaveClass('cr-selecting-lines');
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Base' }));
+
+    expect(document.body).not.toHaveClass('cr-selecting-lines');
+    expect(within(dialog).getByRole('row', { name: /Line 1, unchanged:/ })).toHaveAttribute(
+      'aria-selected',
+      'false',
+    );
+    fireEvent.mouseUp(window);
+    expect(onOpenComposer).not.toHaveBeenCalled();
+  });
+
+  it('removes the drag styling when the dialog unmounts mid-drag', () => {
+    const { unmount } = render(
+      <FullFileDialog file={fourLineFile()} round={1} onClose={vi.fn()} />,
+    );
+    const dialog = screen.getByRole('dialog', { name: 'src/drag.ts' });
+
+    fireEvent.mouseDown(within(dialog).getByRole('row', { name: /Line 1, unchanged: alpha/ }));
+    expect(document.body).toHaveClass('cr-selecting-lines');
+
+    unmount();
+
+    expect(document.body).not.toHaveClass('cr-selecting-lines');
   });
 
   it('renders a comment thread in a full-width row', () => {

@@ -49,6 +49,12 @@ interface Selection {
   end: number;
 }
 
+interface DragState {
+  side: Side;
+  anchor: number;
+  last: number;
+}
+
 function sideLabel(side: Side): string {
   return side === 'new' ? 'Current' : 'Base';
 }
@@ -116,6 +122,13 @@ export function FullFileDialog({
   );
   const activeSideRef = useRef<Side | null>(null);
   const commentAtSelectionRef = useRef<() => void>(() => {});
+  const dragRef = useRef<DragState | null>(null);
+  const suppressClickRef = useRef(false);
+  // Keep the mount-only mouseup listener current without re-registering on every parent render.
+  const onOpenComposerRef = useRef(onOpenComposer);
+  const readOnlyRef = useRef(readOnly);
+  onOpenComposerRef.current = onOpenComposer;
+  readOnlyRef.current = readOnly;
 
   useEffect(() => {
     setShowAll(false);
@@ -131,6 +144,8 @@ export function FullFileDialog({
     const first = activeSideRef.current === null;
     activeSideRef.current = activeSide;
     if (first) return;
+    dragRef.current = null;
+    document.body.classList.remove('cr-selecting-lines');
     setAnchor(1);
     setSelection(null);
     if (composer !== null && composer.side !== activeSide) onCancelComposer?.();
@@ -168,6 +183,32 @@ export function FullFileDialog({
   // Refresh the controller closure every render so the route never reads a stale selection.
   commentAtSelectionRef.current = commentAtSelection;
 
+  // Mount once: refs supply the latest props, and a drag that moved opens its range composer.
+  useEffect(() => {
+    function finishDrag(): void {
+      const drag = dragRef.current;
+      dragRef.current = null;
+      document.body.classList.remove('cr-selecting-lines');
+      if (drag === null || drag.last === drag.anchor) return;
+      suppressClickRef.current = true;
+      window.setTimeout(() => {
+        suppressClickRef.current = false;
+      }, 0);
+      if (readOnlyRef.current) return;
+      onOpenComposerRef.current?.(
+        drag.side,
+        Math.min(drag.anchor, drag.last),
+        Math.max(drag.anchor, drag.last),
+      );
+    }
+    window.addEventListener('mouseup', finishDrag);
+    return () => {
+      window.removeEventListener('mouseup', finishDrag);
+      dragRef.current = null;
+      document.body.classList.remove('cr-selecting-lines');
+    };
+  }, []);
+
   useEffect(() => {
     if (controllerRef === undefined) return;
     const controller: FullFileController = {
@@ -184,6 +225,33 @@ export function FullFileDialog({
     setAnchor(no);
     setSelection({ start: no, end: no });
     onOpenComposer(activeSide, no, no);
+  }
+
+  function beginLineDrag(no: number, event: ReactMouseEvent<HTMLDivElement>): void {
+    event.preventDefault();
+    event.currentTarget.focus({ preventScroll: true });
+    // Do not select the anchor here: the toolbar range button would grow the toolbar
+    // and shift rows out from under a stationary click. The first row change selects.
+    setAnchor(no);
+    dragRef.current = { side: activeSide, anchor: no, last: no };
+    document.body.classList.add('cr-selecting-lines');
+  }
+
+  function enterLine(no: number): void {
+    const drag = dragRef.current;
+    if (drag === null || drag.side !== activeSide) return;
+    if (no === drag.anchor && drag.last === drag.anchor) return;
+    drag.last = no;
+    setSelection({
+      start: Math.min(drag.anchor, no),
+      end: Math.max(drag.anchor, no),
+    });
+  }
+
+  function consumeSuppressedClick(): boolean {
+    if (!suppressClickRef.current) return false;
+    suppressClickRef.current = false;
+    return true;
   }
 
   function focusLineNumber(no: number): void {
@@ -302,7 +370,8 @@ export function FullFileDialog({
           <>
             <div className="cr-full-file-toolbar">
               <p className="cr-meta">
-                Click a line, or focus one and use ↑/↓. Shift-click or Shift+↑/↓ selects a range.
+                Click a line, drag across rows, or focus one and use ↑/↓. Shift-click or Shift+↑/↓
+                selects a range.
               </p>
               {selection !== null && onOpenComposer !== undefined && !readOnly ? (
                 <Button size="small" variant="secondary" onClick={openSelectionComposer}>
@@ -347,9 +416,22 @@ export function FullFileDialog({
                       tabIndex={no === focusLine ? 0 : -1}
                       aria-selected={selected}
                       aria-label={`Line ${no}, ${kind}: ${text || '(blank)'}`}
-                      onClick={(event: ReactMouseEvent<HTMLDivElement>) =>
-                        selectLine(no, event.shiftKey)
-                      }
+                      onMouseDown={(event) => {
+                        if (event.button !== 0 || event.shiftKey) return;
+                        const target = event.target as HTMLElement | null;
+                        if (
+                          target === null ||
+                          target.closest('button, a, input, textarea, select') !== null
+                        ) {
+                          return;
+                        }
+                        beginLineDrag(no, event);
+                      }}
+                      onMouseOver={() => enterLine(no)}
+                      onClick={(event: ReactMouseEvent<HTMLDivElement>) => {
+                        if (consumeSuppressedClick()) return;
+                        selectLine(no, event.shiftKey);
+                      }}
                       onKeyDown={(event) => onLineKeyDown(event, no)}
                     >
                       <span className="cr-full-file-no" role="cell" aria-hidden="true">
@@ -369,6 +451,7 @@ export function FullFileDialog({
                             aria-label={`Comment on line ${no}`}
                             onClick={(event) => {
                               event.stopPropagation();
+                              if (consumeSuppressedClick()) return;
                               commentOnLine(no);
                             }}
                           >
