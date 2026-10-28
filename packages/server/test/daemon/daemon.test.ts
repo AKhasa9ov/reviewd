@@ -720,6 +720,33 @@ describe('daemon limits, leases and gc', () => {
     expect(view.report).toBeNull();
   });
 
+  it('cancels a queued worker after the reviewer backend is switched away', async () => {
+    const { daemonUrl } = await running();
+    const checkout = await repo();
+    const created = await createReview(daemonUrl, { backend: 'worker' }, checkout.root);
+    const reviewId = created.body.review.review.id;
+
+    const switched = await fetch(`${daemonUrl}/api/reviews/${reviewId}`, {
+      method: 'PATCH',
+      headers: headers(),
+      body: JSON.stringify({ reviewer: { backend: 'none' } }),
+    });
+    expect(switched.status).toBe(200);
+    expect((await read(switched)).review.reviewer.backend).toBe('none');
+
+    const cancel = await fetch(`${daemonUrl}/api/reviews/${reviewId}/agent/cancel`, {
+      method: 'POST',
+      headers: headers(),
+      body: '{}',
+    });
+    expect(cancel.status).toBe(200);
+    const canceled = await read(
+      await fetch(`${daemonUrl}/api/reviews/${reviewId}`, { headers: headers() }),
+    );
+    expect(canceled.review.agent.status).toBe('failed');
+    expect(canceled.review.agent.error).toMatch(/canceled/);
+  });
+
   it('fails a worker agent canceled before it is leased and unblocks refresh', async () => {
     const { daemonUrl } = await running();
     const checkout = await repo();

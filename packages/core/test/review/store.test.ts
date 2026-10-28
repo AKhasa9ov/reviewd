@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  coverageFromPrompt,
   fold,
   ReviewStore,
   ReviewStoreCorruptionError,
@@ -495,6 +496,20 @@ describe('ReviewStore', () => {
     expect(snapshot.manifest).toBeDefined();
     expect(snapshot.manifest?.files).toEqual([]);
     expect(snapshot.manifest?.warnings).toEqual([]);
+    await store.close();
+  });
+
+  it('marks a synthesized v2 manifest incomplete when the manifest is missing', async () => {
+    const root = await tempRoot();
+    const store = await ReviewStore.open(root);
+    await store.writeSnapshot('snap_1', { ...snapshotFixture(), schemaVersion: 2 });
+
+    const snapshot = await store.readSnapshot('snap_1');
+
+    expect(snapshot.schemaVersion).toBe(2);
+    expect(snapshot.manifest?.warnings).toContain('manifest-missing');
+    const coverage = coverageFromPrompt(snapshot.manifest!, []);
+    expect(coverage.incomplete).toBe(true);
     await store.close();
   });
 

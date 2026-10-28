@@ -301,19 +301,19 @@ interface ManifestFile {
   added: number; deleted: number;
   hunkCount: number; patchBytes: number;
   reason?: 'render-budget' | 'diff-truncated' | 'per-file-cap' | 'binary'
-    | 'ignored' | 'generated' | 'unreadable' | 'legacy-truncated';
+    | 'ignored' | 'generated' | 'unreadable' | 'legacy-truncated' | 'symlink';
 }
 
 interface ReviewCoverage {
   files: Array<{
     path: string;
     status: 'pending' | 'deep-reviewed' | 'light-reviewed' | 'manifest-only'
-      | 'skipped' | 'deferred' | 'failed';
+      | 'skipped' | 'no-hunks' | 'deferred' | 'failed';
     reason?: string;
     shardId?: string;                      // появится в R3
   }>;
   totals: { files: number; byStatus: Record<string, number> };
-  incomplete?: boolean;                    // манифест обрезан listing-cap
+  incomplete?: boolean;                    // listing-cap или synthesized manifest-missing
 }
 
 interface FileSnapshot {
@@ -412,7 +412,7 @@ interface Submission {
 ### 6.2 Статусы
 
 - `Review.status`: `open` (можно комментировать/refresh) → `submitted` (отправлено, ждём правок; новый раунд разрешён) → `closed` (approved/закрыто вручную; комментарии read-only).
-- `Review.agent.status`: `queued → running → done | partial | failed | skipped`. `done` ставится только когда все пути известного манифеста финальны и сам манифест не помечен `incomplete`; любой `pending`/`skipped`/`deferred`/`failed` или warning `manifest-listing-truncated` даёт `partial`. Legacy review без coverage сохраняет прежнее поведение (`done` после принятого отчёта). `partial` в случае listing-cap означает, что покрытие известного манифеста не доказывает полное покрытие диапазона.
+- `Review.agent.status`: `queued → running → done | partial | failed | skipped`. `done` ставится только когда все пути известного манифеста финальны и сам манифест не помечен `incomplete`; любой `pending`/`skipped`/`deferred`/`failed` или warning `manifest-listing-truncated`/`manifest-missing` даёт `partial`. `no-hunks` — терминальный статус для файла без изменяемого содержимого (pure rename, mode-only, empty file, untracked symlink, цель которого намеренно не разыменовывается); это не «не проверен». Legacy review без coverage сохраняет прежнее поведение (`done` после принятого отчёта). `partial` в случае listing-cap означает, что покрытие известного манифеста не доказывает полное покрытие диапазона.
 - `Comment.state`: `open ⇄ resolved`, `dismissed`.
 - `Suggestion.state`: `proposed → accepted | applied | declined`, `stale` при расхождении HEAD.
 - `Delivery.state`: `pending → sending → acked | failed` (в store: `delivery/*`).
@@ -597,9 +597,9 @@ interface Job {
 4. «Спорные» вопросы — отдельным списком `questions`, если решение зависит от продукта/намерения.
 5. Выход: строго JSON по схеме; либо tool-вызовы, либо файл `REVIEW_OUTPUT`.
 
-`diff.json`: `{review, round, files[], signals[]}` — стабильный формат. В prompt попадает только bounded unified diff (60k символов); список файлов строится из манифеста, а не из render subset.
+`diff.json`: `{review, round, files[], signals[]}` — стабильный формат. В prompt попадает только bounded unified diff (60k символов) из `Snapshot.files`; полный `manifest` едет в `bundle.manifest` для coverage и не вставляется в prompt отдельным списком.
 
-**Coverage R1.** При enqueue worker-job reviewd строит coverage ledger из манифеста (полного до listing-cap) и путей, чьи заголовки реально попали в prompt: файл с hunks в prompt — `pending`; binary/generated/ignored — `manifest-only`; остальные — `skipped` с причиной. Принятый report переводит `pending` в `light-reviewed` (в контексте одного reviewer'а, не «глубоко проверен»). Worker report не несёт per-file статуса ревью, поэтому `light-reviewed` здесь означает «файл был в контексте и reviewer завершил раунд», а не независимое подтверждение по каждому файлу; R3 заменит это shard-level evidence. Если остался хотя бы один `skipped`/`pending`/`deferred`/`failed`, round становится `partial`; `done` возможен только при полном покрытии известного манифеста и отсутствии `incomplete`. При `manifest-listing-truncated` ledger помечается `incomplete`, поэтому round всегда `partial`: неизвестные пути в ledger не попали. R1 не обещает полное ревью большого PR: 882-файловый диапазон при лимите prompt остаётся `partial`, пока R3 не введёт shards.
+**Coverage R1.** При enqueue worker-job reviewd строит coverage ledger из манифеста (полного до listing-cap) и путей, чьи заголовки реально попали в prompt: файл с hunks в prompt — `pending`; binary/generated/ignored — `manifest-only`; файл без изменяемого содержимого (pure rename, mode-only, empty file, untracked symlink) — терминальный `no-hunks`; остальные — `skipped` с причиной. Принятый report переводит `pending` в `light-reviewed` (в контексте одного reviewer'а, не «глубоко проверен»). Worker report не несёт per-file статуса ревью, поэтому `light-reviewed` здесь означает «файл был в контексте и reviewer завершил раунд», а не независимое подтверждение по каждому файлу; R3 заменит это shard-level evidence. Если остался хотя бы один `skipped`/`pending`/`deferred`/`failed`, round становится `partial`; `done` возможен только при полном покрытии известного манифеста и отсутствии `incomplete`. При `manifest-listing-truncated`, `untracked-list-truncated` или синтезированном `manifest-missing` ledger помечается `incomplete`, поэтому round всегда `partial`: неизвестные пути в ledger не попали. R1 не обещает полное ревью большого PR: 882-файловый диапазон при лимите prompt остаётся `partial`, пока R3 не введёт shards.
 
 ### 9.3 Output schema (v1)
 

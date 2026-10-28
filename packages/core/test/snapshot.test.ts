@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { symlink } from 'node:fs/promises';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   buildReviewManifest,
@@ -134,6 +136,27 @@ describe('buildSnapshot', () => {
     expect(result.scope.headSha).toBeNull();
     expect(result.files).toHaveLength(1);
     expect(result.files[0]?.newLines).toEqual(['line1', 'line2 worktree']);
+  });
+
+  it('records an untracked symlink as symlink without following it', async () => {
+    const repo = await featureRepo();
+    await repo.git('checkout', 'main');
+    await symlink('src/a.ts', join(repo.root, 'link.ts'));
+
+    const result = await buildSnapshot({
+      repoRoot: repo.root,
+      scope: { kind: 'worktree', baseRef: 'main' },
+    });
+
+    expect(result.files).toHaveLength(0);
+    expect(result.manifest?.files.find((file) => file.path === 'link.ts')).toMatchObject({
+      status: 'untracked',
+      reason: 'symlink',
+      hunkCount: 0,
+      added: 0,
+      deleted: 0,
+    });
+    expect(result.warnings).toContain('symlink-not-followed:link.ts');
   });
 
   it('marks files over maxFileLines as oversized and skips their content', async () => {
@@ -979,6 +1002,22 @@ describe('review manifest', () => {
 
     expect(manifest.files.map((file) => file.path)).toEqual(['src/file-001.ts']);
     expect(manifest.warnings).toEqual([]);
+  });
+
+  it('marks a synthesized v2 manifest as missing instead of legacy-truncated', () => {
+    const current: Snapshot = {
+      schemaVersion: 2,
+      scope: manifestScope,
+      files: [changedFile(1)],
+      totals: { files: 1, added: 1, deleted: 0, truncated: false },
+      warnings: [],
+    };
+
+    const manifest = manifestFromSnapshot(current);
+
+    expect(manifest.files.map((file) => file.path)).toEqual(['src/file-001.ts']);
+    expect(manifest.warnings).toEqual(['manifest-missing']);
+    expect(manifest.warnings).not.toContain('legacy-truncated');
   });
 
   it('keeps the manifest carried by a v2 snapshot', () => {

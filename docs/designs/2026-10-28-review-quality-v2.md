@@ -43,6 +43,8 @@ Legacy snapshot v1 читается; синтезированный манифе
 - `light-reviewed`;
 - `manifest-only` — политика явно исключила содержимое (binary/generated/lockfile);
 - `skipped` — пропущен с причиной;
+- `no-hunks` — изменяемого содержимого нет (pure rename, mode-only, empty file,
+  untracked symlink); терминальный, не «не проверен»;
 - `deferred` — бюджет исчерпан;
 - `failed`.
 
@@ -50,7 +52,8 @@ Terminal gate:
 
 - `done` — все deep/light единицы успешны, у каждого файла финальный статус, нет
   `pending/skipped/deferred/failed`; `manifest-only` допустим только для
-  policy-excluded файлов;
+  policy-excluded файлов, `no-hunks` — для включённых файлов без изменяемого
+  содержимого;
 - `partial` — любая незавершённая/пропущенная работа;
 - `failed` — не удалось получить coverage/aggregate.
 
@@ -63,6 +66,9 @@ R1 ещё не умеет планировать shards, но обязан бы�
 строит coverage из manifest и **prompt coverage** при enqueue:
 
 - файл с hunks, попавший в `Snapshot.files`, получает `pending`;
+- файл без hunks и без бюджета (`added=deleted=0`), включая untracked symlink,
+  получает терминальный `no-hunks` — он не должен навсегда делать раунд
+  `partial`;
 - файл без hunks/за render-бюджетом получает `skipped` с причиной
   (`render-budget`, `binary`, `ignored`) или `manifest-only` для policy-excluded;
 - после принятого report `pending` становится `light-reviewed` — это означает

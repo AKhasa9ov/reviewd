@@ -7,6 +7,7 @@ export const COVERAGE_STATUSES: readonly CoverageStatus[] = Object.freeze([
   'light-reviewed',
   'manifest-only',
   'skipped',
+  'no-hunks',
   'deferred',
   'failed',
 ]);
@@ -24,12 +25,14 @@ const SKIP_REASONS = new Set<ManifestFileReason>([
   'diff-truncated',
   'unreadable',
   'legacy-truncated',
+  'symlink',
 ]);
 
 /** Warnings that prove the manifest's changed-path listing itself was cut. */
 const INCOMPLETE_MANIFEST_WARNINGS = new Set([
   'manifest-listing-truncated',
   'untracked-list-truncated',
+  'manifest-missing',
 ]);
 
 /**
@@ -78,7 +81,10 @@ function skipReason(file: ManifestFile): ManifestFileReason {
  * Builds the R1 coverage bridge from the complete manifest and the paths whose
  * file header made it into the prompt. Policy-excluded content is explicitly
  * `manifest-only`; an included file with a reviewable hunk is `pending` and may
- * at most become `light-reviewed` after the report. Everything else is
+ * at most become `light-reviewed` after the report. A file with no content
+ * change (pure rename, mode-only, empty file, or an untracked symlink whose
+ * target is deliberately not followed) is terminal `no-hunks`, because there
+ * is nothing to inspect and it was not dropped by a budget. Everything else is
  * `skipped` with the manifest reason (or `render-budget` when the prompt
  * dropped it). This never mutates the manifest.
  */
@@ -92,8 +98,19 @@ export function coverageFromPrompt(
     if (policy !== undefined) {
       return { path: file.path, status: 'manifest-only', reason: policy };
     }
-    if (included.has(file.path) && file.hunkCount > 0) {
-      return { path: file.path, status: 'pending' };
+    if (
+      file.reason === 'symlink' &&
+      file.hunkCount === 0 &&
+      file.added === 0 &&
+      file.deleted === 0
+    ) {
+      return { path: file.path, status: 'no-hunks' };
+    }
+    if (included.has(file.path)) {
+      if (file.hunkCount > 0) return { path: file.path, status: 'pending' };
+      if (file.reason === undefined && file.added === 0 && file.deleted === 0) {
+        return { path: file.path, status: 'no-hunks' };
+      }
     }
     return { path: file.path, status: 'skipped', reason: skipReason(file) };
   });
@@ -116,6 +133,9 @@ export function isCoverageComplete(coverage: ReviewCoverage): boolean {
   const knownCount = COVERAGE_STATUSES.reduce((sum, status) => sum + computed.byStatus[status], 0);
   if (knownCount !== coverage.files.length) return false;
   if (coverage.totals.files !== coverage.files.length) return false;
+  for (const status of COVERAGE_STATUSES) {
+    if ((coverage.totals.byStatus[status] ?? 0) !== computed.byStatus[status]) return false;
+  }
   const persistedCount = COVERAGE_STATUSES.reduce(
     (sum, status) => sum + (coverage.totals.byStatus[status] ?? 0),
     0,

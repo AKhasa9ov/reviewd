@@ -24,6 +24,7 @@ const partialCoverage: ReviewCoverage = {
       'light-reviewed': 1,
       'manifest-only': 1,
       skipped: 1,
+      'no-hunks': 0,
       deferred: 0,
       failed: 0,
     },
@@ -38,23 +39,33 @@ const partialView: ReviewView = {
   },
 };
 
+const queuedView: ReviewView = {
+  ...reviewView,
+  review: {
+    ...reviewView.review,
+    agent: { status: 'queued', round: 2, findings: [], coverage: partialCoverage },
+  },
+};
+
 const unresolvedCoverage: ReviewCoverage = {
   files: [
     { path: 'src/reviewed.ts', status: 'light-reviewed' },
     { path: 'src/pending.ts', status: 'pending' },
     { path: 'src/deferred.ts', status: 'deferred', reason: 'shard-budget' },
     { path: 'src/failed.ts', status: 'failed', reason: 'agent-error' },
+    { path: 'src/renamed.ts', status: 'no-hunks' },
     { path: 'src/skipped.ts', status: 'skipped', reason: 'render-budget' },
     { path: 'logo.png', status: 'manifest-only', reason: 'binary' },
   ],
   totals: {
-    files: 6,
+    files: 7,
     byStatus: {
       pending: 1,
       'deep-reviewed': 0,
       'light-reviewed': 1,
       'manifest-only': 1,
       skipped: 1,
+      'no-hunks': 1,
       deferred: 1,
       failed: 1,
     },
@@ -120,8 +131,16 @@ describe('review coverage', () => {
     await screen.findByRole('heading', { name: 'Billing retry semantics' });
     expect(
       screen.getByText(
-        'Reviewed 1/6 files · 1 pending · 1 deferred · 1 failed · 1 skipped · 1 manifest-only · manifest incomplete',
+        'Reviewed 1/7 files · 1 pending · 1 deferred · 1 failed · 1 no-hunks · 1 skipped · 1 manifest-only · manifest incomplete',
       ),
     ).toBeInTheDocument();
+  });
+
+  it('offers cancellation and blocks refresh while a worker is queued', async () => {
+    render(<App client={fakeClient(queuedView)} />);
+
+    await screen.findByRole('heading', { name: 'Billing retry semantics' });
+    expect(screen.getByRole('button', { name: 'Cancel reviewer' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBeDisabled();
   });
 });

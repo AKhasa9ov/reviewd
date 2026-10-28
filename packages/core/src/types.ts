@@ -88,7 +88,8 @@ export type ManifestFileReason =
   | 'legacy-truncated'
   | 'diff-truncated'
   | 'render-budget'
-  | 'unreadable';
+  | 'unreadable'
+  | 'symlink';
 
 /**
  * One changed path in the complete manifest. Every changed path is listed here,

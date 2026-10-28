@@ -723,17 +723,16 @@ export async function handle(
       return;
     }
     if (rest[0] === 'agent' && rest[1] === 'cancel' && method === 'POST') {
-      const view = await ctx.service.get(reviewId);
-      const workerActive =
-        view.review.reviewer?.backend === 'worker' &&
-        (view.review.agent?.status === 'queued' || view.review.agent?.status === 'running');
-      ctx.jobs.cancelReview(reviewId);
+      const canceled = ctx.jobs.cancelReview(reviewId);
+      let serviceOwned = true;
       await ctx.service.cancelAgent(reviewId, ctxFor(req, options.auth)).catch((error: unknown) => {
         if (!(error instanceof ReviewError) || error.code !== 'conflict') throw error;
+        serviceOwned = false;
       });
-      if (workerActive) {
-        // Worker jobs are owned by this daemon's memory queue. A service-side
-        // cancel cannot append for them, so leave a durable terminal event.
+      if (!serviceOwned || canceled.length > 0) {
+        // Worker jobs are owned by this daemon's memory queue, and a persisted
+        // active agent may outlive a reviewer-backend change. A service-side
+        // cancel cannot append for either, so leave a durable terminal event.
         await append(ctx, reviewId, 'agent/failed', {
           code: 'canceled',
           message: 'reviewer canceled by request',

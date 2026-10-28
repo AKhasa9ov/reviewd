@@ -128,13 +128,18 @@ export type CoverageStatus =
   | 'light-reviewed'
   | 'manifest-only'
   | 'skipped'
+  | 'no-hunks'
   | 'deferred'
   | 'failed';
 
 export interface FileCoverage {
   path: string;
   status: CoverageStatus;
-  /** Why the file was not deep/light reviewed, when a reason applies. */
+  /**
+   * Why the file was not deep/light reviewed, when a reason applies. Terminal
+   * `no-hunks` files have no reason: they were in context but have no
+   * reviewable content change.
+   */
   reason?: string;
   /** Shard that owns the file, once review work has been assigned. */
   shardId?: string;
@@ -150,9 +155,9 @@ export interface ReviewCoverage {
   files: FileCoverage[];
   totals: CoverageTotals;
   /**
-   * True when the manifest itself is known to be incomplete (for example a
-   * truncated raw/numstat listing). Such a ledger cannot prove full coverage
-   * even if every known path has a final status.
+   * True when the manifest itself is known to be incomplete (a truncated
+   * raw/numstat listing, or a synthesized `manifest-missing` fallback). Such a
+   * ledger cannot prove full coverage even if every known path is final.
    */
   incomplete?: boolean;
 }

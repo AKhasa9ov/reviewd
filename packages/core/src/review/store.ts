@@ -16,7 +16,7 @@ import { join, resolve } from 'node:path';
 import { isReviewEvent, ReviewEventError } from './events.js';
 import type { ReviewEvent } from './events.js';
 import { fold } from './fold.js';
-import { buildReviewManifest, manifestFromSnapshot } from '../diff/manifest.js';
+import { manifestFromSnapshot } from '../diff/manifest.js';
 import type { FileStatus, ManifestFileReason, ReviewManifest, Snapshot } from '../types.js';
 import type {
   Actor,
@@ -207,6 +207,7 @@ const MANIFEST_REASONS = new Set<ManifestFileReason>([
   'diff-truncated',
   'render-budget',
   'unreadable',
+  'symlink',
 ]);
 
 function isManifestFile(value: unknown): boolean {
@@ -279,8 +280,10 @@ function isSnapshot(value: unknown): value is Snapshot {
 /**
  * API and job consumers expect a manifest. Legacy v1 snapshots are normalized
  * on read (schemaVersion stays 1 so callers can still recognize them); a v2
- * snapshot that somehow lacks one gets a manifest without the legacy warning.
- * A missing v1 totals.truncated means false before the manifest is synthesized.
+ * snapshot that somehow lacks one gets a synthesized manifest marked
+ * `manifest-missing`, so coverage can never treat the bounded render subset as
+ * the complete changed-path listing. A missing v1 totals.truncated means false
+ * before the manifest is synthesized.
  */
 function normalizeSnapshot(snapshot: Snapshot): Snapshot {
   // Older v1 snapshots predate totals.truncated; a missing value means false.
@@ -289,17 +292,7 @@ function normalizeSnapshot(snapshot: Snapshot): Snapshot {
     totals: { ...snapshot.totals, truncated: snapshot.totals.truncated === true },
   };
   if (normalized.manifest !== undefined) return normalized;
-  if (normalized.schemaVersion === 1) {
-    return { ...normalized, manifest: manifestFromSnapshot(normalized) };
-  }
-  return {
-    ...normalized,
-    manifest: buildReviewManifest({
-      scope: normalized.scope,
-      files: normalized.files,
-      warnings: normalized.warnings,
-    }),
-  };
+  return { ...normalized, manifest: manifestFromSnapshot(normalized) };
 }
 
 function isPidAlive(pid: number): boolean {

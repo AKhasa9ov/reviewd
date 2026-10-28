@@ -111,6 +111,9 @@ export function buildReviewManifest(input: {
  * Returns the snapshot's own manifest when present. Legacy v1 snapshots only
  * retain the bounded render subset, so a truncated one gets a
  * `legacy-truncated` warning; a complete v1 snapshot already lists every path.
+ * A v2 snapshot without a manifest is corrupt, so its synthesized manifest is
+ * marked `manifest-missing` and coverage cannot treat the render subset as the
+ * complete changed-path listing.
  *
  * `totals.truncated` is the only aggregate truncation signal a legacy snapshot
  * retains, and it covers files, diff bytes, and content bytes alike. Keeping
@@ -120,7 +123,9 @@ export function buildReviewManifest(input: {
 export function manifestFromSnapshot(snapshot: Snapshot): ReviewManifest {
   if (snapshot.manifest !== undefined) return snapshot.manifest;
   const warnings = [...snapshot.warnings];
-  if (snapshot.totals.truncated && !warnings.includes('legacy-truncated')) {
+  if (snapshot.schemaVersion === 2) {
+    if (!warnings.includes('manifest-missing')) warnings.push('manifest-missing');
+  } else if (snapshot.totals.truncated && !warnings.includes('legacy-truncated')) {
     warnings.push('legacy-truncated');
   }
   return buildReviewManifest({ scope: snapshot.scope, files: snapshot.files, warnings });

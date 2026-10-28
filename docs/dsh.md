@@ -195,10 +195,12 @@ The subagent:
   to its 64 MiB metadata listing cap) and marks the round `done` only when no known path
   is pending, deferred, failed or skipped, and the manifest is complete. A large review
   can be `partial` under the current single-agent prompt; the panel shows the coverage
-  summary (`Reviewed X/Y files`, plus pending/deferred/failed/skipped/manifest-only
-  counts when non-zero). `partial` means the rest of the range was not in the reviewer's
-  context, not that the review failed. A `manifest-listing-truncated` warning marks the
-  ledger `incomplete`, so the round stays `partial` rather than pretending the known
+  summary (`Reviewed X/Y files`, plus pending/deferred/failed/no-hunks/skipped/
+  manifest-only counts when non-zero). `partial` means the rest of the range was not in
+  the reviewer's context, not that the review failed. `no-hunks` is terminal for a
+  pure rename/mode-only/empty file, or an untracked symlink that was deliberately not
+  followed: there is nothing to inspect. A `manifest-listing-truncated` or synthesized `manifest-missing` warning marks
+  the ledger `incomplete`, so the round stays `partial` rather than pretending the known
   manifest is the whole range;
 - reads the report from the durable session log (`agent.session.snapshotEvents()`),
   falling back to the newest earlier parseable report if the last message is prose;

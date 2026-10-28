@@ -767,7 +767,10 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
       const absolute = safeJoin(scope.repoRoot, path);
       const info = await lstat(absolute).catch(() => null);
       if (info?.isSymbolicLink() === true || (await hasSymlinkParent(scope.repoRoot, path))) {
-        seed.reason = 'unreadable';
+        // The link target is deliberately not followed. Mark it as a symlink
+        // rather than unreadable so coverage can treat it as terminal
+        // `no-hunks` instead of pinning every worktree review to `partial`.
+        seed.reason = 'symlink';
         warnings.push(`symlink-not-followed:${path}`);
         continue;
       }

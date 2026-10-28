@@ -96,6 +96,7 @@ function coverageLabel(coverage: ReviewCoverage): string {
     ['pending', byStatus.pending],
     ['deferred', byStatus.deferred],
     ['failed', byStatus.failed],
+    ['no-hunks', byStatus['no-hunks']],
     ['skipped', byStatus.skipped],
     ['manifest-only', byStatus['manifest-only']],
   ];
@@ -513,7 +514,8 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
     return decisions;
   }, [view, report]);
   const canDecideFinding = !readOnly && report !== null && report.round === selectedRound;
-  const agentRunning = view?.review.agent?.status === 'running';
+  const agentActive =
+    view?.review.agent?.status === 'running' || view?.review.agent?.status === 'queued';
   const scope = snapshot?.scope;
 
   const roundLabel = selectedRound === null ? 'No rounds' : `r${selectedRound}`;
@@ -1191,8 +1193,8 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
           <Button
             variant="secondary"
             onClick={() => setRefreshOpen(true)}
-            disabled={readOnly || agentRunning}
-            title={agentRunning ? 'Wait for the reviewer to finish' : undefined}
+            disabled={readOnly || agentActive}
+            title={agentActive ? 'Wait for the reviewer to finish' : undefined}
           >
             Refresh
           </Button>
@@ -1478,10 +1480,11 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
                   Coverage is incomplete: the reviewer did not inspect every changed file.
                 </p>
               ) : null}
-              {review.agent?.status === 'running' ? (
+              {review.agent?.status === 'running' || review.agent?.status === 'queued' ? (
                 <>
                   <p className="cr-meta">
-                    Working on round {review.agent.round ?? selectedRound ?? '—'}.
+                    {review.agent.status === 'queued' ? 'Waiting for a worker' : 'Working'} on round{' '}
+                    {review.agent.round ?? selectedRound ?? '—'}.
                   </p>
                   <Button
                     size="small"
@@ -1502,7 +1505,7 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
                   <Button
                     size="small"
                     variant="secondary"
-                    disabled={agentRunning}
+                    disabled={agentActive}
                     onClick={() => setRefreshOpen(true)}
                   >
                     Create a new round
@@ -1625,8 +1628,8 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
             the Outdated group; nothing is deleted.
           </p>
           <p className="cr-meta">
-            {agentRunning
-              ? 'The reviewer is running; wait for it to finish before creating the next round.'
+            {agentActive
+              ? 'The reviewer is active; wait for it to finish or cancel it before creating the next round.'
               : 'Refresh is available when the branch has new commits or the worktree changed.'}
           </p>
           {review.reviewer?.backend === 'none' ? (

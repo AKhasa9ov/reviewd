@@ -81,6 +81,7 @@ describe('review coverage', () => {
       'light-reviewed': 0,
       'manifest-only': 0,
       skipped: 0,
+      'no-hunks': 0,
       deferred: 0,
       failed: 0,
     });
@@ -93,6 +94,7 @@ describe('review coverage', () => {
       'light-reviewed',
       'manifest-only',
       'skipped',
+      'no-hunks',
       'deferred',
       'failed',
     ]);
@@ -178,7 +180,7 @@ const bridgeManifest: ReviewManifest = {
     }),
     manifestFile('dist/app.js', { ignored: true, hunkCount: 0, reason: 'ignored' }),
     manifestFile('src/generated.ts', { hunkCount: 0, reason: 'generated' }),
-    manifestFile('src/empty.ts', { hunkCount: 0 }),
+    manifestFile('src/empty.ts', { hunkCount: 0, added: 0, deleted: 0 }),
   ],
   totals: { files: 11, added: 3, deleted: 0, patchBytes: 40 },
   warnings: [],
@@ -205,7 +207,7 @@ describe('coverageFromPrompt', () => {
       { path: 'img/logo.png', status: 'manifest-only', reason: 'binary' },
       { path: 'dist/app.js', status: 'manifest-only', reason: 'ignored' },
       { path: 'src/generated.ts', status: 'manifest-only', reason: 'generated' },
-      { path: 'src/empty.ts', status: 'skipped', reason: 'render-budget' },
+      { path: 'src/empty.ts', status: 'no-hunks' },
     ]);
     expect(coverage.totals).toEqual({
       files: 11,
@@ -214,7 +216,8 @@ describe('coverageFromPrompt', () => {
         'deep-reviewed': 0,
         'light-reviewed': 0,
         'manifest-only': 3,
-        skipped: 6,
+        skipped: 5,
+        'no-hunks': 1,
         deferred: 0,
         failed: 0,
       },
@@ -241,6 +244,40 @@ describe('coverageFromPrompt', () => {
     const coverage = coverageFromPrompt(truncated, ['src/a.ts', 'src/partial.ts']);
 
     expect(coverage.incomplete).toBe(true);
+  });
+
+  it('treats an untracked symlink as terminal no-hunks', () => {
+    const manifest: ReviewManifest = {
+      ...bridgeManifest,
+      files: [
+        manifestFile('link/to-a.ts', {
+          status: 'untracked',
+          hunkCount: 0,
+          added: 0,
+          deleted: 0,
+          reason: 'symlink',
+        }),
+      ],
+      totals: { files: 1, added: 0, deleted: 0, patchBytes: 0 },
+    };
+
+    const coverage = coverageFromPrompt(manifest, []);
+
+    expect(coverage.files).toEqual([{ path: 'link/to-a.ts', status: 'no-hunks' }]);
+  });
+
+  it('keeps an included budget-cut file skipped instead of calling it no-hunks', () => {
+    const manifest: ReviewManifest = {
+      ...bridgeManifest,
+      files: [manifestFile('src/cut.ts', { hunkCount: 0, reason: 'diff-truncated' })],
+      totals: { files: 1, added: 1, deleted: 0, patchBytes: 10 },
+    };
+
+    const coverage = coverageFromPrompt(manifest, ['src/cut.ts']);
+
+    expect(coverage.files).toEqual([
+      { path: 'src/cut.ts', status: 'skipped', reason: 'diff-truncated' },
+    ]);
   });
 });
 
@@ -287,6 +324,7 @@ describe('isCoverageComplete', () => {
           'light-reviewed': 2,
           'manifest-only': 0,
           skipped: 0,
+          'no-hunks': 0,
           deferred: 0,
           failed: 0,
         },
@@ -304,9 +342,24 @@ describe('isCoverageComplete', () => {
     expect(isCoverageComplete(coverage)).toBe(false);
   });
 
+  it('accepts an included file with no reviewable hunks', () => {
+    expect(isCoverageComplete(ledger([{ path: 'src/renamed.ts', status: 'no-hunks' }]))).toBe(true);
+  });
+
   it('rejects an incomplete manifest even when all known files are final', () => {
     const coverage = ledger([{ path: 'src/a.ts', status: 'light-reviewed' }]);
     coverage.incomplete = true;
+
+    expect(isCoverageComplete(coverage)).toBe(false);
+  });
+
+  it('rejects per-bucket totals drift even when the total count matches', () => {
+    const coverage = ledger([
+      { path: 'src/a.ts', status: 'light-reviewed' },
+      { path: 'src/b.ts', status: 'light-reviewed' },
+    ]);
+    coverage.totals.byStatus['deep-reviewed'] = 1;
+    coverage.totals.byStatus['light-reviewed'] = 1;
 
     expect(isCoverageComplete(coverage)).toBe(false);
   });
