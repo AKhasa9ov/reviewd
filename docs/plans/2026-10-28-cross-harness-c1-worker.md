@@ -909,7 +909,7 @@ structurally compatible. Its `get('/api/jobs/next?...')` must return a
 flattened lease. reviewd returns `{ job, bundle }` from that route, so a thin
 adapter must return `{ ...payload.job, bundle: payload.bundle }` (or `null`
 when there is no job). Passing the raw envelope would leave `id`, `attemptId`,
-and `bundle` undefined at runtime.
+and the other flattened lease fields undefined at runtime.
 
 Adapters must not receive the reviewd token through `lease.bundle.prompt` or
 the harness environment. The worker process owns transport authentication.
