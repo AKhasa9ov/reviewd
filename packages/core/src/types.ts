@@ -87,6 +87,7 @@ export type ManifestFileReason =
   | 'generated'
   | 'legacy-truncated'
   | 'diff-truncated'
+  | 'render-budget'
   | 'unreadable';
 
 /**

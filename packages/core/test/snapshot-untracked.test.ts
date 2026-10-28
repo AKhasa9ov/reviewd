@@ -223,7 +223,15 @@ describe('ignores, binary and limits', () => {
     });
 
     expect(result.files.map((file) => file.path)).toEqual(['0-notes.md', 'src/a.ts']);
-    expect(result.totals).toEqual({ files: 2, added: 3, deleted: 0, truncated: true });
+    // The manifest keeps every changed path even when maxFiles bounds the render subset.
+    expect(result.manifest?.files.map((file) => file.path)).toEqual([
+      '0-notes.md',
+      'src/a.ts',
+      'z-notes.md',
+    ]);
+    expect(result.totals).toEqual({ files: 3, added: 4, deleted: 0, truncated: true });
+    const omitted = result.manifest?.files.find((file) => file.path === 'z-notes.md');
+    expect(omitted?.reason).toBe('render-budget');
     expect(result.warnings.filter((warning) => warning === 'files-truncated')).toHaveLength(1);
   });
 

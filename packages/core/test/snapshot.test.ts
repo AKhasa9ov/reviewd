@@ -7,6 +7,7 @@ import {
   patchBytesFromHunks,
   readBlob,
 } from '../src/index.js';
+import { manifestEntry } from '../src/diff/snapshot.js';
 import type * as ContentModule from '../src/git/content.js';
 import type { DiffHunk, FileDiff, ResolvedScope, Snapshot } from '../src/index.js';
 import { makeRepo } from './helpers/repo.js';
@@ -50,7 +51,9 @@ describe('buildSnapshot', () => {
     const repo = await featureRepo();
     const result = await snapshot(repo.root);
 
-    expect(result.schemaVersion).toBe(1);
+    expect(result.schemaVersion).toBe(2);
+    expect(result.manifest?.files.map((file) => file.path)).toEqual(['src/a.ts']);
+    expect(result.manifest?.totals.files).toBe(1);
     expect(result.scope.kind).toBe('range');
     expect(result.scope.headSha).toMatch(/^[0-9a-f]{40}$/);
     expect(result.totals.files).toBe(1);
@@ -163,7 +166,13 @@ describe('buildSnapshot', () => {
     vi.mocked(readBlob).mockClear();
     const result = await snapshot(repo.root, { maxFiles: 1 });
     expect(result.files).toHaveLength(1);
+    expect(result.manifest?.files).toHaveLength(4);
+    expect(result.totals.files).toBe(4);
     expect(result.totals.truncated).toBe(true);
+    const renderPaths = new Set(result.files.map((file) => file.path));
+    const omitted = result.manifest?.files.filter((file) => !renderPaths.has(file.path)) ?? [];
+    expect(omitted).toHaveLength(3);
+    expect(omitted.every((file) => file.reason === 'render-budget')).toBe(true);
     const readPaths = vi.mocked(readBlob).mock.calls.map(([, , path]) => path);
     expect(readPaths).toEqual(['src/a.ts', 'src/a.ts']);
   });
@@ -414,6 +423,9 @@ describe('buildSnapshot', () => {
     expect(ignored?.ignored).toBe(true);
     expect(ignored?.truncated).toBe(true);
     expect(ignored?.reason).toBe('diff-truncated');
+    const ignoredManifest = result.manifest?.files.find((file) => file.path === 'zzz/000.txt');
+    expect(ignoredManifest?.ignored).toBe(true);
+    expect(ignoredManifest?.reason).toBe('diff-truncated');
     expect(result.warnings).toContain('diff-file-skipped:zzz/000.txt');
     expect(result.warnings).not.toContain('files-truncated');
   });
@@ -440,6 +452,97 @@ describe('buildSnapshot', () => {
     const result = await snapshot(repo.root);
     const paths = result.files.map((file) => file.path);
     expect(paths).toEqual([...paths].sort());
+  });
+
+  it('emits a complete 882-path manifest while the render subset stays capped', async () => {
+    const repo = await makeRepo();
+    cleanups.push(repo.cleanup);
+    await repo.write('base.txt', 'base\n');
+    await repo.commit('base');
+    await repo.git('checkout', '-b', 'feature');
+    for (let index = 0; index < 882; index += 1) {
+      const path = `src/file-${String(index).padStart(3, '0')}.ts`;
+      const lines = Array.from(
+        { length: 96 },
+        (_, line) => `file ${index} line ${line} ${'x'.repeat(24)}`,
+      );
+      await repo.write(path, `${lines.join('\n')}\n`);
+    }
+    await repo.commit('882 files');
+
+    const result = await snapshot(repo.root, { includeContent: false });
+    const expectedPaths = Array.from(
+      { length: 882 },
+      (_, index) => `src/file-${String(index).padStart(3, '0')}.ts`,
+    );
+    const manifestPaths = result.manifest?.files.map((file) => file.path) ?? [];
+    const renderPaths = new Set(result.files.map((file) => file.path));
+
+    expect(result.schemaVersion).toBe(2);
+    expect(result.manifest?.files).toHaveLength(882);
+    expect(manifestPaths).toEqual(expectedPaths);
+    expect(new Set(manifestPaths).size).toBe(882);
+    expect(result.totals.files).toBe(882);
+    expect(result.totals.added).toBe(882 * 96);
+    expect(result.files.length).toBeLessThanOrEqual(500);
+    const manifestSet = new Set(manifestPaths);
+    expect(result.files.every((file) => manifestSet.has(file.path))).toBe(true);
+    const omitted = result.manifest?.files.filter((file) => !renderPaths.has(file.path)) ?? [];
+    expect(omitted.length).toBeGreaterThan(0);
+    expect(omitted.every((file) => file.reason !== undefined)).toBe(true);
+    expect(omitted.every((file) => file.reason === 'render-budget')).toBe(true);
+    expect(result.totals.truncated).toBe(true);
+  });
+
+  it('records a single file cut by the byte cap as per-file-cap', async () => {
+    const repo = await makeRepo();
+    cleanups.push(repo.cleanup);
+    await repo.write('base.txt', 'base\n');
+    await repo.commit('base');
+    await repo.git('checkout', '-b', 'feature');
+    await repo.write('huge.txt', `${'x'.repeat(6 * 1024 * 1024)}\n`);
+    await repo.commit('6 MiB file');
+
+    const result = await snapshot(repo.root);
+    const entry = result.manifest?.files.find((file) => file.path === 'huge.txt');
+
+    expect(result.schemaVersion).toBe(2);
+    expect(result.manifest?.files).toHaveLength(1);
+    expect(result.files).toHaveLength(1);
+    expect(entry).toMatchObject({
+      path: 'huge.txt',
+      status: 'added',
+      reason: 'per-file-cap',
+      hunkCount: 0,
+      patchBytes: 0,
+    });
+    expect(entry?.added).toBe(1);
+    expect(result.totals.files).toBe(1);
+    expect(result.totals.truncated).toBe(true);
+  });
+
+  it('merges rename numstat metadata by new path in the manifest', async () => {
+    const repo = await makeRepo();
+    cleanups.push(repo.cleanup);
+    await repo.write('old-name.ts', 'one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\n');
+    await repo.commit('base');
+    await repo.git('checkout', '-b', 'feature');
+    await repo.git('mv', 'old-name.ts', 'new-name.ts');
+    await repo.write('new-name.ts', 'one\ntwo\nthree\nfour changed\nfive\nsix\nseven\neight\n');
+    await repo.commit('rename with edit');
+
+    const result = await snapshot(repo.root);
+    const entry = result.manifest?.files.find((file) => file.path === 'new-name.ts');
+
+    expect(result.manifest?.files).toHaveLength(1);
+    expect(entry).toMatchObject({
+      path: 'new-name.ts',
+      oldPath: 'old-name.ts',
+      status: 'renamed',
+      added: 1,
+      deleted: 1,
+    });
+    expect(result.manifest?.files.some((file) => file.path === 'old-name.ts')).toBe(false);
   });
 });
 
@@ -602,6 +705,27 @@ describe('review manifest', () => {
         contentHash: null,
         reason: 'unreadable',
       },
+      {
+        path: 'assets/ignored-binary.bin',
+        status: 'modified',
+        binary: true,
+        oversized: false,
+        ignored: true,
+        added: 0,
+        deleted: 0,
+        hunks: [],
+        contentHash: null,
+      },
+      {
+        path: 'assets/large-binary.bin',
+        status: 'modified',
+        binary: true,
+        oversized: true,
+        added: 0,
+        deleted: 0,
+        hunks: [],
+        contentHash: null,
+      },
     ];
 
     const manifest = buildReviewManifest({ scope: manifestScope, files });
@@ -612,6 +736,54 @@ describe('review manifest', () => {
     expect(manifest.files.find((file) => file.path === 'src/unreadable-ignored.ts')?.reason).toBe(
       'unreadable',
     );
+    expect(manifest.files.find((file) => file.path === 'assets/ignored-binary.bin')?.reason).toBe(
+      'ignored',
+    );
+    expect(manifest.files.find((file) => file.path === 'assets/large-binary.bin')?.reason).toBe(
+      'binary',
+    );
+  });
+
+  it('prefers ignored over render-budget for an ignored manifest-only path', () => {
+    const entry = manifestEntry({
+      seed: {
+        path: 'dist/bundle.js',
+        status: 'modified',
+        binary: false,
+        added: 4,
+        deleted: 1,
+        ignored: true,
+        fromNumstat: true,
+      },
+      renderExcluded: true,
+    });
+
+    expect(entry).toMatchObject({
+      path: 'dist/bundle.js',
+      ignored: true,
+      reason: 'ignored',
+      patchBytes: 0,
+      hunkCount: 0,
+      added: 4,
+      deleted: 1,
+    });
+  });
+
+  it('uses render-budget for an ordinary manifest-only path', () => {
+    const entry = manifestEntry({
+      seed: {
+        path: 'src/file-501.ts',
+        status: 'modified',
+        binary: false,
+        added: 1,
+        deleted: 0,
+        ignored: false,
+        fromNumstat: true,
+      },
+      renderExcluded: true,
+    });
+
+    expect(entry).toMatchObject({ reason: 'render-budget', patchBytes: 0, hunkCount: 0 });
   });
 
   it('measures patch bytes as a hunk-body lower bound', () => {
@@ -640,6 +812,21 @@ describe('review manifest', () => {
     expect(manifest.totals.files).toBe(2);
     expect(manifest.warnings).toEqual(['files-truncated', 'legacy-truncated']);
     expect(legacy.warnings).toEqual(['files-truncated']);
+  });
+
+  it('keeps legacy-truncated when a whole-file-set legacy snapshot truncated content', () => {
+    const legacy: Snapshot = {
+      schemaVersion: 1,
+      scope: manifestScope,
+      files: [changedFile(1)],
+      totals: { files: 1, added: 1, deleted: 0, truncated: true },
+      warnings: ['content-budget-truncated'],
+    };
+
+    const manifest = manifestFromSnapshot(legacy);
+
+    expect(manifest.totals.files).toBe(1);
+    expect(manifest.warnings).toEqual(['content-budget-truncated', 'legacy-truncated']);
   });
 
   it('does not mark a complete v1 snapshot as legacy-truncated', () => {

@@ -15,6 +15,7 @@ import type {
   SubmissionRecord,
 } from '../review/types.js';
 import type { DiffScope, Snapshot } from '../types.js';
+import { manifestFromSnapshot } from '../diff/manifest.js';
 import { CommandReviewer } from '../reviewer/command.js';
 import { FakeReviewer } from '../reviewer/fake.js';
 import { ReviewerError } from '../reviewer/types.js';
@@ -380,11 +381,8 @@ export class ReviewServiceImpl implements ReviewService {
           file,
         });
       }
-      snapshot = {
-        ...snapshot,
-        files: [clone(selected)],
-        totals: { ...snapshot.totals, files: 1 },
-      };
+      // The file query bounds the rendered view, not the manifest or its totals.
+      snapshot = { ...snapshot, files: [clone(selected)] };
     }
     return { snapshot, round, ...(file === undefined ? {} : { file }) };
   }
@@ -868,6 +866,7 @@ export class ReviewServiceImpl implements ReviewService {
       repoRoot: review.repoRoot,
       prompt: this.buildPrompt(review, round, snapshot),
       snapshot,
+      manifest: manifestFromSnapshot(snapshot),
     };
     const controller = new AbortController();
     this.active.set(id, { controller });

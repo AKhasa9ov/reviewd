@@ -483,6 +483,95 @@ describe('ReviewStore', () => {
     await expect(store.readSnapshot('snap_1')).resolves.toMatchObject({ schemaVersion: 1 });
     await store.close();
   });
+
+  it('synthesizes a manifest for a legacy v1 snapshot on read', async () => {
+    const root = await tempRoot();
+    const store = await ReviewStore.open(root);
+    await store.writeSnapshot('snap_1', snapshotFixture());
+
+    const snapshot = await store.readSnapshot('snap_1');
+
+    expect(snapshot.schemaVersion).toBe(1);
+    expect(snapshot.manifest).toBeDefined();
+    expect(snapshot.manifest?.files).toEqual([]);
+    expect(snapshot.manifest?.warnings).toEqual([]);
+    await store.close();
+  });
+
+  it('carries legacy-truncated into the synthesized manifest of a truncated v1 snapshot', async () => {
+    const root = await tempRoot();
+    const store = await ReviewStore.open(root);
+    await store.writeSnapshot('snap_1', {
+      ...snapshotFixture(),
+      totals: { files: 0, added: 0, deleted: 0, truncated: true },
+    });
+
+    const snapshot = await store.readSnapshot('snap_1');
+
+    expect(snapshot.schemaVersion).toBe(1);
+    expect(snapshot.manifest?.warnings).toContain('legacy-truncated');
+    await store.close();
+  });
+
+  it('round-trips a v2 snapshot manifest and keeps legacy v1 distinct', async () => {
+    const root = await tempRoot();
+    const store = await ReviewStore.open(root);
+    const legacy = snapshotFixture();
+    const manifest = {
+      schemaVersion: 1 as const,
+      scope: legacy.scope,
+      files: [],
+      totals: { files: 0, added: 0, deleted: 0, patchBytes: 0 },
+      warnings: [],
+    };
+    await store.writeSnapshot('snap_1', { ...legacy, schemaVersion: 2, manifest });
+
+    const snapshot = await store.readSnapshot('snap_1');
+    expect(snapshot.schemaVersion).toBe(2);
+    expect(snapshot.manifest).toEqual(manifest);
+    await store.close();
+  });
+
+  it('accepts a v2 snapshot without a manifest and synthesizes one on read', async () => {
+    const root = await tempRoot();
+    const store = await ReviewStore.open(root);
+    await store.writeSnapshot('snap_1', { ...snapshotFixture(), schemaVersion: 2 });
+
+    const snapshot = await store.readSnapshot('snap_1');
+
+    expect(snapshot.schemaVersion).toBe(2);
+    expect(snapshot.manifest?.files).toEqual([]);
+    await store.close();
+  });
+
+  it('rejects a snapshot whose totals.truncated is not boolean', async () => {
+    const root = await tempRoot();
+    const store = await ReviewStore.open(root);
+    const invalid = {
+      ...snapshotFixture(),
+      totals: { files: 0, added: 0, deleted: 0 },
+    } as unknown as Snapshot;
+
+    await expect(store.writeSnapshot('snap_1', invalid)).rejects.toBeInstanceOf(
+      ReviewNotFoundError,
+    );
+    await store.close();
+  });
+
+  it('rejects a malformed manifest on a v2 snapshot', async () => {
+    const root = await tempRoot();
+    const store = await ReviewStore.open(root);
+    const invalid = {
+      ...snapshotFixture(),
+      schemaVersion: 2,
+      manifest: { schemaVersion: 1, files: 'nope' },
+    } as unknown as Snapshot;
+
+    await expect(store.writeSnapshot('snap_1', invalid)).rejects.toBeInstanceOf(
+      ReviewNotFoundError,
+    );
+    await store.close();
+  });
 });
 
 describe('fold', () => {

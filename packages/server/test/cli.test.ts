@@ -101,7 +101,8 @@ describe('review diff', () => {
     expect(code).toBe(0);
     expect(err).toEqual([]);
     const snapshot = parseSnapshot(out);
-    expect(snapshot.schemaVersion).toBe(1);
+    expect(snapshot.schemaVersion).toBe(2);
+    expect(snapshot.manifest?.files.map((file) => file.path)).toEqual(['src/a.ts']);
     expect(snapshot.files[0]?.path).toBe('src/a.ts');
     expect(snapshot.files[0]?.added).toBe(1);
   });

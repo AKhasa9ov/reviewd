@@ -16,7 +16,8 @@ import { join, resolve } from 'node:path';
 import { isReviewEvent, ReviewEventError } from './events.js';
 import type { ReviewEvent } from './events.js';
 import { fold } from './fold.js';
-import type { Snapshot } from '../types.js';
+import { buildReviewManifest, manifestFromSnapshot } from '../diff/manifest.js';
+import type { FileStatus, ManifestFileReason, ReviewManifest, Snapshot } from '../types.js';
 import type {
   Actor,
   Comment,
@@ -188,15 +189,103 @@ function safeSnapshotId(snapshotId: string): string {
   return snapshotId;
 }
 
-function isSnapshot(value: unknown): value is Snapshot {
+const FILE_STATUSES = new Set<FileStatus>([
+  'added',
+  'modified',
+  'deleted',
+  'renamed',
+  'submodule',
+  'untracked',
+]);
+
+const MANIFEST_REASONS = new Set<ManifestFileReason>([
+  'per-file-cap',
+  'binary',
+  'ignored',
+  'generated',
+  'legacy-truncated',
+  'diff-truncated',
+  'render-budget',
+  'unreadable',
+]);
+
+function isManifestFile(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  if (typeof value.path !== 'string') return false;
+  if (value.oldPath !== undefined && typeof value.oldPath !== 'string') return false;
+  if (typeof value.status !== 'string' || !FILE_STATUSES.has(value.status as FileStatus)) {
+    return false;
+  }
+  if (
+    typeof value.binary !== 'boolean' ||
+    typeof value.ignored !== 'boolean' ||
+    typeof value.oversized !== 'boolean'
+  ) {
+    return false;
+  }
+  for (const field of ['added', 'deleted', 'hunkCount', 'patchBytes'] as const) {
+    if (typeof value[field] !== 'number' || !Number.isFinite(value[field])) return false;
+  }
+  if (
+    value.contentBytes !== undefined &&
+    (typeof value.contentBytes !== 'number' || !Number.isFinite(value.contentBytes))
+  ) {
+    return false;
+  }
+  if (
+    value.reason !== undefined &&
+    (typeof value.reason !== 'string' || !MANIFEST_REASONS.has(value.reason as ManifestFileReason))
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function isManifest(value: unknown): value is ReviewManifest {
   if (!isRecord(value)) return false;
   if (value.schemaVersion !== 1) return false;
   if (!isRecord(value.scope) || typeof value.scope.baseSha !== 'string') return false;
+  if (!Array.isArray(value.files) || !value.files.every(isManifestFile)) return false;
+  if (!isRecord(value.totals)) return false;
+  for (const field of ['files', 'added', 'deleted', 'patchBytes'] as const) {
+    if (typeof value.totals[field] !== 'number' || !Number.isFinite(value.totals[field])) {
+      return false;
+    }
+  }
+  return Array.isArray(value.warnings) && value.warnings.every((item) => typeof item === 'string');
+}
+
+function isSnapshot(value: unknown): value is Snapshot {
+  if (!isRecord(value)) return false;
+  if (value.schemaVersion !== 1 && value.schemaVersion !== 2) return false;
+  if (!isRecord(value.scope) || typeof value.scope.baseSha !== 'string') return false;
   if (!Array.isArray(value.files)) return false;
-  if (!isRecord(value.totals) || !Array.isArray(value.warnings)) return false;
+  if (!isRecord(value.totals) || typeof value.totals.truncated !== 'boolean') return false;
+  if (!Array.isArray(value.warnings)) return false;
+  if (value.manifest !== undefined && !isManifest(value.manifest)) return false;
   return value.files.every(
     (file) => isRecord(file) && typeof file.path === 'string' && Array.isArray(file.hunks),
   );
+}
+
+/**
+ * API and job consumers expect a manifest. Legacy v1 snapshots are normalized
+ * on read (schemaVersion stays 1 so callers can still recognize them); a v2
+ * snapshot that somehow lacks one gets a manifest without the legacy warning.
+ */
+function normalizeSnapshot(snapshot: Snapshot): Snapshot {
+  if (snapshot.manifest !== undefined) return snapshot;
+  if (snapshot.schemaVersion === 1) {
+    return { ...snapshot, manifest: manifestFromSnapshot(snapshot) };
+  }
+  return {
+    ...snapshot,
+    manifest: buildReviewManifest({
+      scope: snapshot.scope,
+      files: snapshot.files,
+      warnings: snapshot.warnings,
+    }),
+  };
 }
 
 function isPidAlive(pid: number): boolean {
@@ -578,7 +667,7 @@ export class ReviewStore {
       throw new ReviewNotFoundError(id);
     }
     if (!isSnapshot(value)) throw new ReviewNotFoundError(id);
-    return structuredClone(value);
+    return structuredClone(normalizeSnapshot(value));
   }
 
   /**

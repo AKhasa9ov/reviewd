@@ -1,10 +1,20 @@
 import { lstat } from 'node:fs/promises';
-import type { DiffHunk, FileDiff, ParsedFile, Snapshot, SnapshotOptions } from '../types.js';
+import type {
+  DiffHunk,
+  FileDiff,
+  FileStatus,
+  ManifestFile,
+  ManifestFileReason,
+  ParsedFile,
+  Snapshot,
+  SnapshotOptions,
+} from '../types.js';
 import { hasSymlinkParent, safeJoin, splitNulPaths } from '../paths.js';
 import { readBlob } from '../git/content.js';
 import { resolveScope } from '../git/scope.js';
 import { runGit } from '../git/run.js';
 import type { GitResult } from '../git/run.js';
+import { manifestFileFromDiff, reviewManifest } from './manifest.js';
 import { parseDiffHeader, parseUnifiedDiff, stripDiffPrefix } from './parse.js';
 import { isIgnored } from './glob.js';
 
@@ -17,6 +27,13 @@ const DEFAULTS = {
   maxTotalContentBytes: 64 * 1024 * 1024,
   maxFiles: 500,
 } as const;
+
+/**
+ * The changed-path listing is metadata only; this byte cap is a safety valve
+ * for pathological repositories. Hitting it is surfaced as a snapshot warning,
+ * never as a silent omission.
+ */
+const MAX_MANIFEST_LISTING_BYTES = 64 * 1024 * 1024;
 
 interface ContentBudget {
   includeContent: boolean;
@@ -56,9 +73,12 @@ interface DiffText {
   synthetic?: ParsedFile;
 }
 
-function diffArgs(scope: Snapshot['scope'], raw = false): string[] {
+type DiffFormat = 'patch' | 'raw' | 'numstat';
+
+function diffArgs(scope: Snapshot['scope'], format: DiffFormat = 'patch'): string[] {
   const common = ['diff', '--no-color', '--no-ext-diff', '--no-textconv'];
-  if (raw) common.push('--raw', '-z');
+  if (format === 'raw') common.push('--raw', '-z');
+  else if (format === 'numstat') common.push('--numstat', '-z');
   else common.push('--unified=3');
   common.push('--find-renames=50%', '--src-prefix=a/', '--dst-prefix=b/');
   if (scope.kind === 'worktree') return [...common, scope.baseSha, '--'];
@@ -171,7 +191,6 @@ function parseRawDiff(raw: string): ParsedFile[] {
       hunks: [],
       added: 0,
       deleted: 0,
-      backfill: true,
     };
     if (oldPath !== undefined) entry.oldPath = oldPath;
     entries.push(entry);
@@ -179,12 +198,145 @@ function parseRawDiff(raw: string): ParsedFile[] {
   return entries;
 }
 
-async function listRawChanges(
+interface RawListing {
+  entries: ParsedFile[];
+  truncated: boolean;
+}
+
+async function listRawChanges(scope: Snapshot['scope'], signal?: AbortSignal): Promise<RawListing> {
+  const result = await runGit(scope.repoRoot, diffArgs(scope, 'raw'), {
+    signal,
+    maxBytes: MAX_MANIFEST_LISTING_BYTES,
+    truncateOnOverflow: true,
+  });
+  return { entries: parseRawDiff(result.stdout), truncated: result.truncated === true };
+}
+
+interface NumstatEntry {
+  added: number;
+  deleted: number;
+  binary: boolean;
+}
+
+interface NumstatListing {
+  entries: Map<string, NumstatEntry>;
+  truncated: boolean;
+}
+
+/**
+ * Parses `git diff --numstat -z`. A rename record is
+ * `added\tdeleted\t\0oldPath\0newPath\0`, so the empty path field is followed
+ * by two NUL-delimited path tokens; the result is keyed by the new path.
+ */
+function parseNumstat(raw: string): Map<string, NumstatEntry> {
+  const entries = new Map<string, NumstatEntry>();
+  const tokens = raw.split('\0');
+  if (!raw.endsWith('\0')) tokens.pop();
+
+  for (let index = 0; index < tokens.length;) {
+    const record = tokens[index++];
+    if (record === undefined || record === '') continue;
+    const fields = record.split('\t');
+    if (fields.length < 3) continue;
+    const addedField = fields[0] ?? '';
+    const deletedField = fields[1] ?? '';
+    let path = fields.slice(2).join('\t');
+    if (path === '') {
+      index += 1; // old path; only the new path keys the manifest
+      path = tokens[index++] ?? '';
+      if (path === '') continue;
+    }
+    const binary = addedField === '-' || deletedField === '-';
+    const added = binary ? 0 : Number.parseInt(addedField, 10);
+    const deleted = binary ? 0 : Number.parseInt(deletedField, 10);
+    if (!Number.isFinite(added) || !Number.isFinite(deleted)) continue;
+    entries.set(path, { added, deleted, binary });
+  }
+  return entries;
+}
+
+async function listNumstatChanges(
   scope: Snapshot['scope'],
   signal?: AbortSignal,
-): Promise<ParsedFile[]> {
-  const result = await runGit(scope.repoRoot, diffArgs(scope, true), { signal });
-  return parseRawDiff(result.stdout);
+): Promise<NumstatListing> {
+  const result = await runGit(scope.repoRoot, diffArgs(scope, 'numstat'), {
+    signal,
+    maxBytes: MAX_MANIFEST_LISTING_BYTES,
+    truncateOnOverflow: true,
+  });
+  return { entries: parseNumstat(result.stdout), truncated: result.truncated === true };
+}
+
+interface ManifestSeed {
+  path: string;
+  oldPath?: string;
+  status: FileStatus;
+  binary: boolean;
+  added: number;
+  deleted: number;
+  ignored: boolean;
+  /** True when `added`/`deleted` came from the exact numstat listing. */
+  fromNumstat: boolean;
+  reason?: ManifestFileReason;
+}
+
+function rawSeeds(
+  raw: readonly ParsedFile[],
+  numstat: Map<string, NumstatEntry>,
+  ignore: readonly string[],
+): Map<string, ManifestSeed> {
+  const seeds = new Map<string, ManifestSeed>();
+  for (const entry of raw) {
+    const counts = numstat.get(entry.path);
+    const seed: ManifestSeed = {
+      path: entry.path,
+      status: entry.status,
+      binary: counts?.binary === true,
+      added: counts?.added ?? entry.added,
+      deleted: counts?.deleted ?? entry.deleted,
+      ignored: isIgnored(entry.path, ignore),
+      fromNumstat: counts !== undefined,
+    };
+    if (entry.oldPath !== undefined) seed.oldPath = entry.oldPath;
+    seeds.set(entry.path, seed);
+  }
+  return seeds;
+}
+
+/**
+ * Builds one complete-manifest entry from the full listing seed and, when the
+ * path is inside the render subset, the bounded render data. Manifest-only
+ * entries never trigger content reads; their patch fields stay at zero.
+ *
+ * Exported from the module (not the package index) so the reason precedence
+ * for manifest-only paths can be pinned without a synthetic git fixture.
+ */
+export function manifestEntry(input: {
+  seed: ManifestSeed;
+  file?: FileDiff;
+  renderExcluded: boolean;
+}): ManifestFile {
+  const mapped = input.file === undefined ? undefined : manifestFileFromDiff(input.file);
+  const ignored = input.seed.ignored || mapped?.ignored === true;
+  let reason = mapped?.reason ?? input.seed.reason;
+  if (input.renderExcluded && (reason === undefined || reason === 'per-file-cap')) {
+    reason = ignored ? 'ignored' : 'render-budget';
+  }
+  const entry: ManifestFile = {
+    path: input.seed.path,
+    status: mapped?.status ?? input.seed.status,
+    binary: input.seed.binary || mapped?.binary === true,
+    ignored,
+    oversized: mapped?.oversized ?? false,
+    added: input.seed.fromNumstat ? input.seed.added : (mapped?.added ?? input.seed.added),
+    deleted: input.seed.fromNumstat ? input.seed.deleted : (mapped?.deleted ?? input.seed.deleted),
+    hunkCount: mapped?.hunkCount ?? 0,
+    patchBytes: mapped?.patchBytes ?? 0,
+  };
+  const oldPath = mapped?.oldPath ?? input.seed.oldPath;
+  if (oldPath !== undefined) entry.oldPath = oldPath;
+  if (reason !== undefined) entry.reason = reason;
+  return entry;
 }
 
 interface UntrackedListing {
@@ -362,6 +514,16 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
 
   const warnings: string[] = [];
   if (scope.worktreeDigestTruncated === true) warnings.push('worktree-digest-truncated');
+
+  // The complete changed-path listing is independent of the render budget.
+  // It is metadata only, so it stays cheap even when patch bytes are capped.
+  const rawListing = await listRawChanges(scope, options.signal);
+  const numstatListing = await listNumstatChanges(scope, options.signal);
+  if (rawListing.truncated || numstatListing.truncated) {
+    warnings.push('manifest-listing-truncated');
+  }
+  const seeds = rawSeeds(rawListing.entries, numstatListing.entries, ignore);
+
   const diff = await runGit(scope.repoRoot, diffArgs(scope), {
     signal: options.signal,
     maxBytes: Math.max(maxDiffBytes * 8, 16 * 1024 * 1024),
@@ -384,17 +546,23 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
   if (truncated) {
     const seen = new Set(candidates.map((entry) => candidateKey(entry)));
     const byKey = new Map(candidates.map((entry) => [candidateKey(entry), entry]));
-    for (const entry of await listRawChanges(scope, options.signal)) {
-      const key = candidateKey(entry);
-      const warning = `diff-file-skipped:${entry.path}`;
+    for (const listed of rawListing.entries) {
+      const key = candidateKey(listed);
+      const warning = `diff-file-skipped:${listed.path}`;
       if (seen.has(key)) {
         const existing = byKey.get(key);
-        if (existing?.synthetic === true) {
+        // A synthetic entry recovered after a complete file prefix is a file
+        // cut by the diff cap. When the cap cuts the first (or only) file, the
+        // whole patch is empty: that is a per-file cap, not a lost path.
+        if (existing?.synthetic === true && limited.text !== '') {
           existing.skipped = true;
           if (!warnings.includes(warning)) warnings.push(warning);
         }
         continue;
       }
+      // Only this backfill copy carries the marker; the seed above stays plain
+      // listing metadata so it is not mistaken for a diff-cap omission.
+      const entry: ParsedFile = { ...listed, backfill: true };
       seen.add(key);
       byKey.set(key, entry);
       candidates.push(entry);
@@ -403,12 +571,14 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
     candidates.sort((left, right) => comparePaths(left.path, right.path));
   }
 
+  let renderCapped = false;
   let selected = candidates;
   const reviewableCandidates = candidates.filter((entry) => !isIgnored(entry.path, ignore));
   if (reviewableCandidates.length > maxFiles) {
     const kept = new Set(reviewableCandidates.slice(0, maxFiles));
     selected = candidates.filter((entry) => isIgnored(entry.path, ignore) || kept.has(entry));
     truncated = true;
+    renderCapped = true;
     warnings.push('files-truncated');
   }
 
@@ -576,9 +746,21 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
       truncated = true;
     }
     for (const path of listing.paths) {
+      const ignored = isIgnored(path, ignore);
+      const seed: ManifestSeed = {
+        path,
+        status: 'untracked',
+        binary: false,
+        added: 0,
+        deleted: 0,
+        ignored,
+        fromNumstat: false,
+      };
+      seeds.set(path, seed);
       const absolute = safeJoin(scope.repoRoot, path);
       const info = await lstat(absolute).catch(() => null);
       if (info?.isSymbolicLink() === true || (await hasSymlinkParent(scope.repoRoot, path))) {
+        seed.reason = 'unreadable';
         warnings.push(`symlink-not-followed:${path}`);
         continue;
       }
@@ -588,7 +770,7 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
         maxFileLines,
         maxContentBytes,
         includeContent,
-        isIgnored(path, ignore),
+        ignored,
         budget,
         warnings,
       );
@@ -598,6 +780,9 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
 
   files.sort((left, right) => comparePaths(left.path, right.path));
 
+  // Everything built before the render cap is retained for manifest metadata;
+  // culling below only bounds what the snapshot renders.
+  const retainedFiles = files.slice();
   const reviewableFiles = files.filter((file) => file.ignored !== true);
   if (reviewableFiles.length > maxFiles) {
     const kept = new Set(reviewableFiles.slice(0, maxFiles));
@@ -607,24 +792,66 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
       ...files.filter((file) => file.ignored === true || kept.has(file)),
     );
     truncated = true;
+    renderCapped = true;
     if (!warnings.includes('files-truncated')) warnings.push('files-truncated');
   }
 
-  const totalsTruncated = truncated || budget.exhausted;
-  const totals = files.reduce(
-    (accumulator, file) => ({
-      files: accumulator.files + 1,
-      added: accumulator.added + file.added,
-      deleted: accumulator.deleted + file.deleted,
-      truncated: totalsTruncated,
-    }),
-    { files: 0, added: 0, deleted: 0, truncated: totalsTruncated },
+  const retainedByPath = new Map(retainedFiles.map((file) => [file.path, file]));
+  for (const file of retainedFiles) {
+    if (seeds.has(file.path)) continue;
+    const seed: ManifestSeed = {
+      path: file.path,
+      status: file.status,
+      binary: file.binary,
+      added: file.added,
+      deleted: file.deleted,
+      ignored: file.ignored === true,
+      fromNumstat: false,
+    };
+    if (file.oldPath !== undefined) seed.oldPath = file.oldPath;
+    if (file.reason !== undefined) seed.reason = file.reason;
+    seeds.set(file.path, seed);
+  }
+
+  const renderPaths = new Set(files.map((file) => file.path));
+  const manifest = reviewManifest(
+    scope,
+    [...seeds.values()]
+      .map((seed) => {
+        const file = retainedByPath.get(seed.path);
+        return manifestEntry({
+          seed,
+          ...(file === undefined ? {} : { file }),
+          renderExcluded: !renderPaths.has(seed.path),
+        });
+      })
+      .sort((left, right) => comparePaths(left.path, right.path)),
+    warnings,
   );
 
+  const manifestTruncated =
+    truncated ||
+    budget.exhausted ||
+    renderCapped ||
+    manifest.files.some(
+      (file) =>
+        file.reason === 'render-budget' ||
+        file.reason === 'diff-truncated' ||
+        file.reason === 'per-file-cap',
+    );
+
+  const totals = {
+    files: manifest.totals.files,
+    added: manifest.totals.added,
+    deleted: manifest.totals.deleted,
+    truncated: manifestTruncated,
+  };
+
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     scope,
     files,
+    manifest,
     totals,
     warnings,
   };
