@@ -48,6 +48,17 @@ export interface LeaseVersions {
   legacy: boolean;
 }
 
+/** Versions this build accepts; injectable so tests can pin per-field routing. */
+export interface SupportedLeaseVersions {
+  protocol: number;
+  prompt: number;
+}
+
+const SUPPORTED_LEASE_VERSIONS: SupportedLeaseVersions = {
+  protocol: PROTOCOL_VERSION,
+  prompt: PROMPT_VERSION,
+};
+
 export interface RunnerResult {
   findings?: readonly unknown[];
   report: Record<string, unknown>;
@@ -99,32 +110,45 @@ export function isStaleWorkerError(error: unknown): boolean {
   );
 }
 
-function leaseVersion(label: 'protocol' | 'prompt', value: unknown): number {
+function leaseVersion(label: 'protocol' | 'prompt', supported: number, value: unknown): number {
   // Missing versions identify the legacy v0 lease. v0 is accepted only during
   // migration; every new adapter must emit and receive v1.
   if (value === undefined) return 0;
-  if (value === 0 || value === PROTOCOL_VERSION) return value;
+  if (value === 0 || value === supported) return value;
   throw new WorkerRunError(
     'protocol-mismatch',
-    `worker supports ${label} version ${PROTOCOL_VERSION}, but the lease declares ${label} version ${String(
+    `worker supports ${label} version ${supported}, but the lease declares ${label} version ${String(
       value,
-    )}; upgrade the worker or reviewd so both use ${label} version ${PROTOCOL_VERSION}`,
+    )}; upgrade the worker or reviewd so both use ${label} version ${supported}`,
     false,
   );
 }
 
 /**
  * Reads the lease protocol and prompt versions, preferring the flattened lease
- * fields and falling back to the bundle envelope. Throws a non-retryable
+ * fields and falling back to the bundle envelope. Protocol and prompt values are
+ * checked against their own supported versions. Throws a non-retryable
  * `protocol-mismatch` before a runner sees an unsupported lease; callers must
  * invoke this before `runner.run`.
+ *
+ * A top-level version and its bundle copy are expected to agree; when they do
+ * not, the top-level lease field wins and the conflict is not rejected. C2 can
+ * harden this once a second adapter emits leases.
  */
-export function readLeaseVersions(lease: JobLease): LeaseVersions {
+export function readLeaseVersions(
+  lease: JobLease,
+  supported: SupportedLeaseVersions = SUPPORTED_LEASE_VERSIONS,
+): LeaseVersions {
   const protocolVersion = leaseVersion(
     'protocol',
+    supported.protocol,
     lease.protocolVersion ?? lease.bundle.protocolVersion,
   );
-  const promptVersion = leaseVersion('prompt', lease.promptVersion ?? lease.bundle.promptVersion);
+  const promptVersion = leaseVersion(
+    'prompt',
+    supported.prompt,
+    lease.promptVersion ?? lease.bundle.promptVersion,
+  );
   return {
     protocolVersion,
     promptVersion,

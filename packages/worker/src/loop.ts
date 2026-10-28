@@ -98,8 +98,14 @@ async function runLease(
     return;
   }
   if (versions.legacy) {
+    const missing = [
+      versions.protocolVersion === 0 ? 'protocolVersion' : undefined,
+      versions.promptVersion === 0 ? 'promptVersion' : undefined,
+    ].filter((field): field is string => field !== undefined);
     options.logger?.warn?.(
-      'code-review: lease uses protocol v0 (missing protocolVersion/promptVersion); accepted for migration, but new adapters must require protocol version 1',
+      `code-review: lease is missing ${missing.join(
+        ' and ',
+      )}; accepted as protocol v0 during migration, but new adapters must require protocol version 1`,
     );
   }
   const onAbort = (): void => {

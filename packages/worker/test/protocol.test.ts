@@ -192,4 +192,26 @@ describe('lease protocol versions', () => {
     expect((error as Error).message).toMatch(/prompt version 1/);
     expect((error as Error).message).toMatch(/prompt version 3/);
   });
+
+  it('checks each version against its own supported version', () => {
+    const mixed = lease({ protocolVersion: 2, promptVersion: 2 });
+
+    // Prompt v2 is supported here but protocol v2 is not, so the protocol
+    // field must be checked against the protocol supported version.
+    const protocolError = caught(() => readLeaseVersions(mixed, { protocol: 1, prompt: 2 }));
+    expect((protocolError as Error).message).toMatch(/protocol version 1/);
+    expect((protocolError as Error).message).toMatch(/protocol version 2/);
+
+    // Protocol v2 is supported here but prompt v2 is not, so the prompt field
+    // must be checked against the prompt supported version, not PROTOCOL_VERSION.
+    const promptError = caught(() => readLeaseVersions(mixed, { protocol: 2, prompt: 1 }));
+    expect((promptError as Error).message).toMatch(/prompt version 1/);
+    expect((promptError as Error).message).toMatch(/prompt version 2/);
+
+    expect(readLeaseVersions(mixed, { protocol: 2, prompt: 2 })).toEqual({
+      protocolVersion: 2,
+      promptVersion: 2,
+      legacy: false,
+    });
+  });
 });

@@ -13,6 +13,7 @@ export type {
   JobLease,
   LeaseVersions,
   RunnerResult,
+  SupportedLeaseVersions,
   WorkerApi,
   WorkerIdentity,
   WorkerLogger,

@@ -556,8 +556,42 @@ describe('runWorkerLoop', () => {
       },
     });
     expect(
-      calls.some((call) => call.path.endsWith('/findings') || call.path.endsWith('/report')),
+      calls.some(
+        (call) =>
+          call.path.endsWith('/findings') ||
+          call.path.endsWith('/report') ||
+          call.path.endsWith('/ack'),
+      ),
     ).toBe(false);
+  });
+
+  it('names only the missing version in the v0 warning', async () => {
+    const controller = new AbortController();
+    const calls: Call[] = [];
+    const api = apiFor(
+      controller,
+      calls,
+      lease({ protocolVersion: 1, bundle: { prompt: 'Review this diff' } }),
+    );
+    const warnings: string[] = [];
+    let runs = 0;
+    await runWorkerLoop(
+      {
+        ...options(api, {
+          run: async () => {
+            runs += 1;
+            return { report: { schemaVersion: 1 } };
+          },
+        }),
+        logger: { warn: (message) => warnings.push(message) },
+      },
+      controller.signal,
+    );
+
+    expect(runs).toBe(1);
+    expect(warnings.some((message) => /promptVersion/.test(message))).toBe(true);
+    expect(warnings.some((message) => /protocolVersion/.test(message))).toBe(false);
+    expect(warnings.some((message) => /protocol version 1/.test(message))).toBe(true);
   });
 
   it('runs a legacy v0 lease and warns about the migration', async () => {

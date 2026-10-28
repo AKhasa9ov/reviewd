@@ -133,6 +133,11 @@ describe('worker protocol v1', () => {
     expect(payload.bundle.protocolVersion).toBe(1);
     expect(payload.bundle.promptVersion).toBe(1);
     expect(payload.job.bundle).toBeUndefined();
+    // The v2 snapshot manifest is transported on the bundle, not just in bundle.diff.
+    expect(payload.bundle.manifest?.schemaVersion).toBe(1);
+    expect(Array.isArray(payload.bundle.manifest?.files)).toBe(true);
+    expect(payload.bundle.manifest.files).not.toHaveLength(0);
+    expect(payload.bundle.manifest.files.map((file: any) => file.path)).toContain('src/a.ts');
     // The bundled contract is harness-neutral: it must not carry model or token policy.
     expect(payload.job).not.toHaveProperty('model');
     expect(payload.bundle).not.toHaveProperty('model');
