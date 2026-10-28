@@ -7,6 +7,14 @@ versions may contain breaking changes.
 
 ## [Unreleased]
 
+### Changed
+
+- The DSH bundle defaults to embedded mode and serves the review SPA under the
+  `/code-review` base path. The embedded SPA authenticates with the DSH session and has no
+  review-token form or browser-visible daemon token; external mode (`embedded: false`)
+  keeps the daemon-origin UI and token login. Install and upgrade with
+  `dsh plugin --profile web add @dsh-code-review/dsh`.
+
 ### Fixed
 
 - Review appends are serialized per review; the derived cache is best-effort and rebuilt when missing, and GC uses `closedAt` and preserves referenced snapshots.
@@ -18,6 +26,14 @@ versions may contain breaking changes.
 
 ### Added
 
+- Fat DSH package `@dsh-code-review/dsh`: one installable Cordis bundle now ships the Host,
+  reviewer worker and review daemon/SPA, so embedded mode (the default) needs no separate
+  server. It starts `reviewd` in-process on an ephemeral loopback port and serves the full
+  review UI at `/code-review` on the DSH origin. `/code-review` and `/api/code-review` use
+  DSH session auth through `connection.requestRejection`; the daemon bearer stays Host-only
+  and never reaches the browser. `embedded: false` keeps the external daemon path and its
+  32+ character token requirement. The package declares the DSH bundle/client signals, MIT
+  license, root README and files manifest for registry submission.
 - Repository settings at `/settings` with daemon-persisted, path-validated checkouts and default target branches (`/api/settings/repositories`).
 - Merge-request review setup: source and target branch pickers, all merge-base commits or an inclusive commit set (`commits` scope), plus `GET /api/repos/commits`.
 - Docker multi-stage image and Compose stack: Node 22 slim, non-root, read-only root,

@@ -1,43 +1,96 @@
 # DSH integration
 
-`packages/dsh` is a Cordis bundle for DeepSeek Harness 0.2.x. It ships two halves:
+`@dsh-code-review/dsh` is one Cordis bundle for DeepSeek Harness 0.2.x. It ships both
+halves of the integration plus the review daemon and SPA, so the default install needs no
+separate server process:
 
-- **Host**: same-origin daemon proxy, `review_*` tools, `/review` command, reviewer
-  worker and feedback delivery into the initiating DSH session.
-- **Client**: a `Code Review` entry in `sidebar.panellist` and a keyed `main` panel
-  listing reviews and opening the standalone review UI.
+- **Host**: starts the daemon in-process (embedded mode) or proxies an external one,
+  registers the `review_*` tools and `/review` command, runs the reviewer worker and
+  delivers feedback into the initiating DSH session.
+- **Client**: a `Code Review` entry in `sidebar.panellist` and a keyed `main` panel. The
+  panel lists reviews, creates them and opens the full review SPA in a new tab.
 
-The standalone `reviewd` daemon still owns review state, diff snapshots and the full
-line-comment UI. DSH is a control surface and delivery bridge; it is not a second store.
+Review state is owned by `reviewd` and its filesystem store, not by DSH. Embedded mode
+runs that daemon inside the DSH process; external mode connects to one the operator runs.
+Both modes use the same store, review lifecycle and HTTP contract.
+
+## Architecture
+
+### Embedded mode (default)
+
+```text
+DSH Web UI (browser)
+  ├── /code-review/*        SPA served by the bundle, behind the DSH connection gate
+  └── /api/code-review/*    panel/SPA API proxy, behind the same gate
+        │
+        ▼
+DSH Host process
+  ├── connection.requestRejection()   Host/Origin + DSH session credential check
+  ├── proxy → 127.0.0.1:<ephemeral>   adds per-process bearer, strips browser auth
+  ├── tools, /review, worker, delivery loops
+  └── reviewd (in-process) ── storeDir ── reviews/ snapshots/ deliveries.json
+```
+
+The bundle's patch inserts `code-review` with `embedded: true`, `uiBase: /code-review`,
+`worker: true` and `reviewerBackend: worker`. It starts `reviewd` on an ephemeral loopback
+port and generates a random 32-byte bearer for that instance. The browser only sees the
+DSH session cookie; the bearer is injected by the Host and never appears in HTML, URLs,
+`/api/code-review/info` or client code. A failed daemon start is reported as a typed 503.
+
+### External mode (`embedded: false`)
+
+```text
+DSH Web UI (browser)
+  ├── /api/code-review/*    panel API proxy, behind the DSH connection gate
+  └── Open link             external review UI (publicUrl or daemonUrl)
+        │                         │
+        ▼                         ▼
+DSH Host process              reviewd (separate process)
+  ├── proxy → daemonUrl ────────┘  token login + HttpOnly cookie
+  ├── tools, /review, worker, delivery loops
+  └── no /code-review static mount
+```
+
+External mode does not mount the SPA on the DSH origin. The panel lists reviews through
+the same-origin proxy and links to the daemon's own UI, which keeps its token login and
+HttpOnly session cookie. The configured `token` is still Host-only: the proxy replaces any
+browser `Authorization` header, forwards `idempotency-key` and `x-review-actor`, and keeps
+the token out of responses. The daemon may be on loopback with a separate `publicUrl` for
+browser links.
 
 ## Install
 
-Build the workspace, then install the bundle at its absolute path through the profile
-plugin manager (do not hand-edit the profile patch):
+Requires Node.js 22+, DSH 0.2.x and `git` on `PATH`.
 
 ```bash
-pnpm build
+dsh plugin --profile web add @dsh-code-review/dsh
 ```
 
-```text
-plugin_manager install_bundle target=/absolute/path/to/dsh-code-review/packages/dsh
+This forwards `add` to pnpm in the `web` profile directory. Restart the profile after a
+Host-side install so its routes, tools and loops load; DSH HMR can reload only the client
+half. From a local checkout, build and pack, then install the tarball with the same
+command:
+
+```bash
+pnpm fat:verify
+dsh plugin --profile web add /absolute/path/to/dsh-code-review-dsh-0.1.0.tgz
 ```
 
-A successful install reports `application: applied`, adds `@dsh-code-review/dsh` to the
-profile bundle list and activates the inserted `code-review` row. Restart or reload the
-Harness page if the client half was not hot-reloaded; a change to the Host half requires
-restarting the Harness process so its routes and loops reload.
+A successful install adds `@dsh-code-review/dsh` to the profile bundle list and activates
+the inserted `code-review` row. The older `plugin_manager install_bundle target=...` flow
+still works for an unpacked directory, but the npm package/tarball path above is the
+release path. The package id in the manifest is the last segment of the npm name (`dsh`).
 
 ## Configuration
 
-The bundle's patch inserts one row with defaults. Override its config in the profile's
-own patch layer (the layer applied after every bundle):
+The bundle patch supplies defaults; override the row in the profile's own patch layer (the
+layer applied after every bundle), not in the package's `cordis.patch.yml`:
 
 ```yaml
 - id: code-review
   config:
-    daemonUrl: http://127.0.0.1:3100
-    token: '<at least 32 bytes>'
+    embedded: true
+    storeDir: /var/lib/dsh-code-review
     worker: true
     reviewerBackend: worker
     repoHint: /absolute/repo
@@ -50,27 +103,50 @@ own patch layer (the layer applied after every bundle):
     # reviewerTimeoutMs: 600000
 ```
 
-| Key                                                           | Meaning                                                                |
-| ------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `daemonUrl`                                                   | `reviewd` origin reachable from the DSH host.                          |
-| `publicUrl`                                                   | Browser-facing UI origin when `daemonUrl` is loopback or host-only.    |
-| `token`                                                       | Shared daemon bearer token. Secret; Host-only.                         |
-| `worker`                                                      | Register a reviewer worker that long-polls `/api/jobs/next`.           |
-| `repoHint`                                                    | Default repository root when the session has no usable cwd.            |
-| `reviewerBackend`                                             | `worker`, `command` or `none`, copied into new reviews.                |
-| `sessionId`                                                   | Parent session for reviewer agents and fallback initiator.             |
-| `cwd`                                                         | Fallback reviewer working directory.                                   |
-| `reviewerPreset`                                              | Agent preset for reviewer subagents.                                   |
-| `reviewerModel`                                               | Provider/model/reasoning override for reviewer subagents.              |
-| `reviewerTimeoutMs`                                           | Reviewer deadline in ms (default `600000`); timeouts cancel and retry. |
-| `pollMs`, `deliveryPollMs`, `heartbeatMs`, `requestTimeoutMs` | Loop and request tuning.                                               |
+| Key                                                           | Meaning                                                                 |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `embedded`                                                    | `true` (default) starts `reviewd` in-process; `false` uses `daemonUrl`. |
+| `uiBase`                                                      | Same-origin mount for the embedded SPA. Default `/code-review`.         |
+| `storeDir`                                                    | Embedded store directory. Default `$HOME/.local/share/dsh-code-review`. |
+| `daemonUrl`                                                   | External `reviewd` origin. Ignored when `embedded` is true.             |
+| `publicUrl`                                                   | Browser-facing UI origin when the daemon URL is loopback or host-only.  |
+| `token`                                                       | External daemon bearer. Required (32+ chars) only when not embedded.    |
+| `worker`                                                      | Register the reviewer worker. Default `true` in the bundle patch.       |
+| `repoHint`                                                    | Default repository root when the session has no usable cwd.             |
+| `reviewerBackend`                                             | `worker`, `command` or `none`, copied into new reviews.                 |
+| `sessionId`                                                   | Parent session for reviewer agents and fallback initiator.              |
+| `cwd`                                                         | Fallback reviewer working directory.                                    |
+| `reviewerPreset`                                              | Agent preset for reviewer subagents.                                    |
+| `reviewerModel`                                               | Provider/model/reasoning override; an explicit value wins over Host.    |
+| `reviewerTimeoutMs`                                           | Reviewer deadline in ms (default `600000`); timeouts cancel and retry.  |
+| `pollMs`, `deliveryPollMs`, `heartbeatMs`, `requestTimeoutMs` | Loop and request tuning.                                                |
 
-`reviewd` rejects tokens shorter than 32 bytes. The token is never sent to the Client,
-rendered in a panel, logged, or placed in a URL. The Client calls only same-origin
-`/api/code-review/*`; the Host applies DSH's `connection.requestRejection` gate (Host/Origin
-fence plus browser/API credentials), replaces any Client-supplied authorization header with
-`Authorization: Bearer <token>`, forwards `idempotency-key` and `x-review-actor`, and serves
-the authenticated `/api/code-review/info` as `{daemonUrl, publicUrl?}` without the token.
+Embedded mode ignores `daemonUrl` and `token`; its URL and bearer are generated per
+process. External mode validates both: `daemonUrl` must be an http(s) URL and `token` must
+be at least 32 characters. A configuration problem logs a warning and leaves the tools and
+panel in a not-configured state instead of failing activation.
+
+## Authentication and routes
+
+Both `/api/code-review/*` and, in embedded mode, `/code-review/*` pass through
+`connection.requestRejection()` before any proxy or static work. That gate applies DSH's
+Host/Origin fence and browser/API credential checks. Unauthenticated requests get 401/403;
+there is no separate review-token form in embedded mode. The browser authenticates with
+its DSH session and never receives the daemon bearer.
+
+- `/api/code-review/info` is authenticated and returns `{daemonUrl, publicUrl?, uiBase?}`
+  without the token. The panel uses `uiBase` first in embedded mode and falls back to
+  `publicUrl`, then `daemonUrl`, for the `Open` link.
+- `/api/code-review/*` proxies to `<daemon>/api/*` and forwards `last-event-id` for SSE.
+  Bodies over 2 MiB get 413; an unreachable daemon or failed embedded start gets 502/503.
+- `/code-review/` serves the SPA; deep links are `/code-review/review/<id>`. The SPA calls
+  `/code-review/api/*`, which the Host proxies to the daemon. Static paths outside the SPA
+  contract return 404/405 rather than the index page.
+- In external mode the static mount is absent. `/api/code-review` remains available for
+  the panel and any DSH-side API calls.
+
+Do not put the daemon token in a URL or in client configuration. In embedded mode there is
+no token to configure.
 
 ## Tools and command
 
@@ -92,7 +168,9 @@ With `worker: true`, the bundle registers a worker named `dsh-code-review`, hear
 long-polls for jobs and creates a subagent through `ctx.agents.create`. Registration
 retries a stable worker id with 1s..30s backoff instead of giving up after one failure.
 If the daemon restarted and forgot the id, `/api/jobs/next` answers 401 and the worker
-registers again before polling.
+registers again before polling. In embedded mode the worker waits for the daemon's
+readiness before its first poll; a failed embedded start is logged once instead of
+becoming a retry loop against a dead port.
 
 The subagent:
 
@@ -103,6 +181,8 @@ The subagent:
   allows only `read`, `grep`, `glob`, `review_status` and `review_feedback`; shell,
   write, network, delegation and review-mutating tools fail closed. Global
   `tools.restrict()` cannot hide preset-scoped tools, so the guard is the boundary;
+- inherits the Host's default model unless `reviewerModel` is set; the explicit override
+  wins;
 - receives the job prompt with a bounded unified diff (60k characters, with an explicit
   truncation marker) and an exact report schema, then returns one JSON report;
 - reads the report from the durable session log (`agent.session.snapshotEvents()`),
@@ -113,6 +193,12 @@ The subagent:
 - is cancelled with `kind: 'timeout'` and failed with retryable `reviewer-timeout` when
   `reviewerTimeoutMs` expires, and its agent handle is disposed in `finally` on every
   path. Plugin disposal cancels an active reviewer.
+
+Set `worker: false` to stop this Host from picking up jobs. Reviews created with
+`reviewerBackend: worker` then wait for another worker; the sidebar's **New review** form
+always requests the worker backend. Use `reviewerBackend: none` for no automated
+pre-review, or `command` when the daemon is configured for a command reviewer. With
+`none`, the review is created and a skipped report is recorded.
 
 ## Delivery
 
@@ -125,21 +211,67 @@ failures retry with capped backoff; after three failed attempts the Host POSTs
 budget; no partial prompt is acked. Legacy/CLI deliveries without an initiator stay
 pending for a human or CLI.
 
-## Panel
+## Store, upgrade and uninstall
 
-The sidebar entry opens the Code Review panel. It loads reviews through the proxy and
-offers a create form. The `Open` link prefers `publicUrl` over `daemonUrl`, so a daemon
-on loopback still produces a link that works from another machine. That UI asks for the
-daemon token once and exchanges it for an HttpOnly session cookie. A missing or rejected
-token produces the panel's auth state with a Retry button. The panel uses Harness
-`--dsw-alias-*` tokens and does not load the standalone UI bundle.
+The embedded daemon creates `$HOME/.local/share/dsh-code-review` on first run (the store
+also creates missing directories). Set `storeDir` to an absolute path to use another
+directory. The store holds the append-only event log, replay caches, snapshots, deliveries,
+settings and the single-writer lock; it survives restarts, upgrades and package removal.
+
+Upgrade with `dsh plugin --profile web add @dsh-code-review/dsh@latest`, then restart the
+profile. Back up `storeDir` first; the daemon applies compatible event-schema migrations at
+startup and refuses an incompatible store with an actionable error. Uninstall with
+`dsh plugin --profile web remove @dsh-code-review/dsh`. Stopping the Host closes the
+embedded daemon and discards its in-memory token. Uninstalling does **not** delete review
+data; remove `storeDir` manually to erase it.
+
+There is no automatic retention or GC in embedded mode. Reviews remain until the store is
+deleted. An external daemon exposes authenticated `POST /api/gc` and the
+`review gc --older-than 90d` CLI; GC is irreversible, so take a backup first. See
+[docs/ops.md](ops.md) for the full retention, backup and upgrade procedure.
+
+## Security notes
+
+- The embedded daemon binds `127.0.0.1` on an ephemeral port with a per-process bearer.
+  The DSH connection gate protects both the SPA and the proxy; the daemon port is not a
+  second public surface. Do not forward it.
+- Embedded mode is single-tenant: anyone who can authenticate to that DSH profile can read
+  and modify every review in its store. Treat the DSH profile as the access boundary.
+- An external `reviewd` has one shared bearer and no accounts. Keep it on loopback or a
+  private network and terminate TLS at a reverse proxy. There is no CORS and no
+  per-user audit identity.
+- Reviewer comments and output are untrusted. The reviewer is read-only, suggestions are
+  not applied automatically, and git access validates paths against the repository root.
+- The package contains no secrets, tokens, `.env` files, store data, test fixtures or
+  source maps, and runs no postinstall script. Registry scans should expect warnings for
+  `child_process` (git and the optional command reviewer spawn without a shell),
+  filesystem access (repository reads and store writes) and network access (loopback
+  daemon/proxy); these are expected, with no secret exfiltration or destructive behavior.
+
+## Release status
+
+The package name is `@dsh-code-review/dsh` (version `0.1.0`, MIT, public access). The
+manifest's repository, homepage and bugs URLs currently point at
+`https://github.com/dsh-code-review/dsh-code-review`; **confirm those final public URLs
+before npm publish** and update all three fields together if the repository moves. The
+package has not been published to npm and has not been submitted to dsh.so. dsh.so expects
+the public npm package URL after publish (not a local tarball or ZIP); a listing may stay
+"Declared/unverified" until it is independently install-tested.
 
 ## Verification
 
-- `pnpm verify` covers typecheck and 39 test files (19 core, 7 server, 6 DSH, 4 UI,
-  3 web).
+- `pnpm verify` runs format, lint, typecheck, build and the unit/integration suite,
+  including the package metadata/README checks in `packages/dsh/test/package.test.ts`.
+- `pnpm fat:verify` builds, packs and inspects the tarball: `index.js`, `client.js`,
+  `cordis.patch.yml`, `web/index.html`, `web/assets/*`, `README.md` and `LICENSE`, with no
+  `src/`, `test/`, `node_modules/` or `*.map`.
 - `packages/dsh/test/integration.test.ts` starts a real daemon, creates a review with an
-  initiator, submits feedback and asserts one queued prompt plus an acknowledged
-  delivery.
-- After install, `plugin_manager list_plugins` should show `include:code-review` active
-  and the Host should expose `review_start` in `cordis_inspect_query`.
+  initiator, submits feedback and asserts one queued prompt plus an acknowledged delivery.
+- `pnpm test:e2e` covers external mode. The live fat-package check used a disposable
+  profile: panel without a token, review creation, `/code-review/review/<id>` in a new tab,
+  comments and deep-link reload, findings in the report and inline view, proxy SSE, and
+  cleanup of both DSH and daemon ports on shutdown. External mode was covered by e2e, not a
+  second live profile.
+- After install, `dsh plugin --profile web why @dsh-code-review/dsh` should show the
+  package in the profile, and the Host should expose `review_start` in
+  `cordis_inspect_query`.

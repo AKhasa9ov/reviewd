@@ -61,17 +61,24 @@ review serve --store /var/lib/code-review --public-url https://review.example
 
 ### DSH
 
-Build first, then install the bundle through the profile plugin manager:
+Install the bundle into the DSH web profile, then restart the profile so its Host routes
+and loops load:
 
 ```bash
-pnpm build
-# plugin_manager install_bundle target=/absolute/path/to/dsh-code-review/packages/dsh
+dsh plugin --profile web add @dsh-code-review/dsh
 ```
 
-Configure `daemonUrl`, `token`, `worker` and `repoHint` in the profile patch; the full
-key table, tool list, worker behaviour and delivery contract are in [docs/dsh.md](docs/dsh.md).
-The bundle adds a sidebar panel, a keyed main panel, `review_*` tools, `/review`, the
-reviewer worker and feedback delivery into the initiating session.
+Embedded mode is the default: the bundle starts `reviewd` in-process on an ephemeral
+loopback port and serves the review SPA at `/code-review` behind DSH session auth. Review
+data stays in `$HOME/.local/share/dsh-code-review`; set `storeDir` to move it. Set
+`embedded: false` with `daemonUrl` and a 32+ character `token` to use an external daemon
+instead. The full key table, install/upgrade/uninstall commands, tool list, worker
+behaviour, auth model and data-retention notes are in [docs/dsh.md](docs/dsh.md).
+
+For a local checkout, build and pack first, then add the tarball with the same command
+(`pnpm fat:verify` prints its path). The older
+`plugin_manager install_bundle target=/absolute/path/to/dsh-code-review/packages/dsh`
+flow also works for an unpacked directory.
 
 ### CLI
 

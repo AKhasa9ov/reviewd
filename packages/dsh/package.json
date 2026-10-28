@@ -1,9 +1,20 @@
 {
   "name": "@dsh-code-review/dsh",
   "version": "0.1.0",
-  "description": "Code review panel, tools, reviewer worker and feedback delivery for DeepSeek Harness",
+  "description": "Code review panel, review daemon, tools, reviewer worker and feedback delivery for DeepSeek Harness",
   "license": "MIT",
   "type": "module",
+  "main": "./index.js",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "code-review",
+    "review"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "prepack": "node ../../scripts/build.mjs"
   },
@@ -47,7 +58,8 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dsh-code-review/dsh-code-review.git"
+    "url": "git+https://github.com/dsh-code-review/dsh-code-review.git",
+    "directory": "packages/dsh"
   },
   "homepage": "https://github.com/dsh-code-review/dsh-code-review#readme",
   "bugs": {
