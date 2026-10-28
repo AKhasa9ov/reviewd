@@ -7,6 +7,9 @@ export default defineConfig({
       '@dsh-code-review/core': fileURLToPath(
         new URL('./packages/core/src/index.ts', import.meta.url),
       ),
+      '@dsh-code-review/worker': fileURLToPath(
+        new URL('./packages/worker/src/index.ts', import.meta.url),
+      ),
       '@dsh-code-review/ui': fileURLToPath(new URL('./packages/ui/src/index.ts', import.meta.url)),
     },
   },

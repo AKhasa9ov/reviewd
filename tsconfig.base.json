@@ -16,7 +16,8 @@
     "types": ["node"],
     "baseUrl": ".",
     "paths": {
-      "@dsh-code-review/core": ["packages/core/src/index.ts"]
+      "@dsh-code-review/core": ["packages/core/src/index.ts"],
+      "@dsh-code-review/worker": ["packages/worker/src/index.ts"]
     }
   }
 }
