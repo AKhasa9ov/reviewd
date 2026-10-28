@@ -9,7 +9,7 @@ interface Call {
   body?: unknown;
 }
 
-function lease(): JobLease {
+function lease(overrides: Partial<JobLease> = {}): JobLease {
   return {
     id: 'job_1',
     reviewId: 'rev_1',
@@ -20,6 +20,7 @@ function lease(): JobLease {
     attemptId: 'att_1',
     leaseUntil: '2026-10-28T00:00:00.000Z',
     bundle: { prompt: 'Review this diff', meta: { cwd: '/repo' } },
+    ...overrides,
   };
 }
 
@@ -523,4 +524,90 @@ describe('runWorkerLoop', () => {
     expect(cancelCalls).toBe(1);
     expect(calls.some((call) => call.path.endsWith('/fail'))).toBe(false);
   }, 2_000);
+
+  it('rejects an unsupported lease protocol version before running the runner', async () => {
+    const controller = new AbortController();
+    const calls: Call[] = [];
+    const api = apiFor(
+      controller,
+      calls,
+      lease({ protocolVersion: 2, promptVersion: 1, bundle: { prompt: 'Review this diff' } }),
+    );
+    let runs = 0;
+    await runWorkerLoop(
+      options(api, {
+        run: async () => {
+          runs += 1;
+          return { report: { schemaVersion: 1 } };
+        },
+      }),
+      controller.signal,
+    );
+
+    expect(runs).toBe(0);
+    expect(calls).toContainEqual({
+      method: 'POST',
+      path: '/api/jobs/job_1/fail',
+      body: {
+        attemptId: 'att_1',
+        code: 'protocol-mismatch',
+        message: expect.stringMatching(/protocol version 1/),
+        retryable: false,
+      },
+    });
+    expect(
+      calls.some((call) => call.path.endsWith('/findings') || call.path.endsWith('/report')),
+    ).toBe(false);
+  });
+
+  it('runs a legacy v0 lease and warns about the migration', async () => {
+    const controller = new AbortController();
+    const calls: Call[] = [];
+    const api = apiFor(controller, calls, lease());
+    const warnings: string[] = [];
+    let runs = 0;
+    await runWorkerLoop(
+      {
+        ...options(api, {
+          run: async () => {
+            runs += 1;
+            return { report: { schemaVersion: 1 } };
+          },
+        }),
+        logger: { warn: (message) => warnings.push(message) },
+      },
+      controller.signal,
+    );
+
+    expect(runs).toBe(1);
+    expect(warnings.some((message) => /v0/.test(message))).toBe(true);
+    expect(warnings.some((message) => /protocol version 1/.test(message))).toBe(true);
+  });
+
+  it('accepts an explicit v1 lease without a migration warning', async () => {
+    const controller = new AbortController();
+    const calls: Call[] = [];
+    const api = apiFor(
+      controller,
+      calls,
+      lease({ protocolVersion: 1, promptVersion: 1, bundle: { prompt: 'Review this diff' } }),
+    );
+    const warnings: string[] = [];
+    let runs = 0;
+    await runWorkerLoop(
+      {
+        ...options(api, {
+          run: async () => {
+            runs += 1;
+            return { report: { schemaVersion: 1 } };
+          },
+        }),
+        logger: { warn: (message) => warnings.push(message) },
+      },
+      controller.signal,
+    );
+
+    expect(runs).toBe(1);
+    expect(warnings).toEqual([]);
+  });
 });

@@ -1,5 +1,10 @@
 import { isDeepStrictEqual } from 'node:util';
 
+/** Lease protocol version this worker understands. v0 is the legacy unversioned lease. */
+export const PROTOCOL_VERSION = 1;
+/** Prompt dialect version this worker understands. v0 is the legacy unversioned prompt. */
+export const PROMPT_VERSION = 1;
+
 export interface WorkerApi {
   get<T = unknown>(path: string, signal?: AbortSignal): Promise<T>;
   post<T = unknown>(path: string, body: unknown, signal?: AbortSignal): Promise<T>;
@@ -12,8 +17,12 @@ export interface WorkerIdentity {
 }
 
 export interface JobBundle {
+  protocolVersion?: number;
+  promptVersion?: number;
   prompt: string;
   diff?: unknown;
+  /** Complete changed-file manifest produced by reviewd; the shape is owned by core. */
+  manifest?: unknown;
   schema?: unknown;
   meta?: Record<string, unknown>;
 }
@@ -27,7 +36,16 @@ export interface JobLease {
   attempt: number;
   attemptId: string;
   leaseUntil: string;
+  protocolVersion?: number;
+  promptVersion?: number;
   bundle: JobBundle;
+}
+
+export interface LeaseVersions {
+  protocolVersion: number;
+  promptVersion: number;
+  /** True when a version is absent, which identifies a v0 lease during migration. */
+  legacy: boolean;
 }
 
 export interface RunnerResult {
@@ -79,6 +97,39 @@ export function isStaleWorkerError(error: unknown): boolean {
     candidate.code === 'unauthorized' ||
     candidate.code === 'not-found'
   );
+}
+
+function leaseVersion(label: 'protocol' | 'prompt', value: unknown): number {
+  // Missing versions identify the legacy v0 lease. v0 is accepted only during
+  // migration; every new adapter must emit and receive v1.
+  if (value === undefined) return 0;
+  if (value === 0 || value === PROTOCOL_VERSION) return value;
+  throw new WorkerRunError(
+    'protocol-mismatch',
+    `worker supports ${label} version ${PROTOCOL_VERSION}, but the lease declares ${label} version ${String(
+      value,
+    )}; upgrade the worker or reviewd so both use ${label} version ${PROTOCOL_VERSION}`,
+    false,
+  );
+}
+
+/**
+ * Reads the lease protocol and prompt versions, preferring the flattened lease
+ * fields and falling back to the bundle envelope. Throws a non-retryable
+ * `protocol-mismatch` before a runner sees an unsupported lease; callers must
+ * invoke this before `runner.run`.
+ */
+export function readLeaseVersions(lease: JobLease): LeaseVersions {
+  const protocolVersion = leaseVersion(
+    'protocol',
+    lease.protocolVersion ?? lease.bundle.protocolVersion,
+  );
+  const promptVersion = leaseVersion('prompt', lease.promptVersion ?? lease.bundle.promptVersion);
+  return {
+    protocolVersion,
+    promptVersion,
+    legacy: protocolVersion === 0 || promptVersion === 0,
+  };
 }
 
 export function normalizeRunnerResult(result: RunnerResult): {

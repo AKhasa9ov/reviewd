@@ -1,6 +1,17 @@
 import { randomUUID } from 'node:crypto';
-import { isStaleWorkerError, normalizeRunnerResult, WorkerRunError } from './protocol.js';
-import type { HarnessRunner, JobLease, RunnerResult, WorkerLoopOptions } from './protocol.js';
+import {
+  isStaleWorkerError,
+  normalizeRunnerResult,
+  readLeaseVersions,
+  WorkerRunError,
+} from './protocol.js';
+import type {
+  HarnessRunner,
+  JobLease,
+  LeaseVersions,
+  RunnerResult,
+  WorkerLoopOptions,
+} from './protocol.js';
 
 /** Marks a runner invocation that the loop abandoned because the signal aborted. */
 const ABORTED = Symbol('aborted');
@@ -69,6 +80,28 @@ async function runLease(
   signal: AbortSignal,
 ): Promise<void> {
   if (signal.aborted) return;
+  // A lease version mismatch is a contract error, not a reviewer failure: reject
+  // it before the runner sees the lease and never consume findings/report.
+  let versions: LeaseVersions;
+  try {
+    versions = readLeaseVersions(lease);
+  } catch (error) {
+    const failure =
+      error instanceof WorkerRunError
+        ? error
+        : new WorkerRunError(
+            'protocol-mismatch',
+            error instanceof Error ? error.message : 'unsupported lease protocol version',
+            false,
+          );
+    await fail(options, lease, failure.code, failure.message, failure.retryable, signal);
+    return;
+  }
+  if (versions.legacy) {
+    options.logger?.warn?.(
+      'code-review: lease uses protocol v0 (missing protocolVersion/promptVersion); accepted for migration, but new adapters must require protocol version 1',
+    );
+  }
   const onAbort = (): void => {
     try {
       options.runner.cancel?.();

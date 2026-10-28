@@ -70,6 +70,9 @@ findings.
 - Divergent result-level and report-level findings map to `invalid-output` and
   are not retryable.
 - Failure to submit findings/report/ack maps to `report-failed` and is retryable.
+- Unsupported lease `protocolVersion`/`promptVersion` maps to non-retryable
+  `protocol-mismatch` before the runner runs; the loop posts `fail` and does not
+  consume findings or a report.
 - Aborted runs do not post a failure.
 - Stale worker registration (`401`/`403`/`404` or `unauthorized`/`not-found`)
   triggers one re-registration. A successful poll re-arms that one retry; a
@@ -77,12 +80,23 @@ findings.
 
 ## Protocol versioning
 
-C1 is a **v0** lease contract. reviewd's wire contract does not yet carry
-`protocolVersion` or `promptVersion`, so this package intentionally omits the
-typed fields shown in the cross-harness design (§6.2–6.3). This is a recorded
-decision, not an omitted field: C2 must add and validate both versions before
-any adapter consumes `@dsh-code-review/worker`. `schemaVersion: 1` describes the
-report shape only and is unrelated to the lease protocol version.
+reviewd emits `protocolVersion: 1` and `promptVersion: 1` on every lease and
+inside `bundle`. `schemaVersion: 1` describes the report shape only and is
+unrelated to the lease protocol version.
+
+`runWorkerLoop` validates both versions through `readLeaseVersions` before the
+runner is invoked:
+
+- v1 leases run normally;
+- a missing version is the legacy v0 lease. It is accepted during migration and
+  logs a warning; new adapters must require v1;
+- an explicit unsupported version posts non-retryable `protocol-mismatch` with a
+  message naming the supported version and never runs the runner.
+
+`bundle.manifest` carries reviewd's complete `ReviewManifest` when available.
+The manifest shape is owned by `@dsh-code-review/core`; this package transports
+it and does not model it. The bundle deliberately carries no model or token
+policy.
 
 ## Verification
 

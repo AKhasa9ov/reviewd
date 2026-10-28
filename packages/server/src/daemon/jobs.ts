@@ -1,5 +1,7 @@
 import { randomBytes } from 'node:crypto';
+import type { ReviewManifest } from '@dsh-code-review/core';
 import { ApiError } from './errors.js';
+import { PROMPT_VERSION, PROTOCOL_VERSION } from './types.js';
 import type { LeaseView } from './types.js';
 
 export interface WorkerRegistration {
@@ -31,6 +33,9 @@ export interface JobRecord {
   attemptId?: string;
   workerId?: string;
   leaseUntil?: string;
+  protocolVersion: number;
+  promptVersion: number;
+  manifest?: ReviewManifest;
   createdAt: string;
 }
 
@@ -114,6 +119,9 @@ export class JobQueue {
     prompt: string;
     diff: unknown;
     meta?: Record<string, unknown>;
+    protocolVersion?: number;
+    promptVersion?: number;
+    manifest?: ReviewManifest;
   }): JobRecord {
     const job: JobRecord = {
       id: randomId('job'),
@@ -126,6 +134,9 @@ export class JobQueue {
       meta: input.meta ?? {},
       status: 'queued',
       attempt: 0,
+      protocolVersion: input.protocolVersion ?? PROTOCOL_VERSION,
+      promptVersion: input.promptVersion ?? PROMPT_VERSION,
+      ...(input.manifest === undefined ? {} : { manifest: input.manifest }),
       createdAt: this.now().toISOString(),
     };
     this.jobs.set(job.id, job);
@@ -311,9 +322,14 @@ export class JobQueue {
       attempt: job.attempt,
       attemptId: job.attemptId,
       leaseUntil: job.leaseUntil,
+      protocolVersion: job.protocolVersion,
+      promptVersion: job.promptVersion,
       bundle: {
+        protocolVersion: job.protocolVersion,
+        promptVersion: job.promptVersion,
         prompt: job.prompt,
         diff: job.diff,
+        ...(job.manifest === undefined ? {} : { manifest: job.manifest }),
         schema: { schemaVersion: 1 },
         meta: { ...job.meta, reviewId: job.reviewId, round: job.round, kind: job.kind },
       },

@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { isStaleWorkerError, normalizeRunnerResult, WorkerRunError } from '../src/index.js';
+import {
+  PROMPT_VERSION,
+  PROTOCOL_VERSION,
+  isStaleWorkerError,
+  normalizeRunnerResult,
+  readLeaseVersions,
+  WorkerRunError,
+} from '../src/index.js';
+import type { JobLease } from '../src/index.js';
 
 function caught(fn: () => unknown): unknown {
   try {
@@ -8,6 +16,21 @@ function caught(fn: () => unknown): unknown {
     return error;
   }
   return undefined;
+}
+
+function lease(overrides: Partial<JobLease> = {}): JobLease {
+  return {
+    id: 'job_1',
+    reviewId: 'rev_1',
+    round: 1,
+    kind: 'initial',
+    backend: 'worker',
+    attempt: 1,
+    attemptId: 'att_1',
+    leaseUntil: '2026-10-28T00:00:00.000Z',
+    bundle: { prompt: 'Review this diff' },
+    ...overrides,
+  };
 }
 
 describe('worker protocol errors', () => {
@@ -106,5 +129,67 @@ describe('worker protocol errors', () => {
     const normalized = normalizeRunnerResult({ report: { schemaVersion: 1 } });
     expect(normalized.findings).toEqual([]);
     expect(normalized.report).toEqual({ schemaVersion: 1, findings: [] });
+  });
+});
+
+describe('lease protocol versions', () => {
+  it('accepts an explicit v1 lease', () => {
+    const versions = readLeaseVersions(
+      lease({
+        protocolVersion: 1,
+        promptVersion: 1,
+        bundle: { prompt: 'Review this diff', protocolVersion: 1, promptVersion: 1 },
+      }),
+    );
+
+    expect(PROTOCOL_VERSION).toBe(1);
+    expect(PROMPT_VERSION).toBe(1);
+    expect(versions).toEqual({ protocolVersion: 1, promptVersion: 1, legacy: false });
+  });
+
+  it('treats a missing version as legacy v0', () => {
+    expect(readLeaseVersions(lease())).toEqual({
+      protocolVersion: 0,
+      promptVersion: 0,
+      legacy: true,
+    });
+  });
+
+  it('accepts an explicit v0 lease', () => {
+    expect(readLeaseVersions(lease({ protocolVersion: 0, promptVersion: 0 }))).toEqual({
+      protocolVersion: 0,
+      promptVersion: 0,
+      legacy: true,
+    });
+  });
+
+  it('falls back to the bundle versions when the lease omits them', () => {
+    const versions = readLeaseVersions(
+      lease({
+        bundle: { prompt: 'Review this diff', protocolVersion: 1, promptVersion: 1 },
+      }),
+    );
+
+    expect(versions).toEqual({ protocolVersion: 1, promptVersion: 1, legacy: false });
+  });
+
+  it('rejects an unsupported protocol version as a non-retryable protocol mismatch', () => {
+    const error = caught(() => readLeaseVersions(lease({ protocolVersion: 2, promptVersion: 1 })));
+
+    expect(error).toBeInstanceOf(WorkerRunError);
+    expect((error as WorkerRunError).code).toBe('protocol-mismatch');
+    expect((error as WorkerRunError).retryable).toBe(false);
+    expect((error as Error).message).toMatch(/protocol version 1/);
+    expect((error as Error).message).toMatch(/protocol version 2/);
+  });
+
+  it('rejects an unsupported prompt version as a non-retryable protocol mismatch', () => {
+    const error = caught(() => readLeaseVersions(lease({ protocolVersion: 1, promptVersion: 3 })));
+
+    expect(error).toBeInstanceOf(WorkerRunError);
+    expect((error as WorkerRunError).code).toBe('protocol-mismatch');
+    expect((error as WorkerRunError).retryable).toBe(false);
+    expect((error as Error).message).toMatch(/prompt version 1/);
+    expect((error as Error).message).toMatch(/prompt version 3/);
   });
 });

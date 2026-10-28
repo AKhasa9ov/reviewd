@@ -40,6 +40,7 @@ import {
 import { serveStatic } from './static.js';
 import { openSse } from './sse.js';
 import type { EventHub } from './sse.js';
+import { PROMPT_VERSION, PROTOCOL_VERSION } from './types.js';
 import type { DaemonConfig } from './types.js';
 
 export interface RouteContext {
@@ -215,6 +216,7 @@ async function enqueueWorkerJob(ctx: RouteContext, reviewId: string): Promise<vo
       : {}),
   });
   const initiator = view.review.initiator;
+  const manifest = view.latestSnapshot?.manifest;
   ctx.jobs.enqueue({
     reviewId,
     round: round.no,
@@ -222,6 +224,9 @@ async function enqueueWorkerJob(ctx: RouteContext, reviewId: string): Promise<vo
     backend: 'worker',
     prompt,
     diff: view.latestSnapshot,
+    protocolVersion: PROTOCOL_VERSION,
+    promptVersion: PROMPT_VERSION,
+    ...(manifest === undefined ? {} : { manifest }),
     meta: {
       reviewId,
       round: round.no,

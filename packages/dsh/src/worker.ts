@@ -64,7 +64,14 @@ export interface WorkerJob {
 
 export interface JobLease {
   job: WorkerJob;
-  bundle: { prompt: string; diff?: unknown; schema?: unknown; meta?: Record<string, unknown> };
+  bundle: {
+    prompt: string;
+    diff?: unknown;
+    /** Complete changed-file manifest; the shape is owned by core and not validated here. */
+    manifest?: unknown;
+    schema?: unknown;
+    meta?: Record<string, unknown>;
+  };
 }
 
 function wait(ms: number, signal: AbortSignal): Promise<void> {
