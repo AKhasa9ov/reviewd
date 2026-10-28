@@ -4,6 +4,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type * as embeddedModule from '../src/embedded.js';
 import type * as uiModule from '../src/ui.js';
 
 const uiWebDir = vi.hoisted(() => ({ value: '' }));
@@ -15,11 +16,36 @@ vi.mock('../src/ui.js', async (importOriginal) => {
   };
 });
 
-import { apply, inject } from '../src/host.js';
+/**
+ * Test seam for embedded startup failures. `apply` always boots the real daemon,
+ * so these tests stand in a controlled `EmbeddedReview` instead of forcing a
+ * failing bind; the control plane and `startEmbeddedReview` failure mode are
+ * covered by embedded.test.ts.
+ */
+const embeddedSeam = vi.hoisted(() => ({
+  override: undefined as undefined | ((config: unknown, options: unknown) => unknown),
+}));
+vi.mock('../src/embedded.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof embeddedModule>();
+  return {
+    ...actual,
+    startEmbeddedReview: (
+      config: Parameters<typeof actual.startEmbeddedReview>[0],
+      options?: Parameters<typeof actual.startEmbeddedReview>[1],
+    ) =>
+      embeddedSeam.override === undefined
+        ? actual.startEmbeddedReview(config, options ?? {})
+        : (embeddedSeam.override(config, options) as ReturnType<typeof actual.startEmbeddedReview>),
+  };
+});
+
+import { normalizeConfig } from '../src/config.js';
+import { apply, inject, startReviewLoops } from '../src/host.js';
 
 const contextDisposals: Array<() => Promise<void>> = [];
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => {
+  embeddedSeam.override = undefined;
   uiWebDir.value = '';
   for (const dispose of contextDisposals.splice(0).reverse()) await dispose();
   await Promise.all(
@@ -69,7 +95,10 @@ function routeAt(routes: RegisteredRoute[], path: string): RegisteredRoute {
   return registered;
 }
 
-function createContext(requestRejection: () => 401 | 403 | undefined = () => undefined) {
+function createContext(
+  requestRejection: () => 401 | 403 | undefined = () => undefined,
+  options: { warn?: (message: string) => void; services?: Record<string, unknown> } = {},
+) {
   const routes: RegisteredRoute[] = [];
   const disposers: Array<() => void | Promise<void>> = [];
   const ctx: any = {
@@ -87,8 +116,8 @@ function createContext(requestRejection: () => 401 | 403 | undefined = () => und
       if (typeof dispose === 'function') disposers.push(dispose);
       return () => undefined;
     },
-    get: () => undefined,
-    logger: { warn: () => undefined },
+    get: (key: string) => options.services?.[key],
+    logger: { warn: options.warn ?? (() => undefined) },
   };
   const dispose = async (): Promise<void> => {
     // Cordis disposes a fiber's effects in reverse registration order.
@@ -226,5 +255,232 @@ describe('host plugin embedded mode', () => {
 
     await dispose();
     uiWebDir.value = '';
+  });
+});
+
+type LoopContext = Parameters<typeof startReviewLoops>[0];
+type LoopApi = Parameters<typeof startReviewLoops>[2];
+
+/** Host context for the loop helper: upstream services and a logger. */
+function loopContext(
+  warn: (message: string) => void = () => undefined,
+  services: Record<string, unknown> = { agents: { create: vi.fn() } },
+): LoopContext {
+  return {
+    get: (key: string) => services[key],
+    logger: { warn },
+  } as unknown as LoopContext;
+}
+
+function loopApi(): {
+  api: LoopApi;
+  get: ReturnType<typeof vi.fn>;
+  post: ReturnType<typeof vi.fn>;
+} {
+  const get = vi.fn(async () => null);
+  const post = vi.fn(async () => ({ id: 'wkr_1' }));
+  return { api: { get, post } as unknown as LoopApi, get, post };
+}
+
+describe('review loop readiness', () => {
+  it('starts the worker only after embedded readiness resolves', async () => {
+    let release!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const { api, get, post } = loopApi();
+    const stop = startReviewLoops(
+      loopContext(),
+      normalizeConfig({ embedded: true, worker: true }),
+      api,
+      ready,
+    );
+
+    await Promise.resolve();
+    expect(post).not.toHaveBeenCalled();
+    expect(get).not.toHaveBeenCalled();
+
+    release();
+    await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+    expect(post.mock.calls[0]?.[0]).toBe('/api/workers/register');
+    stop();
+  });
+
+  it('starts delivery only after embedded readiness resolves', async () => {
+    let release!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const get = vi.fn(async () => ({ deliveries: [] }));
+    const post = vi.fn(async () => ({}));
+    const stop = startReviewLoops(
+      loopContext(undefined, { sessionController: { prompt: vi.fn(), resolveAgent: vi.fn() } }),
+      normalizeConfig({ embedded: true, worker: false }),
+      { get, post } as unknown as LoopApi,
+      ready,
+    );
+
+    await Promise.resolve();
+    expect(get).not.toHaveBeenCalled();
+
+    release();
+    await vi.waitFor(() =>
+      expect(get).toHaveBeenCalledWith('/api/deliveries/pending?harness=dsh', expect.anything()),
+    );
+    stop();
+  });
+
+  it('warns and starts nothing when embedded readiness rejects', async () => {
+    const warn = vi.fn();
+    const { api, get, post } = loopApi();
+    let reject!: (error: Error) => void;
+    const ready = new Promise<void>((_resolve, rejectReady) => {
+      reject = rejectReady;
+    });
+    const stop = startReviewLoops(
+      loopContext(warn),
+      normalizeConfig({ embedded: true, worker: true }),
+      api,
+      ready,
+    );
+
+    expect(post).not.toHaveBeenCalled();
+    reject(new Error('bind refused'));
+    await vi.waitFor(() => expect(warn).toHaveBeenCalledTimes(1));
+    expect(warn.mock.calls[0]?.[0]).toContain('embedded daemon failed: bind refused');
+    expect(post).not.toHaveBeenCalled();
+    expect(get).not.toHaveBeenCalled();
+    stop();
+  });
+
+  it('does not start loops when disposed before embedded readiness', async () => {
+    let release!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const warn = vi.fn();
+    const { api, get, post } = loopApi();
+    const stop = startReviewLoops(
+      loopContext(warn),
+      normalizeConfig({ embedded: true, worker: true }),
+      api,
+      ready,
+    );
+
+    stop();
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(post).not.toHaveBeenCalled();
+    expect(get).not.toHaveBeenCalled();
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('starts immediately when no readiness promise is supplied', async () => {
+    const { api, post } = loopApi();
+    const stop = startReviewLoops(loopContext(), normalizeConfig({ worker: true }), api);
+
+    await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+    expect(post.mock.calls[0]?.[0]).toBe('/api/workers/register');
+    stop();
+  });
+});
+
+describe('host embedded startup failure', () => {
+  it('keeps routes available with a typed 503 and starts no loops', async () => {
+    const get = vi.fn(async () => null);
+    const post = vi.fn(async () => ({ id: 'wkr_1' }));
+    const warn = vi.fn();
+    embeddedSeam.override = () => ({
+      ready: Promise.reject(new Error('bind refused')),
+      api: { get, post },
+      token: 'embedded-token',
+      close: async () => undefined,
+    });
+    const { ctx, getRoutes, dispose } = createContext(() => undefined, {
+      warn,
+      services: { agents: { create: vi.fn() } },
+    });
+
+    apply(ctx, { embedded: true, worker: true, reviewerBackend: 'none' });
+
+    // The panel proxy stays mounted and reports the failed startup as a typed 503.
+    const panel = routeAt(getRoutes(), '/api/code-review');
+    const health = createResponse();
+    await panel.handler(
+      { headers: {}, method: 'GET', url: '/api/code-review/health' } as IncomingMessage,
+      health.res,
+    );
+    expect(health.getStatus()).toBe(503);
+    expect(JSON.parse(health.body())).toEqual({
+      error: { code: 'daemon-unavailable', message: 'review daemon is not ready' },
+    });
+
+    // The same-origin UI stays reachable; its API proxy also reports 503.
+    const ui = routeAt(getRoutes(), '/code-review');
+    const uiHealth = createResponse();
+    await ui.handler(
+      { headers: {}, method: 'GET', url: '/code-review/api/health' } as IncomingMessage,
+      uiHealth.res,
+    );
+    expect(uiHealth.getStatus()).toBe(503);
+
+    await vi.waitFor(() =>
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('embedded daemon failed: bind refused'),
+      ),
+    );
+    expect(post).not.toHaveBeenCalled();
+    expect(get).not.toHaveBeenCalled();
+    await expect(dispose()).resolves.toBeUndefined();
+  });
+
+  it('aborts polls before closing the embedded daemon on dispose', async () => {
+    const events: string[] = [];
+    const get = vi.fn((path: string, signal?: AbortSignal) => {
+      events.push(`get ${path}`);
+      return new Promise<null>((resolve) => {
+        signal?.addEventListener(
+          'abort',
+          () => {
+            events.push('loop-aborted');
+            resolve(null);
+          },
+          { once: true },
+        );
+      });
+    });
+    const post = vi.fn(async (path: string) => {
+      events.push(`post ${path}`);
+      return { id: 'wkr_1' };
+    });
+    embeddedSeam.override = () => ({
+      ready: Promise.resolve({
+        url: 'http://127.0.0.1:4321',
+        port: 4321,
+        close: async () => undefined,
+      }),
+      api: { get, post },
+      token: 'embedded-token',
+      close: async () => {
+        events.push('daemon-close');
+      },
+    });
+    const { ctx, dispose } = createContext(() => undefined, {
+      services: { agents: { create: vi.fn() } },
+    });
+
+    apply(ctx, { embedded: true, worker: true, reviewerBackend: 'none' });
+    await vi.waitFor(() =>
+      expect(events.some((event) => event.startsWith('get /api/jobs/next'))).toBe(true),
+    );
+
+    await dispose();
+
+    const abortedAt = events.indexOf('loop-aborted');
+    const closedAt = events.indexOf('daemon-close');
+    expect(abortedAt).toBeGreaterThanOrEqual(0);
+    expect(closedAt).toBeGreaterThan(abortedAt);
+    // Disposal must not resurrect the worker: exactly one registration, ever.
+    expect(events.filter((event) => event === 'post /api/workers/register')).toHaveLength(1);
   });
 });

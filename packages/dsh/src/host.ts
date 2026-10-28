@@ -65,37 +65,68 @@ function service<T>(ctx: HostContext, key: string): T | undefined {
   return value === undefined || value === null ? undefined : (value as T);
 }
 
-function startLoops(ctx: HostContext, config: ReviewConfig, api: ReviewApiLike): () => void {
+/**
+ * Start the reviewer worker and feedback delivery loops.
+ *
+ * External mode passes no `ready` promise and starts polling immediately, since
+ * its daemon already exists. Embedded mode passes the daemon's readiness: the
+ * ephemeral port is unknown until then, and a rejected startup is logged once
+ * instead of becoming a worker registration retry loop against a dead port.
+ * The returned disposer aborts both loops and wins over a readiness promise that
+ * settles after disposal, so a late-resolving daemon never resurrects polling.
+ */
+export function startReviewLoops(
+  ctx: HostContext,
+  config: ReviewConfig,
+  api: ReviewApiLike,
+  ready?: Promise<unknown>,
+): () => void {
   const controller = new AbortController();
-  const agents = service<WorkerDeps['agents']>(ctx, 'agents');
-  const sessionController = service<
-    DeliveryDeps['sessionController'] & WorkerDeps['sessionController']
-  >(ctx, 'sessionController');
 
-  if (config.worker) {
-    const deps: WorkerDeps = {
-      config,
-      api,
-      ...(agents === undefined ? {} : { agents }),
-      ...(sessionController === undefined ? {} : { sessionController }),
-      ...(ctx.logger === undefined ? {} : { logger: ctx.logger }),
-    };
-    void runWorkerLoop(deps, controller.signal).catch((error: unknown) => {
+  const start = (): void => {
+    if (controller.signal.aborted) return;
+    const agents = service<WorkerDeps['agents']>(ctx, 'agents');
+    const sessionController = service<
+      DeliveryDeps['sessionController'] & WorkerDeps['sessionController']
+    >(ctx, 'sessionController');
+
+    if (config.worker) {
+      const deps: WorkerDeps = {
+        config,
+        api,
+        ...(agents === undefined ? {} : { agents }),
+        ...(sessionController === undefined ? {} : { sessionController }),
+        ...(ctx.logger === undefined ? {} : { logger: ctx.logger }),
+      };
+      void runWorkerLoop(deps, controller.signal).catch((error: unknown) => {
+        ctx.logger?.warn?.(
+          `code-review: worker stopped: ${error instanceof Error ? error.message : 'unknown'}`,
+        );
+      });
+    }
+    if (sessionController !== undefined) {
+      const deps: DeliveryDeps = {
+        config,
+        api,
+        sessionController,
+        ...(ctx.logger === undefined ? {} : { logger: ctx.logger }),
+      };
+      void runDeliveryLoop(deps, controller.signal).catch((error: unknown) => {
+        ctx.logger?.warn?.(
+          `code-review: delivery stopped: ${error instanceof Error ? error.message : 'unknown'}`,
+        );
+      });
+    }
+  };
+
+  if (ready === undefined) {
+    start();
+  } else {
+    void ready.then(start).catch((error: unknown) => {
       ctx.logger?.warn?.(
-        `code-review: worker stopped: ${error instanceof Error ? error.message : 'unknown'}`,
-      );
-    });
-  }
-  if (sessionController !== undefined) {
-    const deps: DeliveryDeps = {
-      config,
-      api,
-      sessionController,
-      ...(ctx.logger === undefined ? {} : { logger: ctx.logger }),
-    };
-    void runDeliveryLoop(deps, controller.signal).catch((error: unknown) => {
-      ctx.logger?.warn?.(
-        `code-review: delivery stopped: ${error instanceof Error ? error.message : 'unknown'}`,
+        `code-review: embedded daemon failed: ${
+          error instanceof Error ? error.message : 'unknown'
+        }`,
       );
     });
   }
@@ -178,5 +209,6 @@ export function apply(ctx: HostContext, rawConfig: unknown): void {
     };
   });
   ctx.effect(() => createReviewCommand({ ...ctx, commands: ctx.commands }, config, api));
-  ctx.effect(() => startLoops(ctx, config, api));
+  // Embedded loops wait for the daemon they poll; external mode starts at once.
+  ctx.effect(() => startReviewLoops(ctx, config, api, embedded?.ready));
 }

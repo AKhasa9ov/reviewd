@@ -114,6 +114,23 @@ describe('embedded review daemon', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
 
+  it('closes idempotently and without rejecting after a failed start', async () => {
+    let starts = 0;
+    const embedded = startEmbeddedReview(normalizeConfig({ reviewerBackend: 'none' }), {
+      startDaemon: async () => {
+        starts += 1;
+        throw new Error('bind failed');
+      },
+    });
+
+    await expect(embedded.ready).rejects.toThrow('bind failed');
+    // Host disposal runs after a rejected readiness; it must not throw and must
+    // not start the daemon a second time.
+    await expect(embedded.close()).resolves.toBeUndefined();
+    await expect(embedded.close()).resolves.toBeUndefined();
+    expect(starts).toBe(1);
+  });
+
   it('uses loopback, port 0, a 32-byte token and the default store, closing once', async () => {
     let release!: (daemon: ReviewDaemon) => void;
     const daemonReady = new Promise<ReviewDaemon>((resolve) => {

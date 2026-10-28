@@ -124,6 +124,33 @@ describe('reviewer output', () => {
 });
 
 describe('worker loop', () => {
+  it('does not register or poll when disposal already aborted the signal', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const calls: string[] = [];
+    const api = {
+      get: async (path: string) => {
+        calls.push(`GET ${path}`);
+        return null;
+      },
+      post: async (path: string) => {
+        calls.push(`POST ${path}`);
+        return {};
+      },
+    } as any;
+    await runWorkerLoop(
+      {
+        config,
+        api,
+        agents: { create: async () => reviewerAgent({}) },
+      },
+      controller.signal,
+    );
+    // The host disposes loops before closing the daemon; a loop started after
+    // that point must stay silent instead of polling a closing port.
+    expect(calls).toEqual([]);
+  });
+
   it('registers, creates a read-only reviewer agent, submits findings/report and acks', async () => {
     const controller = new AbortController();
     const calls: Array<{ method: string; path: string; body?: any }> = [];
