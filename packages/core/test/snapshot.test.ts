@@ -9,17 +9,46 @@ import {
 } from '../src/index.js';
 import { manifestEntry } from '../src/diff/snapshot.js';
 import type * as ContentModule from '../src/git/content.js';
+import type * as GitRunModule from '../src/git/run.js';
 import type { DiffHunk, FileDiff, ResolvedScope, Snapshot } from '../src/index.js';
 import { makeRepo } from './helpers/repo.js';
+
+const listingControl = vi.hoisted(() => ({ truncateRaw: false, truncateNumstat: false }));
 
 vi.mock('../src/git/content.js', async (importOriginal) => {
   const actual = await importOriginal<typeof ContentModule>();
   return { ...actual, readBlob: vi.fn(actual.readBlob) };
 });
 
+vi.mock('../src/git/run.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof GitRunModule>();
+  return {
+    ...actual,
+    runGit: async (...args: Parameters<typeof actual.runGit>) => {
+      const result = await actual.runGit(...args);
+      const gitArgs = args[1];
+      const truncate = gitArgs.includes('--raw')
+        ? listingControl.truncateRaw
+        : gitArgs.includes('--numstat')
+          ? listingControl.truncateNumstat
+          : false;
+      if (!truncate) return result;
+      const stdout = result.stdout.slice(0, 8);
+      return {
+        ...result,
+        stdout,
+        stdoutBytes: result.stdoutBytes.subarray(0, 8),
+        truncated: true,
+      };
+    },
+  };
+});
+
 const cleanups: Array<() => Promise<void>> = [];
 
 afterEach(async () => {
+  listingControl.truncateRaw = false;
+  listingControl.truncateNumstat = false;
   await Promise.all(cleanups.splice(0).map(async (cleanup) => cleanup()));
 });
 
@@ -112,6 +141,9 @@ describe('buildSnapshot', () => {
     expect(result.files[0]?.oversized).toBe(true);
     expect(result.files[0]?.newLines).toBeUndefined();
     expect(result.files[0]?.contentHash).toBeNull();
+    expect(result.manifest?.files.find((file) => file.path === 'src/a.ts')?.reason).toBe(
+      'per-file-cap',
+    );
   });
 
   it('does not fall back to the base hash when only the head is oversized', async () => {
@@ -177,7 +209,7 @@ describe('buildSnapshot', () => {
     expect(readPaths).toEqual(['src/a.ts', 'src/a.ts']);
   });
 
-  it('keeps a synthetic oversized entry when one file exceeds the diff cap', async () => {
+  it('marks a single file cut by the global diff cap as diff-truncated', async () => {
     const repo = await makeRepo();
     cleanups.push(repo.cleanup);
     await repo.write('src/a.ts', 'a\n');
@@ -192,12 +224,18 @@ describe('buildSnapshot', () => {
     const file = result.files[0];
     expect(file?.path).toBe('src/a.ts');
     expect(file?.status).toBe('modified');
-    expect(file?.oversized).toBe(true);
+    expect(file?.oversized).toBe(false);
+    expect(file?.truncated).toBe(true);
+    expect(file?.reason).toBe('diff-truncated');
     expect(file?.binary).toBe(false);
     expect(file?.hunks).toEqual([]);
     expect(file?.added).toBe(0);
     expect(file?.deleted).toBe(0);
     expect(file?.contentHash).toBeNull();
+    expect(result.manifest?.files[0]).toMatchObject({
+      reason: 'diff-truncated',
+      oversized: false,
+    });
     expect(result.totals.truncated).toBe(true);
     expect(result.warnings).toContain('diff-truncated');
     expect(result.warnings).toContain('diff-file-truncated:src/a.ts');
@@ -295,7 +333,8 @@ describe('buildSnapshot', () => {
     expect(first?.status).toBe('added');
     expect(first?.oversized).toBe(false);
     expect(last?.status).toBe('added');
-    expect(last?.oversized).toBe(true);
+    expect(last?.oversized).toBe(false);
+    expect(last?.reason).toBe('diff-truncated');
     expect(last?.added).toBe(0);
     expect(last?.deleted).toBe(0);
     expect(last?.hunks).toEqual([]);
@@ -347,7 +386,8 @@ describe('buildSnapshot', () => {
 
     expect(result.files.map((file) => file.path)).toEqual(['a.txt', 'm.txt', 'z.txt']);
     expect(middle).toHaveLength(1);
-    expect(middle[0]?.oversized).toBe(true);
+    expect(middle[0]?.oversized).toBe(false);
+    expect(middle[0]?.reason).toBe('diff-truncated');
     expect(last?.truncated).toBe(true);
     expect(last?.reason).toBe('diff-truncated');
     expect(result.warnings).toContain('diff-file-skipped:z.txt');
@@ -454,6 +494,45 @@ describe('buildSnapshot', () => {
     expect(paths).toEqual([...paths].sort());
   });
 
+  it('marks totals truncated when the changed-path listing is truncated', async () => {
+    const repo = await makeRepo();
+    cleanups.push(repo.cleanup);
+    await repo.write('base.txt', 'base\n');
+    await repo.commit('base');
+    await repo.git('checkout', '-b', 'feature');
+    await repo.write('a.txt', 'a\n');
+    await repo.write('b.txt', 'b\n');
+    await repo.commit('two files');
+
+    listingControl.truncateRaw = true;
+    listingControl.truncateNumstat = true;
+    const result = await snapshot(repo.root, { maxFiles: 1 });
+
+    expect(result.warnings).toContain('manifest-listing-truncated');
+    expect(result.manifest?.warnings).toContain('manifest-listing-truncated');
+    expect(result.totals.truncated).toBe(true);
+  });
+
+  it('falls back to rendered counts when only the numstat listing is truncated', async () => {
+    const repo = await makeRepo();
+    cleanups.push(repo.cleanup);
+    await repo.write('base.txt', 'base\n');
+    await repo.commit('base');
+    await repo.git('checkout', '-b', 'feature');
+    await repo.write('a.txt', 'one\ntwo\n');
+    await repo.commit('one file');
+
+    listingControl.truncateNumstat = true;
+    const result = await snapshot(repo.root);
+
+    expect(result.warnings).toContain('manifest-listing-truncated');
+    expect(result.totals.truncated).toBe(true);
+    expect(result.manifest?.files.find((file) => file.path === 'a.txt')).toMatchObject({
+      added: 2,
+      deleted: 0,
+    });
+  });
+
   it('emits a complete 882-path manifest while the render subset stays capped', async () => {
     const repo = await makeRepo();
     cleanups.push(repo.cleanup);
@@ -494,7 +573,30 @@ describe('buildSnapshot', () => {
     expect(result.totals.truncated).toBe(true);
   });
 
-  it('records a single file cut by the byte cap as per-file-cap', async () => {
+  it('keeps binary as the reason for a binary file cut by the global diff cap', async () => {
+    const repo = await makeRepo();
+    cleanups.push(repo.cleanup);
+    await repo.write('base.txt', 'base\n');
+    await repo.commit('base');
+    await repo.git('checkout', '-b', 'feature');
+    await repo.writeBytes(
+      'z.bin',
+      Uint8Array.from({ length: 4096 }, (_, index) => index % 251),
+    );
+    await repo.commit('binary file');
+
+    const result = await snapshot(repo.root, { maxDiffBytes: 100 });
+    const file = result.files.find((entry) => entry.path === 'z.bin');
+    const manifestFile = result.manifest?.files.find((entry) => entry.path === 'z.bin');
+
+    expect(file?.binary).toBe(true);
+    expect(file?.oversized).toBe(false);
+    expect(file?.reason).toBe('diff-truncated');
+    expect(manifestFile?.binary).toBe(true);
+    expect(manifestFile?.reason).toBe('binary');
+  });
+
+  it('records a single file cut by the global byte cap as diff-truncated', async () => {
     const repo = await makeRepo();
     cleanups.push(repo.cleanup);
     await repo.write('base.txt', 'base\n');
@@ -512,10 +614,13 @@ describe('buildSnapshot', () => {
     expect(entry).toMatchObject({
       path: 'huge.txt',
       status: 'added',
-      reason: 'per-file-cap',
+      reason: 'diff-truncated',
+      oversized: false,
       hunkCount: 0,
       patchBytes: 0,
     });
+    expect(result.files[0]?.reason).toBe('diff-truncated');
+    expect(result.files[0]?.oversized).toBe(false);
     expect(entry?.added).toBe(1);
     expect(result.totals.files).toBe(1);
     expect(result.totals.truncated).toBe(true);

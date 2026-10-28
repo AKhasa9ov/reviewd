@@ -323,6 +323,9 @@ export function manifestEntry(input: {
   const oversized = input.seed.oversized || mapped?.oversized === true;
   const binary = input.seed.binary || mapped?.binary === true;
   let reason = mapped?.reason ?? input.seed.reason;
+  // A binary path has no textual patch regardless of the cap; report the more
+  // specific reason. Ignored/unreadable/explicit policy reasons still win.
+  if (reason === 'diff-truncated' && binary && !ignored) reason = 'binary';
   if (reason === undefined) {
     if (ignored) reason = 'ignored';
     else if (binary) reason = 'binary';
@@ -526,9 +529,8 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
   // It is metadata only, so it stays cheap even when patch bytes are capped.
   const rawListing = await listRawChanges(scope, options.signal);
   const numstatListing = await listNumstatChanges(scope, options.signal);
-  if (rawListing.truncated || numstatListing.truncated) {
-    warnings.push('manifest-listing-truncated');
-  }
+  const listingTruncated = rawListing.truncated || numstatListing.truncated;
+  if (listingTruncated) warnings.push('manifest-listing-truncated');
   const seeds = rawSeeds(rawListing.entries, numstatListing.entries, ignore);
 
   const diff = await runGit(scope.repoRoot, diffArgs(scope), {
@@ -549,7 +551,7 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
     ...parseUnifiedDiff(limited.text),
   ].sort((left, right) => comparePaths(left.path, right.path));
 
-  let truncated = diffTruncated || limited.truncated;
+  let truncated = listingTruncated || diffTruncated || limited.truncated;
   if (truncated) {
     const seen = new Set(candidates.map((entry) => candidateKey(entry)));
     const byKey = new Map(candidates.map((entry) => [candidateKey(entry), entry]));
@@ -558,10 +560,9 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
       const warning = `diff-file-skipped:${listed.path}`;
       if (seen.has(key)) {
         const existing = byKey.get(key);
-        // A synthetic entry recovered after a complete file prefix is a file
-        // cut by the diff cap. When the cap cuts the first (or only) file, the
-        // whole patch is empty: that is a per-file cap, not a lost path.
-        if (existing?.synthetic === true && limited.text !== '') {
+        // Every synthetic entry is a file cut by the global diff cap, whether
+        // the cut lands in the first file or after a complete prefix.
+        if (existing?.synthetic === true) {
           existing.skipped = true;
           if (!warnings.includes(warning)) warnings.push(warning);
         }
@@ -603,10 +604,11 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
   const files: FileDiff[] = [];
   for (const entry of selected) {
     if (entry.backfill === true) {
+      const seed = seeds.get(entry.path);
       const skipped: FileDiff = {
         path: entry.path,
         status: entry.status,
-        binary: false,
+        binary: seed?.binary === true,
         oversized: false,
         added: 0,
         deleted: 0,
@@ -621,25 +623,22 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
       continue;
     }
     if (entry.synthetic === true) {
+      const seed = seeds.get(entry.path);
       const synthetic: FileDiff = {
         path: entry.path,
         status: entry.status,
-        binary: false,
-        oversized: true,
+        binary: entry.binary || seed?.binary === true,
+        // Nothing measured this file's size; the global diff cap cut it.
+        oversized: false,
         added: 0,
         deleted: 0,
         hunks: [],
         contentHash: null,
+        truncated: true,
+        reason: 'diff-truncated',
       };
       if (entry.oldPath !== undefined) synthetic.oldPath = entry.oldPath;
-      if (entry.skipped === true) {
-        synthetic.truncated = true;
-        synthetic.reason = 'diff-truncated';
-      }
-      if (isIgnored(entry.path, ignore)) {
-        synthetic.ignored = true;
-        synthetic.oversized = false;
-      }
+      if (isIgnored(entry.path, ignore)) synthetic.ignored = true;
       files.push(synthetic);
       continue;
     }

@@ -260,7 +260,15 @@ function isSnapshot(value: unknown): value is Snapshot {
   if (value.schemaVersion !== 1 && value.schemaVersion !== 2) return false;
   if (!isRecord(value.scope) || typeof value.scope.baseSha !== 'string') return false;
   if (!Array.isArray(value.files)) return false;
-  if (!isRecord(value.totals) || typeof value.totals.truncated !== 'boolean') return false;
+  if (!isRecord(value.totals)) return false;
+  if (value.schemaVersion === 2 && typeof value.totals.truncated !== 'boolean') return false;
+  if (
+    value.schemaVersion === 1 &&
+    value.totals.truncated !== undefined &&
+    typeof value.totals.truncated !== 'boolean'
+  ) {
+    return false;
+  }
   if (!Array.isArray(value.warnings)) return false;
   if (value.manifest !== undefined && !isManifest(value.manifest)) return false;
   return value.files.every(
@@ -272,18 +280,24 @@ function isSnapshot(value: unknown): value is Snapshot {
  * API and job consumers expect a manifest. Legacy v1 snapshots are normalized
  * on read (schemaVersion stays 1 so callers can still recognize them); a v2
  * snapshot that somehow lacks one gets a manifest without the legacy warning.
+ * A missing v1 totals.truncated means false before the manifest is synthesized.
  */
 function normalizeSnapshot(snapshot: Snapshot): Snapshot {
-  if (snapshot.manifest !== undefined) return snapshot;
-  if (snapshot.schemaVersion === 1) {
-    return { ...snapshot, manifest: manifestFromSnapshot(snapshot) };
+  // Older v1 snapshots predate totals.truncated; a missing value means false.
+  const normalized: Snapshot = {
+    ...snapshot,
+    totals: { ...snapshot.totals, truncated: snapshot.totals.truncated === true },
+  };
+  if (normalized.manifest !== undefined) return normalized;
+  if (normalized.schemaVersion === 1) {
+    return { ...normalized, manifest: manifestFromSnapshot(normalized) };
   }
   return {
-    ...snapshot,
+    ...normalized,
     manifest: buildReviewManifest({
-      scope: snapshot.scope,
-      files: snapshot.files,
-      warnings: snapshot.warnings,
+      scope: normalized.scope,
+      files: normalized.files,
+      warnings: normalized.warnings,
     }),
   };
 }

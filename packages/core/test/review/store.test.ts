@@ -513,6 +513,24 @@ describe('ReviewStore', () => {
     await store.close();
   });
 
+  it('reads a v1 snapshot whose totals omit truncated as not truncated', async () => {
+    const root = await tempRoot();
+    const store = await ReviewStore.open(root);
+    await store.writeSnapshot('snap_1', snapshotFixture());
+    const path = join(root, 'snapshots', 'snap_1.json');
+    const raw = await readJson(path);
+    const totals = raw['totals'] as Record<string, unknown>;
+    delete totals['truncated'];
+    await writeFile(path, JSON.stringify(raw));
+
+    const snapshot = await store.readSnapshot('snap_1');
+
+    expect(snapshot.schemaVersion).toBe(1);
+    expect(snapshot.totals.truncated).toBe(false);
+    expect(snapshot.manifest?.warnings).not.toContain('legacy-truncated');
+    await store.close();
+  });
+
   it('round-trips a v2 snapshot manifest and keeps legacy v1 distinct', async () => {
     const root = await tempRoot();
     const store = await ReviewStore.open(root);
@@ -544,11 +562,12 @@ describe('ReviewStore', () => {
     await store.close();
   });
 
-  it('rejects a snapshot whose totals.truncated is not boolean', async () => {
+  it('rejects a v2 snapshot whose totals.truncated is not boolean', async () => {
     const root = await tempRoot();
     const store = await ReviewStore.open(root);
     const invalid = {
       ...snapshotFixture(),
+      schemaVersion: 2,
       totals: { files: 0, added: 0, deleted: 0 },
     } as unknown as Snapshot;
 
