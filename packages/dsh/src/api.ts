@@ -16,6 +16,15 @@ export interface ReviewApiOptions {
   timeoutMs?: number;
 }
 
+/**
+ * The daemon read/write surface used by tools, worker, delivery and the host proxy.
+ * Kept narrow so a client can be resolved after the daemon has started.
+ */
+export interface ReviewApiLike {
+  get<T = unknown>(path: string, signal?: AbortSignal): Promise<T>;
+  post<T = unknown>(path: string, body: unknown, signal?: AbortSignal): Promise<T>;
+}
+
 function errorCode(status: number): string {
   if (status === 401 || status === 403) return 'unauthorized';
   if (status === 404) return 'not-found';
@@ -27,7 +36,7 @@ function errorCode(status: number): string {
 }
 
 /** Small daemon client used by tools, worker and delivery. Never exposes the token. */
-export class ReviewApi {
+export class ReviewApi implements ReviewApiLike {
   private readonly base: string;
   private readonly token: string;
   private readonly fetchImpl: typeof fetch;
@@ -106,5 +115,25 @@ export class ReviewApi {
 
   post<T = unknown>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
     return this.request<T>('POST', path, body, signal);
+  }
+}
+
+/**
+ * Deferred `ReviewApiLike` handle that can be handed out before the embedded daemon
+ * reports its ephemeral port. Calls wait for the real client and then delegate unchanged.
+ */
+export class DeferredReviewApi implements ReviewApiLike {
+  constructor(private readonly ready: Promise<ReviewApiLike>) {
+    // Calls still receive the startup failure; observing it here only stops an
+    // unused handle from surfacing the rejection as an unhandled promise.
+    void ready.catch(() => undefined);
+  }
+
+  async get<T = unknown>(path: string, signal?: AbortSignal): Promise<T> {
+    return (await this.ready).get<T>(path, signal);
+  }
+
+  async post<T = unknown>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+    return (await this.ready).post<T>(path, body, signal);
   }
 }
