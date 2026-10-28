@@ -16,6 +16,7 @@ const config = {
   requestTimeoutMs: 1000,
   reviewerTimeoutMs: 600_000,
   cwd: '/repo',
+  reviewerModel: undefined as Record<string, unknown> | undefined,
 };
 
 function reviewerAgent(options: {
@@ -274,6 +275,112 @@ describe('worker loop', () => {
     expect(createOptions[0]?.agentOptions).toEqual({
       provider: 'deepseek-official',
       model: 'deepseek-flash',
+    });
+  });
+
+  it('prefers an explicit reviewerModel over the host default', async () => {
+    const controller = new AbortController();
+    let served = false;
+    const createOptions: Array<Record<string, unknown>> = [];
+    const api = {
+      get: async (path: string) => {
+        if (path.includes('/api/jobs/next')) {
+          if (served) {
+            controller.abort();
+            return null;
+          }
+          served = true;
+          return {
+            job: { id: 'job_1', attemptId: 'att_1', reviewId: 'rev_1', round: 1 },
+            bundle: { prompt: 'Review this diff' },
+          };
+        }
+        return null;
+      },
+      post: async (path: string, body: any) =>
+        path === '/api/workers/register' ? { id: body.id } : {},
+    } as any;
+    const agents = {
+      create: async (options: Record<string, unknown>) => {
+        createOptions.push(options);
+        return reviewerAgent({
+          events: [
+            {
+              type: 'assistant/message',
+              data: {
+                message: {
+                  content: [
+                    {
+                      type: 'text',
+                      text: '```json\n{"schemaVersion":1,"summary":"ok","findings":[]}\n```',
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+        });
+      },
+    };
+    await drive({
+      config: {
+        ...config,
+        reviewerModel: { provider: 'openrouter', model: 'deepseek/deepseek-v4.1-flash-1017' },
+      },
+      api,
+      agents,
+      defaultModel: {
+        currentSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-flash' }),
+      },
+      signal: controller.signal,
+    });
+    expect(createOptions[0]?.agentOptions).toEqual({
+      provider: 'openrouter',
+      model: 'deepseek/deepseek-v4.1-flash-1017',
+    });
+  });
+
+  it('fails the job retryably when host model selection throws', async () => {
+    const controller = new AbortController();
+    const calls: Array<{ method: string; path: string; body?: any }> = [];
+    let served = false;
+    const api = {
+      get: async (path: string) => {
+        calls.push({ method: 'GET', path });
+        if (path.includes('/api/jobs/next')) {
+          if (served) {
+            controller.abort();
+            return null;
+          }
+          served = true;
+          return {
+            job: { id: 'job_1', attemptId: 'att_1', reviewId: 'rev_1', round: 1 },
+            bundle: { prompt: 'Review this diff' },
+          };
+        }
+        return null;
+      },
+      post: async (path: string, body: any) => {
+        calls.push({ method: 'POST', path, body });
+        if (path === '/api/workers/register') return { id: body.id };
+        return {};
+      },
+    } as any;
+    await drive({
+      api,
+      agents: { create: async () => reviewerAgent({}) },
+      defaultModel: {
+        currentSelection: () => {
+          throw new Error('model service unavailable');
+        },
+      },
+      signal: controller.signal,
+    });
+    const failure = calls.find((call) => call.path.endsWith('/fail'));
+    expect(failure?.body).toMatchObject({
+      code: 'agent-create-failed',
+      message: 'model service unavailable',
+      retryable: true,
     });
   });
 

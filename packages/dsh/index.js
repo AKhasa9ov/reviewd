@@ -8159,13 +8159,15 @@ async function runJob(deps, lease, signal) {
   }
   const cwd = (typeof bundle.meta?.cwd === "string" && bundle.meta.cwd !== "" ? bundle.meta.cwd : void 0) ?? deps.config.cwd ?? deps.config.repoHint ?? process.cwd();
   const sessionId = `review_${randomUUID()}`;
-  const defaultModel = deps.defaultModel?.currentSelection();
-  const agentOptions = {
-    ...defaultModel === void 0 ? {} : defaultModel,
-    ...deps.config.reviewerModel === void 0 ? {} : deps.config.reviewerModel
-  };
   let handle2;
   try {
+    const selection = deps.defaultModel?.currentSelection();
+    const agentOptions = {
+      ...Object.fromEntries(
+        Object.entries(selection ?? {}).filter(([, value]) => value !== void 0)
+      ),
+      ...deps.config.reviewerModel === void 0 ? {} : deps.config.reviewerModel
+    };
     handle2 = await deps.agents.create({
       sessionId,
       ...parent === void 0 ? {} : { parentAgent: parent },

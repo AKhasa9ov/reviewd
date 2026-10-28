@@ -172,13 +172,15 @@ async function runJob(deps: WorkerDeps, lease: JobLease, signal: AbortSignal): P
     deps.config.repoHint ??
     process.cwd();
   const sessionId = `review_${randomUUID()}`;
-  const defaultModel = deps.defaultModel?.currentSelection();
-  const agentOptions = {
-    ...(defaultModel === undefined ? {} : defaultModel),
-    ...(deps.config.reviewerModel === undefined ? {} : deps.config.reviewerModel),
-  };
   let handle: WorkerAgentHandle;
   try {
+    const selection = deps.defaultModel?.currentSelection();
+    const agentOptions = {
+      ...Object.fromEntries(
+        Object.entries(selection ?? {}).filter(([, value]) => value !== undefined),
+      ),
+      ...(deps.config.reviewerModel === undefined ? {} : deps.config.reviewerModel),
+    };
     handle = await deps.agents.create({
       sessionId,
       ...(parent === undefined ? {} : { parentAgent: parent }),
