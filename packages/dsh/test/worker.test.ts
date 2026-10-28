@@ -53,6 +53,7 @@ async function drive(overrides: {
   config?: typeof config;
   api: any;
   agents: any;
+  defaultModel?: { currentSelection(): Record<string, unknown> };
   signal: AbortSignal;
   sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
 }): Promise<void> {
@@ -61,6 +62,7 @@ async function drive(overrides: {
       config: overrides.config ?? config,
       api: overrides.api,
       agents: overrides.agents,
+      ...(overrides.defaultModel === undefined ? {} : { defaultModel: overrides.defaultModel }),
       sleep: overrides.sleep ?? (async () => undefined),
     },
     overrides.signal,
@@ -215,6 +217,64 @@ describe('worker loop', () => {
     expect(calls.some((call) => call.path.endsWith('/report'))).toBe(true);
     expect(calls.some((call) => call.path.endsWith('/ack'))).toBe(true);
     expect(disposed).toBe(1);
+  });
+
+  it('passes the host default model to the reviewer agent', async () => {
+    const controller = new AbortController();
+    let served = false;
+    const createOptions: Array<Record<string, unknown>> = [];
+    const api = {
+      get: async (path: string) => {
+        if (path.includes('/api/jobs/next')) {
+          if (served) {
+            controller.abort();
+            return null;
+          }
+          served = true;
+          return {
+            job: { id: 'job_1', attemptId: 'att_1', reviewId: 'rev_1', round: 1 },
+            bundle: { prompt: 'Review this diff' },
+          };
+        }
+        return null;
+      },
+      post: async (path: string, body: any) =>
+        path === '/api/workers/register' ? { id: body.id } : {},
+    } as any;
+    const agents = {
+      create: async (options: Record<string, unknown>) => {
+        createOptions.push(options);
+        return reviewerAgent({
+          events: [
+            {
+              type: 'assistant/message',
+              data: {
+                message: {
+                  content: [
+                    {
+                      type: 'text',
+                      text: '```json\n{"schemaVersion":1,"summary":"ok","findings":[]}\n```',
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+        });
+      },
+    };
+    await drive({
+      api,
+      agents,
+      defaultModel: {
+        currentSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-flash' }),
+      },
+      signal: controller.signal,
+    });
+    expect(createOptions[0]?.agentOptions).toEqual({
+      provider: 'deepseek-official',
+      model: 'deepseek-flash',
+    });
   });
 
   it('cancels, disposes and fails retryably when the reviewer times out', async () => {

@@ -91,11 +91,16 @@ export function startReviewLoops(
     >(ctx, 'sessionController');
 
     if (config.worker) {
+      const defaultModel = service<NonNullable<WorkerDeps['defaultModel']>>(
+        ctx,
+        'agentDefaultModel',
+      );
       const deps: WorkerDeps = {
         config,
         api,
         ...(agents === undefined ? {} : { agents }),
         ...(sessionController === undefined ? {} : { sessionController }),
+        ...(defaultModel === undefined ? {} : { defaultModel }),
         ...(ctx.logger === undefined ? {} : { logger: ctx.logger }),
       };
       void runWorkerLoop(deps, controller.signal).catch((error: unknown) => {

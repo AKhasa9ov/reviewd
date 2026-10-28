@@ -8159,6 +8159,11 @@ async function runJob(deps, lease, signal) {
   }
   const cwd = (typeof bundle.meta?.cwd === "string" && bundle.meta.cwd !== "" ? bundle.meta.cwd : void 0) ?? deps.config.cwd ?? deps.config.repoHint ?? process.cwd();
   const sessionId = `review_${randomUUID()}`;
+  const defaultModel = deps.defaultModel?.currentSelection();
+  const agentOptions = {
+    ...defaultModel === void 0 ? {} : defaultModel,
+    ...deps.config.reviewerModel === void 0 ? {} : deps.config.reviewerModel
+  };
   let handle2;
   try {
     handle2 = await deps.agents.create({
@@ -8172,7 +8177,7 @@ async function runJob(deps, lease, signal) {
         reviewId: job.reviewId,
         round: job.round
       },
-      ...deps.config.reviewerModel === void 0 ? {} : { agentOptions: deps.config.reviewerModel }
+      ...Object.keys(agentOptions).length === 0 ? {} : { agentOptions }
     });
   } catch (error) {
     await deps.api.post(
@@ -8423,11 +8428,16 @@ function startReviewLoops(ctx, config, api, ready) {
     const agents = service(ctx, "agents");
     const sessionController = service(ctx, "sessionController");
     if (config.worker) {
+      const defaultModel = service(
+        ctx,
+        "agentDefaultModel"
+      );
       const deps = {
         config,
         api,
         ...agents === void 0 ? {} : { agents },
         ...sessionController === void 0 ? {} : { sessionController },
+        ...defaultModel === void 0 ? {} : { defaultModel },
         ...ctx.logger === void 0 ? {} : { logger: ctx.logger }
       };
       void runWorkerLoop(deps, controller.signal).catch((error) => {

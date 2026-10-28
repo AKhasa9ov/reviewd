@@ -45,6 +45,10 @@ export interface WorkerDeps {
       sessionId: string,
     ): Promise<{ agent?: WorkerAgent; error?: { code?: string; message?: string } }>;
   };
+  /** DSH's default model selection, applied to reviewer agents. */
+  defaultModel?: {
+    currentSelection(): Record<string, unknown>;
+  };
   logger?: { warn?(message: string): void; info?(message: string): void };
   sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
   randomId?: () => string;
@@ -168,6 +172,11 @@ async function runJob(deps: WorkerDeps, lease: JobLease, signal: AbortSignal): P
     deps.config.repoHint ??
     process.cwd();
   const sessionId = `review_${randomUUID()}`;
+  const defaultModel = deps.defaultModel?.currentSelection();
+  const agentOptions = {
+    ...(defaultModel === undefined ? {} : defaultModel),
+    ...(deps.config.reviewerModel === undefined ? {} : deps.config.reviewerModel),
+  };
   let handle: WorkerAgentHandle;
   try {
     handle = await deps.agents.create({
@@ -183,9 +192,7 @@ async function runJob(deps: WorkerDeps, lease: JobLease, signal: AbortSignal): P
         reviewId: job.reviewId,
         round: job.round,
       },
-      ...(deps.config.reviewerModel === undefined
-        ? {}
-        : { agentOptions: deps.config.reviewerModel }),
+      ...(Object.keys(agentOptions).length === 0 ? {} : { agentOptions }),
     });
   } catch (error) {
     await deps.api.post(
