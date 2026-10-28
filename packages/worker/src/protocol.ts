@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from 'node:util';
+
 export interface WorkerApi {
   get<T = unknown>(path: string, signal?: AbortSignal): Promise<T>;
   post<T = unknown>(path: string, body: unknown, signal?: AbortSignal): Promise<T>;
@@ -97,11 +99,22 @@ export function normalizeRunnerResult(result: RunnerResult): {
       false,
     );
   }
-  const reportFindings = (report as { findings?: unknown }).findings;
-  const findings = Array.isArray(result.findings)
-    ? result.findings
-    : Array.isArray(reportFindings)
-      ? reportFindings
-      : [];
-  return { findings, report };
+  const resultFindings = Array.isArray(result.findings) ? result.findings : [];
+  const reportFindings = Array.isArray(report.findings) ? report.findings : [];
+  if (
+    resultFindings.length > 0 &&
+    reportFindings.length > 0 &&
+    !isDeepStrictEqual(resultFindings, reportFindings)
+  ) {
+    throw new WorkerRunError(
+      'invalid-output',
+      'runner returned findings in both the result and the report, and they differ; return one source or make them identical',
+      false,
+    );
+  }
+  // `report.findings` is canonical for the final report, so whenever only the
+  // result carries findings they are copied into a normalized report. When both
+  // are non-empty they are identical (checked above) and either can be used.
+  const findings = resultFindings.length > 0 ? resultFindings : reportFindings;
+  return { findings, report: { ...report, findings } };
 }

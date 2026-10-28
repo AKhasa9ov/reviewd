@@ -22,6 +22,14 @@
 - Final gates: `pnpm verify`, `pnpm test:e2e`, `pnpm fat:verify`.
 - Node 22, strict TypeScript, Prettier, ESLint, Vitest.
 
+### Protocol versioning (recorded decision)
+
+C1 is a **v0** lease contract. Design §6.2–6.3 shows `protocolVersion` and
+`promptVersion`, but reviewd's current wire contract carries neither, so C1 does
+not add those typed fields. C2 must add and validate both versions before any
+adapter consumes `@dsh-code-review/worker`. This is a recorded decision, not an
+omitted field; `packages/worker/README.md` states the same contract.
+
 ## File Structure
 
 New:
@@ -966,7 +974,13 @@ git commit -m "build(worker): expose shared worker package"
 
 ## Self-Review
 
-- **Spec coverage:** C1 maps to design §6.1–6.4 (contracts/errors) and §14 C1 (protocol + shared worker loop). C1 intentionally does not implement MCP, CLI, skills, Codex, or the DSH adapter refactor; those are C2–C5.
+- **Spec coverage:** C1 implements a **v0** subset of design §6.2–6.3 (the
+  lease/runner shape) and §6.4 (errors/retryability), plus §14 C1 (protocol +
+  shared worker loop). It does not claim full §6.2–6.3 coverage: the typed
+  `protocolVersion`/`promptVersion` fields are deferred to C2 before any adapter
+  freezes the contract. C1 also intentionally does not implement §6.1
+  descriptors, MCP, CLI, skills, Codex, or the DSH adapter refactor; those are
+  C2–C6.
 - **No placeholders:** Every task contains exact files, test code, implementation code, commands, and commit messages.
 - **Type consistency:** `JobLease`, `RunnerResult`, `WorkerApi`, `WorkerRunError`, `normalizeRunnerResult`, and `runWorkerLoop` are defined once in Task 1/2 and reused with the same names in Task 3.
 - **DSH parity:** C1 does not import or modify DSH; the existing `packages/dsh/test/worker.test.ts` remains the parity gate. C4 owns the actual DSH refactor.

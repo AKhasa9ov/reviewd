@@ -1,3 +1,4 @@
+import { getEventListeners } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
 import { runWorkerLoop, WorkerRunError } from '../src/index.js';
 import type { JobLease, RunnerResult, WorkerApi, WorkerLoopOptions } from '../src/index.js';
@@ -122,6 +123,139 @@ describe('runWorkerLoop', () => {
       path: '/api/jobs/job_1/ack',
       body: { attemptId: 'att_1' },
     });
+  });
+
+  it('releases the abort listener when the default poll backoff times out', async () => {
+    const controller = new AbortController();
+    const calls: Call[] = [];
+    const listenerCounts: number[] = [];
+    let nextCalls = 0;
+    const api: WorkerApi = {
+      async get<T>(path: string): Promise<T> {
+        calls.push({ method: 'GET', path });
+        if (!path.includes('/api/jobs/next')) return null as T;
+        nextCalls += 1;
+        if (nextCalls === 1) return null as T;
+        // Reaching the second poll proves the first default wait resolved through
+        // its timer; the timeout path must have removed its abort listener.
+        listenerCounts.push(getEventListeners(controller.signal, 'abort').length);
+        controller.abort();
+        return null as T;
+      },
+      async post<T>(path: string, body: unknown): Promise<T> {
+        calls.push({ method: 'POST', path, body });
+        if (path === '/api/workers/register') {
+          return { id: (body as { id: string }).id } as T;
+        }
+        return {} as T;
+      },
+    };
+
+    await runWorkerLoop(
+      {
+        ...options(api, { run: async () => ({ report: { schemaVersion: 1 } }) }),
+        pollMs: 1,
+        sleep: undefined,
+      },
+      controller.signal,
+    );
+
+    expect(listenerCounts).toEqual([0]);
+    expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0);
+  });
+
+  it('aborts a pending default poll backoff promptly and removes its listener', async () => {
+    const controller = new AbortController();
+    const calls: Call[] = [];
+    let markPolled: () => void = () => undefined;
+    const firstPoll = new Promise<void>((resolve) => {
+      markPolled = resolve;
+    });
+    const api: WorkerApi = {
+      async get<T>(path: string): Promise<T> {
+        calls.push({ method: 'GET', path });
+        if (!path.includes('/api/jobs/next')) return null as T;
+        markPolled();
+        return null as T;
+      },
+      async post<T>(path: string, body: unknown): Promise<T> {
+        calls.push({ method: 'POST', path, body });
+        if (path === '/api/workers/register') {
+          return { id: (body as { id: string }).id } as T;
+        }
+        return {} as T;
+      },
+    };
+
+    const loop = runWorkerLoop(
+      {
+        ...options(api, { run: async () => ({ report: { schemaVersion: 1 } }) }),
+        pollMs: 60_000,
+        sleep: undefined,
+      },
+      controller.signal,
+    );
+
+    await firstPoll;
+    await vi.waitFor(() => {
+      expect(getEventListeners(controller.signal, 'abort')).toHaveLength(1);
+    });
+    controller.abort();
+    await loop;
+
+    expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0);
+  }, 2_000);
+
+  it('posts report-only findings to both the findings event and the report', async () => {
+    const controller = new AbortController();
+    const calls: Call[] = [];
+    const api = apiFor(controller, calls, lease());
+    const findings = [{ id: 'f2', title: 'from report' }];
+    await runWorkerLoop(
+      options(api, {
+        run: async () => ({ report: { schemaVersion: 1, summary: 'ok', findings } }),
+      }),
+      controller.signal,
+    );
+
+    expect(calls).toContainEqual({
+      method: 'POST',
+      path: '/api/jobs/job_1/findings',
+      body: { attemptId: 'att_1', findings },
+    });
+    expect(calls).toContainEqual({
+      method: 'POST',
+      path: '/api/jobs/job_1/report',
+      body: { attemptId: 'att_1', report: { schemaVersion: 1, summary: 'ok', findings } },
+    });
+  });
+
+  it('rejects divergent result/report findings as non-retryable invalid output', async () => {
+    const controller = new AbortController();
+    const calls: Call[] = [];
+    const api = apiFor(controller, calls, lease());
+    await runWorkerLoop(
+      options(api, {
+        run: async () => ({
+          findings: [{ id: 'from-result' }],
+          report: { schemaVersion: 1, findings: [{ id: 'from-report' }] },
+        }),
+      }),
+      controller.signal,
+    );
+
+    expect(calls).toContainEqual({
+      method: 'POST',
+      path: '/api/jobs/job_1/fail',
+      body: {
+        attemptId: 'att_1',
+        code: 'invalid-output',
+        message:
+          'runner returned findings in both the result and the report, and they differ; return one source or make them identical',
+        retryable: false,
+      },
+    });
+    expect(calls.some((call) => call.path.endsWith('/report'))).toBe(false);
   });
 
   it('reports a retryable runner failure without posting a report', async () => {

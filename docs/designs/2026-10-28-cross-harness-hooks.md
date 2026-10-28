@@ -196,6 +196,12 @@ interface HarnessRunner {
 
 `ReviewJob` не содержит `model`, `maxTokens`, `reasoningEffort` и API keys.
 
+> **C1 — v0 (записанное решение).** C1 поставляет lease/runner-контракт как v0
+> без типизированных `protocolVersion` и `promptVersion`: текущий wire-контракт
+> reviewd их не передаёт. C2 обязан добавить и валидировать оба поля до того,
+> как какой-либо адаптер начнёт использовать общий worker package. Это
+> осознанное решение, а не пропущенное поле.
+
 ### 6.4 Ошибки
 
 Runner возвращает или бросает `ReviewerError` с кодом:
@@ -364,7 +370,7 @@ review harness list|check
 
 | Change | Содержание                                                    | Зависит от | Verify                           |
 | ------ | ------------------------------------------------------------- | ---------- | -------------------------------- |
-| C1     | Protocol + shared worker loop; DSH parity                     | —          | unit + DSH existing e2e          |
+| C1     | Protocol (v0) + shared worker loop; DSH parity                | —          | unit + DSH existing e2e          |
 | C2     | MCP server + transport-neutral handlers; session tools opt-in | C1         | MCP client + reviewd integration |
 | C3     | CLI package/commands + skills install                         | C1, C2     | CLI contract tests               |
 | C4     | DSH adapter refactor: runner + no plugin auto-start           | C1         | DSH live disposable              |
