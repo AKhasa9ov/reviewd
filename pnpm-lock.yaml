@@ -157,6 +157,8 @@ importers:
         specifier: 0.152.0
         version: 0.152.0
 
+  packages/worker: {}
+
 packages:
 
   '@adobe/css-tools@4.5.0':
