@@ -2949,17 +2949,15 @@ body.cr-selecting-lines {
 }
 
 .cr-inline-finding {
-  display: grid;
-  grid-template-columns: 14px 22px minmax(0, 1fr);
-  gap: var(--cr-space-2);
+  display: block;
   min-width: 0;
   margin: 0;
-  padding: 5px 10px 6px;
+  padding: 0;
   border: 0;
   border-block: 1px solid var(--cr-border);
   border-left: 2px solid var(--cr-warning);
   border-radius: 0;
-  background: var(--cr-bg);
+  background: var(--cr-surface);
   color: var(--cr-text);
   font-family: var(--cr-font-ui);
 }
@@ -2976,29 +2974,40 @@ body.cr-selecting-lines {
   border-left-color: var(--cr-text-muted);
 }
 
+.cr-inline-finding-header {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: 14px 22px minmax(0, 1fr);
+  align-items: start;
+  gap: var(--cr-space-2);
+  margin: 0;
+  padding: 5px 10px 6px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cr-inline-finding-header:hover {
+  background: color-mix(in srgb, var(--cr-text) 4%, transparent);
+}
+
+.cr-inline-finding-header:focus-visible {
+  outline: 2px solid var(--cr-focus);
+  outline-offset: -2px;
+}
+
 .cr-inline-finding-toggle {
   display: grid;
   width: 14px;
   height: 20px;
-  padding: 0;
   place-items: center;
-  border: 0;
-  background: transparent;
   color: var(--cr-text-muted);
-  font: inherit;
   font-size: 11px;
   line-height: 1;
-  cursor: pointer;
-}
-
-.cr-inline-finding-toggle:hover,
-.cr-inline-finding-toggle:focus-visible {
-  color: var(--cr-text);
-}
-
-.cr-inline-finding-toggle:focus-visible {
-  outline: 2px solid var(--cr-focus);
-  outline-offset: 1px;
 }
 
 .cr-inline-finding-severity {
@@ -3031,7 +3040,7 @@ body.cr-selecting-lines {
 
 .cr-inline-finding-main {
   display: grid;
-  gap: var(--cr-space-1);
+  gap: 0;
   min-width: 0;
 }
 
@@ -3044,6 +3053,10 @@ body.cr-selecting-lines {
 
 .cr-inline-finding-head strong {
   font-size: var(--cr-text-control);
+}
+
+.cr-inline-finding-body {
+  padding: 0 10px 7px 62px;
 }
 
 .cr-inline-finding-rationale {
@@ -3093,9 +3106,7 @@ body.cr-selecting-lines {
 }
 
 .cr-inline-question {
-  display: grid;
-  grid-template-columns: 14px 18px minmax(0, 1fr);
-  gap: 8px;
+  display: block;
   min-width: 0;
   margin: 0;
   padding: 5px 10px 6px;
@@ -3103,9 +3114,42 @@ body.cr-selecting-lines {
   border-block: 1px solid var(--cr-border);
   border-left: 2px solid color-mix(in srgb, var(--cr-info) 70%, var(--cr-border));
   border-radius: 0;
-  background: var(--cr-bg);
+  background: var(--cr-surface);
   color: var(--cr-text);
   font-family: var(--cr-font-ui);
+}
+
+.cr-inline-question-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.cr-inline-question-header {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  grid-template-columns: 14px 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cr-inline-question-header:hover {
+  background: color-mix(in srgb, var(--cr-text) 4%, transparent);
+}
+
+.cr-inline-question-header:focus-visible {
+  outline: 2px solid var(--cr-focus);
+  outline-offset: -2px;
 }
 
 .cr-inline-question-mark {
@@ -3115,7 +3159,7 @@ body.cr-selecting-lines {
   place-items: center;
   border: 1px solid color-mix(in srgb, var(--cr-info) 45%, var(--cr-border));
   border-radius: 50%;
-  background: color-mix(in srgb, var(--cr-info) 12%, var(--cr-bg));
+  background: color-mix(in srgb, var(--cr-info) 12%, var(--cr-surface));
   color: color-mix(in srgb, var(--cr-info) 82%, var(--cr-text));
   font-family: var(--cr-font-ui);
   font-size: 11px;
@@ -3150,25 +3194,10 @@ body.cr-selecting-lines {
   display: grid;
   width: 14px;
   height: 20px;
-  padding: 0;
   place-items: center;
-  border: 0;
-  background: transparent;
   color: var(--cr-text-muted);
-  font: inherit;
   font-size: 11px;
   line-height: 1;
-  cursor: pointer;
-}
-
-.cr-inline-question-toggle:hover,
-.cr-inline-question-toggle:focus-visible {
-  color: var(--cr-text);
-}
-
-.cr-inline-question-toggle:focus-visible {
-  outline: 2px solid var(--cr-focus);
-  outline-offset: 1px;
 }
 
 .cr-inline-question-cta {
@@ -3207,21 +3236,7 @@ body.cr-selecting-lines {
   display: grid;
   gap: 4px;
   min-width: 0;
-}
-
-.cr-inline-finding.cr-annotation-added,
-.cr-inline-question.cr-annotation-added {
-  background: var(--cr-added-bg);
-}
-
-.cr-inline-finding.cr-annotation-removed,
-.cr-inline-question.cr-annotation-removed {
-  background: var(--cr-removed-bg);
-}
-
-.cr-inline-finding.cr-annotation-unchanged,
-.cr-inline-question.cr-annotation-unchanged {
-  background: var(--cr-bg);
+  padding: 4px 0 0 48px;
 }
 
 .cr-inline-question-why {

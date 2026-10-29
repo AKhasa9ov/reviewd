@@ -373,7 +373,7 @@ export function FullFileDialog({
     );
   }
 
-  function findingRows(no: number, lineKind: 'added' | 'removed' | 'unchanged'): JSX.Element[] {
+  function findingRows(no: number): JSX.Element[] {
     if (activeSide !== 'new') return [];
     return findings
       .filter(
@@ -387,7 +387,6 @@ export function FullFileDialog({
             decision={findingDecisions.get(finding.id)}
             readOnly={readOnly}
             pending={decidingFindingId === finding.id}
-            lineKind={lineKind}
             error={
               findingDecisionError?.findingId === finding.id ? findingDecisionError.message : null
             }
@@ -398,7 +397,7 @@ export function FullFileDialog({
       ));
   }
 
-  function questionRows(no: number, lineKind: 'added' | 'removed' | 'unchanged'): JSX.Element[] {
+  function questionRows(no: number): JSX.Element[] {
     if (activeSide !== 'new') return [];
     const lineComments = commentsAtLine(comments, round, file.path, no, 'new');
     return questions
@@ -409,7 +408,6 @@ export function FullFileDialog({
             question={question}
             comments={lineComments}
             readOnly={readOnly}
-            lineKind={lineKind}
             activeCommentId={activeCommentId}
             onReply={onReply}
             onState={onState}
@@ -545,8 +543,8 @@ export function FullFileDialog({
                         ) : null}
                       </span>
                     </div>
-                    {findingRows(no, kind)}
-                    {questionRows(no, kind)}
+                    {findingRows(no)}
+                    {questionRows(no)}
                     {threadFor(no)}
                     {composer !== null &&
                     composer.side === activeSide &&

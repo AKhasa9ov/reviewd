@@ -704,9 +704,6 @@ function DiffLineRow({
               decision={findingDecisions.get(finding.id)}
               readOnly={readOnly}
               pending={decidingFindingId === finding.id}
-              lineKind={
-                line.kind === 'add' ? 'added' : line.kind === 'del' ? 'removed' : 'unchanged'
-              }
               error={
                 findingDecisionError?.findingId === finding.id ? findingDecisionError.message : null
               }
@@ -721,7 +718,6 @@ function DiffLineRow({
             question={question}
             comments={lineComments}
             readOnly={readOnly}
-            lineKind={line.kind === 'add' ? 'added' : line.kind === 'del' ? 'removed' : 'unchanged'}
             activeCommentId={activeCommentId}
             onReply={onReply}
             onState={onCommentState}

@@ -4,8 +4,6 @@ import { Badge } from '../primitives/Feedback.js';
 import { FindingDecisionControls } from './FindingDecisionControls.js';
 import type { FindingDecisionControlsProps } from './FindingDecisionControls.js';
 
-export type AnnotationLineKind = 'added' | 'removed' | 'unchanged';
-
 export function severityLetter(severity: Finding['severity']): string {
   return severity === 'blocker'
     ? 'B'
@@ -34,7 +32,6 @@ export interface InlineFindingProps {
   readOnly?: boolean;
   pending?: boolean;
   error?: string | null;
-  lineKind?: AnnotationLineKind | undefined;
   onDecide?: FindingDecisionControlsProps['onDecide'];
   onOpenFinding?: ((finding: Finding) => void) | undefined;
 }
@@ -45,7 +42,6 @@ export function InlineFinding({
   readOnly = false,
   pending = false,
   error,
-  lineKind,
   onDecide,
   onOpenFinding,
 }: InlineFindingProps): JSX.Element {
@@ -63,7 +59,6 @@ export function InlineFinding({
         'cr-inline-finding',
         `cr-risk-${finding.severity}`,
         expanded ? 'cr-inline-finding-expanded' : 'cr-inline-finding-collapsed',
-        lineKind === undefined ? '' : `cr-annotation-${lineKind}`,
       ]
         .filter(Boolean)
         .join(' ')}
@@ -71,66 +66,68 @@ export function InlineFinding({
     >
       <button
         type="button"
-        className="cr-inline-finding-toggle"
+        className="cr-inline-finding-header"
         aria-expanded={expanded}
         aria-controls={expanded ? bodyId : undefined}
         aria-label={`${expanded ? 'Collapse' : 'Expand'} finding ${finding.title}`}
         onClick={() => setExpanded((value) => !value)}
       >
-        <span aria-hidden="true">{expanded ? '▾' : '▸'}</span>
-      </button>
-      <span className="cr-inline-finding-severity" aria-hidden="true">
-        {severityLetter(finding.severity)}
-      </span>
-      <div className="cr-inline-finding-main">
-        <header className="cr-inline-finding-head">
-          <strong>{finding.title}</strong>
-          <span className="cr-meta">
-            {finding.category} · {lines} · agent
+        <span className="cr-inline-finding-toggle" aria-hidden="true">
+          {expanded ? '▾' : '▸'}
+        </span>
+        <span className="cr-inline-finding-severity" aria-hidden="true">
+          {severityLetter(finding.severity)}
+        </span>
+        <span className="cr-inline-finding-main">
+          <span className="cr-inline-finding-head">
+            <strong>{finding.title}</strong>
+            <span className="cr-meta">
+              {finding.category} · {lines} · agent
+            </span>
           </span>
-        </header>
-        {expanded ? (
-          <div className="cr-inline-finding-body" id={bodyId}>
-            <p className="cr-inline-finding-rationale">{finding.rationale}</p>
-            {finding.evidence.trim() !== '' || finding.suggestion !== undefined ? (
-              <details className="cr-inline-finding-details">
-                <summary>Evidence and suggestion</summary>
-                {finding.evidence.trim() !== '' ? (
-                  <pre className="cr-inline-finding-evidence">{finding.evidence}</pre>
-                ) : null}
-                {finding.suggestion !== undefined ? (
-                  <div className="cr-inline-finding-suggestion">
-                    <span className="cr-suggestion-caption">Suggested change</span>
-                    <pre>{finding.suggestion.replacement}</pre>
-                  </div>
-                ) : null}
-              </details>
-            ) : null}
-            <div className="cr-inline-finding-actions">
-              <Badge tone={severityTone(finding.severity)}>{finding.severity}</Badge>
-              {onOpenFinding !== undefined ? (
-                <button
-                  type="button"
-                  className="cr-link-button"
-                  onClick={() => onOpenFinding(finding)}
-                >
-                  Open in report
-                </button>
+        </span>
+      </button>
+      {expanded ? (
+        <div className="cr-inline-finding-body" id={bodyId}>
+          <p className="cr-inline-finding-rationale">{finding.rationale}</p>
+          {finding.evidence.trim() !== '' || finding.suggestion !== undefined ? (
+            <details className="cr-inline-finding-details">
+              <summary>Evidence and suggestion</summary>
+              {finding.evidence.trim() !== '' ? (
+                <pre className="cr-inline-finding-evidence">{finding.evidence}</pre>
               ) : null}
-            </div>
-            {onDecide !== undefined ? (
-              <FindingDecisionControls
-                finding={finding}
-                decision={decision}
-                readOnly={readOnly}
-                pending={pending}
-                error={error ?? null}
-                onDecide={onDecide}
-              />
+              {finding.suggestion !== undefined ? (
+                <div className="cr-inline-finding-suggestion">
+                  <span className="cr-suggestion-caption">Suggested change</span>
+                  <pre>{finding.suggestion.replacement}</pre>
+                </div>
+              ) : null}
+            </details>
+          ) : null}
+          <div className="cr-inline-finding-actions">
+            <Badge tone={severityTone(finding.severity)}>{finding.severity}</Badge>
+            {onOpenFinding !== undefined ? (
+              <button
+                type="button"
+                className="cr-link-button"
+                onClick={() => onOpenFinding(finding)}
+              >
+                Open in report
+              </button>
             ) : null}
           </div>
-        ) : null}
-      </div>
+          {onDecide !== undefined ? (
+            <FindingDecisionControls
+              finding={finding}
+              decision={decision}
+              readOnly={readOnly}
+              pending={pending}
+              error={error ?? null}
+              onDecide={onDecide}
+            />
+          ) : null}
+        </div>
+      ) : null}
     </article>
   );
 }

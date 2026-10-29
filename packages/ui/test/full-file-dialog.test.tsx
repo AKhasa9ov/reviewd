@@ -489,11 +489,7 @@ describe('FullFileDialog', () => {
 
     expect(card).toHaveTextContent('Retry budget is hard-coded');
     expect(card).not.toHaveTextContent('The retry count cannot be configured per environment.');
-    await user.click(
-      within(card).getByRole('button', {
-        name: 'Expand finding Retry budget is hard-coded',
-      }),
-    );
+    await user.click(within(card).getByText('Retry budget is hard-coded'));
     expect(card).toHaveTextContent('The retry count cannot be configured per environment.');
     expect(row).toHaveClass('cr-full-file-finding');
     expect(row).toHaveAttribute('role', 'row');
@@ -510,7 +506,7 @@ describe('FullFileDialog', () => {
 
     expect(card).not.toHaveTextContent('Why is this value 2?');
     expect(card).not.toHaveTextContent('The new constant changes the retry budget.');
-    await user.click(within(card).getByRole('button', { name: 'Expand question' }));
+    await user.click(within(card).getByText('question'));
     expect(card).toHaveTextContent('Why is this value 2?');
     expect(card).toHaveTextContent('The new constant changes the retry budget.');
     expect(row).toHaveClass('cr-full-file-question');
