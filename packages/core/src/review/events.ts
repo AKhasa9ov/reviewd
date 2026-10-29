@@ -142,6 +142,12 @@ export interface AgentFailedData {
   message: string;
 }
 
+export interface AgentRetryData {
+  round: number;
+  /** Shards whose work is missing and must run again in the same round. */
+  shardIds: string[];
+}
+
 export interface ReviewEventDataMap {
   'review/created': ReviewCreatedData;
   'round/created': RoundCreatedData;
@@ -165,6 +171,7 @@ export interface ReviewEventDataMap {
   'agent/finding': AgentFindingData;
   'agent/report': AgentReportData;
   'agent/failed': AgentFailedData;
+  'agent/retry': AgentRetryData;
 }
 
 export type ReviewEventType = keyof ReviewEventDataMap;
@@ -192,6 +199,7 @@ export const REVIEW_EVENT_TYPES: readonly ReviewEventType[] = [
   'agent/finding',
   'agent/report',
   'agent/failed',
+  'agent/retry',
 ];
 
 export interface ReviewEventBase<T extends ReviewEventType = ReviewEventType> {

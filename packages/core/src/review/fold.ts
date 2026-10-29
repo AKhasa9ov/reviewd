@@ -248,6 +248,36 @@ export function fold(state: ReviewState, event: ReviewEvent): ReviewState {
       };
       break;
     }
+    case 'agent/retry': {
+      const agent = next.agent ?? { status: 'queued' as const, findings: [] };
+      const retryShards = new Set(event.data.shardIds);
+      let coverage = agent.coverage;
+      if (coverage !== undefined) {
+        const files = coverage.files.map((file) => {
+          if (
+            file.shardId === undefined ||
+            !retryShards.has(file.shardId) ||
+            (file.status !== 'failed' && file.status !== 'pending')
+          ) {
+            return file;
+          }
+          const retried = { ...file, status: 'pending' as const };
+          delete retried.reason;
+          return retried;
+        });
+        coverage = { ...coverage, files, totals: summarizeCoverage(files) };
+      }
+      next.agent = {
+        ...agent,
+        status: 'queued',
+        round: event.data.round,
+        ...(coverage === undefined ? {} : { coverage }),
+      };
+      delete next.agent.jobId;
+      delete next.agent.startedAt;
+      delete next.agent.error;
+      break;
+    }
   }
 
   return next;

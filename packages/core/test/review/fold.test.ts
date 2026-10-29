@@ -181,6 +181,63 @@ describe('agent coverage fold', () => {
     expect(failed.agent?.coverage?.totals.byStatus.pending).toBe(1);
   });
 
+  it('retries only failed shards without losing completed shard work', () => {
+    const files: FileCoverage[] = [
+      { path: 'src/done.ts', status: 'deep-reviewed', shardId: 'shard_001' },
+      { path: 'src/failed.ts', status: 'failed', reason: 'shard-failed', shardId: 'shard_002' },
+      { path: 'src/pending.ts', status: 'pending', shardId: 'shard_002' },
+    ];
+    const coverage = { files, totals: summarizeCoverage(files) };
+    let state = fold(baseState(), event('agent/coverage', { coverage, round: 1 }));
+    state = fold(
+      state,
+      event('agent/shard', {
+        shardId: 'shard_001',
+        shardIndex: 0,
+        shardCount: 2,
+        round: 1,
+        report: report(),
+        paths: ['src/done.ts'],
+      }),
+    );
+    state = fold(state, event('agent/failed', { code: 'shard-failed', message: 'shard failed' }));
+
+    const retried = fold(
+      state,
+      event('agent/retry', { round: 1, shardIds: ['shard_002'] }),
+    );
+
+    expect(retried.agent).toMatchObject({ status: 'queued', round: 1 });
+    expect(retried.agent?.error).toBeUndefined();
+    expect(retried.agent?.shards).toHaveLength(1);
+    expect(retried.agent?.coverage?.files).toEqual([
+      { path: 'src/done.ts', status: 'deep-reviewed', shardId: 'shard_001' },
+      { path: 'src/failed.ts', status: 'pending', shardId: 'shard_002' },
+      { path: 'src/pending.ts', status: 'pending', shardId: 'shard_002' },
+    ]);
+    expect(retried.agent?.coverage?.totals.byStatus).toMatchObject({
+      'deep-reviewed': 1,
+      pending: 2,
+      failed: 0,
+    });
+  });
+
+  it('does not reset coverage outside the retried shard set', () => {
+    const files: FileCoverage[] = [
+      { path: 'src/keep.ts', status: 'deep-reviewed', shardId: 'shard_001' },
+      { path: 'src/retry.ts', status: 'pending', shardId: 'shard_002' },
+    ];
+    const coverage = { files, totals: summarizeCoverage(files) };
+    const queued = fold(baseState(), event('agent/coverage', { coverage, round: 1 }));
+
+    const retried = fold(
+      queued,
+      event('agent/retry', { round: 1, shardIds: ['shard_002'] }),
+    );
+
+    expect(retried.agent?.coverage?.files).toEqual(files);
+  });
+
   it('keeps a legacy report without coverage done', () => {
     const reported = fold(baseState(), reportEvent());
 
