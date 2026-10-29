@@ -525,6 +525,7 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
   const canDecideFinding = !readOnly && report !== null && report.round === selectedRound;
   const agentActive =
     view?.review.agent?.status === 'running' || view?.review.agent?.status === 'queued';
+  const canRetryReviewer = view?.review.reviewer?.backend === 'worker';
   const scope = snapshot?.scope;
 
   const roundLabel = selectedRound === null ? 'No rounds' : `r${selectedRound}`;
@@ -1274,14 +1275,16 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
             <p>{review.agent.error ?? 'The reviewer did not produce a report.'}</p>
           </div>
           <div className="cr-inline-actions">
-            <Button
-              variant="secondary"
-              loading={retryPending}
-              disabled={readOnly || agentActive}
-              onClick={() => void retryReviewer()}
-            >
-              Retry reviewer
-            </Button>
+            {canRetryReviewer ? (
+              <Button
+                variant="secondary"
+                loading={retryPending}
+                disabled={readOnly || agentActive}
+                onClick={() => void retryReviewer()}
+              >
+                Retry reviewer
+              </Button>
+            ) : null}
             <Button variant="ghost" onClick={() => setTab('report')}>
               Open report
             </Button>
@@ -1514,15 +1517,17 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
                   <p className="cr-notice cr-notice-warning">
                     Coverage is incomplete: the reviewer did not inspect every changed file.
                   </p>
-                  <Button
-                    size="small"
-                    variant="secondary"
-                    loading={retryPending}
-                    disabled={readOnly || agentActive}
-                    onClick={() => void retryReviewer()}
-                  >
-                    Retry reviewer
-                  </Button>
+                  {canRetryReviewer ? (
+                    <Button
+                      size="small"
+                      variant="secondary"
+                      loading={retryPending}
+                      disabled={readOnly || agentActive}
+                      onClick={() => void retryReviewer()}
+                    >
+                      Retry reviewer
+                    </Button>
+                  ) : null}
                 </>
               ) : null}
               {review.agent?.status === 'running' || review.agent?.status === 'queued' ? (
@@ -1544,7 +1549,9 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
                 <>
                   <p className="cr-meta">{review.agent.error ?? 'Reviewer failed.'}</p>
                   <p className="cr-meta">
-                    Retry unfinished shards from the alert above, or create a new round.
+                    {canRetryReviewer
+                      ? 'Retry unfinished shards from the alert above, or create a new round.'
+                      : 'This reviewer backend cannot be retried in place. Create a new round.'}
                   </p>
                   <Button
                     size="small"

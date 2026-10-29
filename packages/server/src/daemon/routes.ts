@@ -567,35 +567,56 @@ async function retryWorkerAgent(ctx: RouteContext, reviewId: string): Promise<Re
       shardIds: targets.map((shard) => shard.id),
     } as never);
     ctx.jobs.clearAggregated(reviewId, round.no);
-    if (targets.length === 0) {
-      const aggregate = aggregateShardReports({
-        reviewId,
-        round: round.no,
-        backend: 'worker',
-        plan,
-        reports: (agent.shards ?? [])
-          .filter((shard) => shard.round === round.no)
-          .map((shard) => ({ shardId: shard.shardId, report: shard.report })),
-      });
-      await append(ctx, reviewId, 'agent/report', {
-        report: aggregate.report,
-        coverage: aggregate.coverage,
-      } as never);
-    } else {
-      await enqueueShardJobs(
-        ctx,
-        view,
-        round,
-        plan,
-        new Set(targets.map((shard) => shard.id)),
-      );
+    try {
+      if (targets.length === 0) {
+        const aggregate = aggregateShardReports({
+          reviewId,
+          round: round.no,
+          backend: 'worker',
+          plan,
+          reports: (agent.shards ?? [])
+            .filter((shard) => shard.round === round.no)
+            .map((shard) => ({ shardId: shard.shardId, report: shard.report })),
+        });
+        await append(ctx, reviewId, 'agent/report', {
+          report: aggregate.report,
+          coverage: aggregate.coverage,
+        } as never);
+      } else {
+        await enqueueShardJobs(
+          ctx,
+          view,
+          round,
+          plan,
+          new Set(targets.map((shard) => shard.id)),
+        );
+      }
+    } catch (error) {
+      // The retry event above made the agent queued. If rebuilding the shard
+      // bundles fails, leave a durable failed state instead of a queued ghost
+      // that cannot be retried again.
+      ctx.jobs.cancelReview(reviewId);
+      await append(ctx, reviewId, 'agent/failed', {
+        code: 'retry-enqueue-failed',
+        message: error instanceof Error ? error.message : 'cannot enqueue retry shards',
+      } as never).catch(() => undefined);
+      throw error;
     }
     return ctx.service.get(reviewId);
   }
 
   await append(ctx, reviewId, 'agent/retry', { round: round.no, shardIds: [] } as never);
   ctx.jobs.clearAggregated(reviewId, round.no);
-  await enqueueLegacyJob(ctx, view, round);
+  try {
+    await enqueueLegacyJob(ctx, view, round);
+  } catch (error) {
+    ctx.jobs.cancelReview(reviewId);
+    await append(ctx, reviewId, 'agent/failed', {
+      code: 'retry-enqueue-failed',
+      message: error instanceof Error ? error.message : 'cannot enqueue retry job',
+    } as never).catch(() => undefined);
+    throw error;
+  }
   return ctx.service.get(reviewId);
 }
 

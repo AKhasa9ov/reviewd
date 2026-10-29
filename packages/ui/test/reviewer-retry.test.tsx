@@ -7,14 +7,17 @@ import type { ApiClient } from '../src/api/client.js';
 import { ToastProvider } from '../src/primitives/Toast.js';
 import { ReviewDetail } from '../src/review/ReviewDetail.js';
 
-function failedView(status: 'failed' | 'partial' = 'failed'): ReviewView {
+function failedView(
+  status: 'failed' | 'partial' = 'failed',
+  backend: 'worker' | 'command' = 'worker',
+): ReviewView {
   const review = {
     id: 'rev_1',
     title: 'Retry reviewer',
     repoRoot: '/repo',
     status: 'open',
     createdAt: '2026-10-29T10:00:00.000Z',
-    reviewer: { backend: 'worker' },
+    reviewer: { backend },
     rounds: [
       {
         no: 1,
@@ -109,5 +112,18 @@ describe('reviewer retry', () => {
 
     expect(await screen.findByText(/Coverage is incomplete/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Retry reviewer' })).toBeInTheDocument();
+  });
+
+  it('does not offer in-place retry for a command reviewer', async () => {
+    const { client } = fakeClient(failedView('failed', 'command'));
+
+    render(
+      <ToastProvider>
+        <ReviewDetail client={client} id="rev_1" location="/review/rev_1?tab=report" />
+      </ToastProvider>,
+    );
+
+    expect(await screen.findByText('Reviewer failed')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Retry reviewer' })).not.toBeInTheDocument();
   });
 });
