@@ -160,7 +160,6 @@ export type { FakeReviewerOptions } from './reviewer/fake.js';
 export { CommandReviewer } from './reviewer/command.js';
 export type { CommandReviewerOptions } from './reviewer/command.js';
 export {
-  MAX_QUESTIONS,
   MAX_TEXT_BYTES,
   normalizeCode,
   ReportValidationError,

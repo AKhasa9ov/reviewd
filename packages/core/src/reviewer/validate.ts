@@ -16,7 +16,6 @@ import type {
 } from './types.js';
 import type { FileDiff, Snapshot } from '../types.js';
 
-export const MAX_QUESTIONS = 50;
 export const MAX_TEXT_BYTES = 32 * 1024;
 
 const CATEGORIES = new Set<FindingCategory>([
@@ -110,7 +109,6 @@ export class ReportValidationError extends Error {
 
 interface ValidationOptions {
   snapshot?: Snapshot;
-  maxQuestions?: number;
   maxTextBytes?: number;
 }
 
@@ -469,12 +467,7 @@ export function validateReport(raw: unknown, options: ValidationOptions = {}): V
   const questions: ReviewQuestion[] = [];
   const questionIds = new Set<string>();
   if (Array.isArray(raw.questions)) {
-    const max = options.maxQuestions ?? MAX_QUESTIONS;
     raw.questions.forEach((entry, index) => {
-      if (index >= max) {
-        reject(ctx, 'question', `more than ${max} questions`, undefined, index);
-        return;
-      }
       const question = validateQuestion(ctx, entry, index, questionIds);
       if (question !== null) questions.push(question);
     });

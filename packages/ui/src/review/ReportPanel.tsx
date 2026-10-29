@@ -63,7 +63,10 @@ const PAGE_SIZE = 50;
 
 type ReportSection = 'issues' | 'questions';
 
-interface ReportPaginationProps {
+type PaginationKind = 'report' | 'question';
+
+interface PaginationProps {
+  kind: PaginationKind;
   placement: 'top' | 'bottom';
   page: number;
   pageCount: number;
@@ -73,7 +76,8 @@ interface ReportPaginationProps {
   onPageChange: (page: number) => void;
 }
 
-function ReportPagination({
+function PaginationBar({
+  kind,
   placement,
   page,
   pageCount,
@@ -81,9 +85,10 @@ function ReportPagination({
   pageEnd,
   total,
   onPageChange,
-}: ReportPaginationProps): JSX.Element {
+}: PaginationProps): JSX.Element {
+  const title = kind === 'report' ? 'Report' : 'Question';
   return (
-    <nav className="cr-report-pagination" aria-label={`Report pages (${placement})`}>
+    <nav className="cr-report-pagination" aria-label={`${title} pages (${placement})`}>
       <span className="cr-meta">
         {pageStart + 1}–{pageEnd} of {total}
       </span>
@@ -91,7 +96,7 @@ function ReportPagination({
         <Button
           size="small"
           variant="secondary"
-          aria-label={`Previous report page (${placement})`}
+          aria-label={`Previous ${kind} page (${placement})`}
           disabled={page === 0}
           onClick={() => onPageChange(page - 1)}
         >
@@ -103,7 +108,7 @@ function ReportPagination({
         <Button
           size="small"
           variant="secondary"
-          aria-label={`Next report page (${placement})`}
+          aria-label={`Next ${kind} page (${placement})`}
           disabled={page >= pageCount - 1}
           onClick={() => onPageChange(page + 1)}
         >
@@ -131,17 +136,25 @@ export function ReportPanel({
   const [severity, setSeverity] = useState<Finding['severity'] | 'all'>('all');
   const [category, setCategory] = useState<Finding['category'] | 'all'>('all');
   const [page, setPage] = useState(0);
+  const [questionPage, setQuestionPage] = useState(0);
   const [section, setSection] = useState<ReportSection>('issues');
   const listRef = useRef<HTMLDivElement>(null);
+  const questionListRef = useRef<HTMLDivElement>(null);
   const findings =
     report === null || report === undefined
       ? []
       : filterFindings(report.findings, severity, category);
+  const questions = report === null || report === undefined ? [] : report.questions;
   const pageCount = Math.max(1, Math.ceil(findings.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount - 1);
   const pageStart = currentPage * PAGE_SIZE;
   const pageEnd = Math.min(pageStart + PAGE_SIZE, findings.length);
   const visibleFindings = findings.slice(pageStart, pageStart + PAGE_SIZE);
+  const questionPageCount = Math.max(1, Math.ceil(questions.length / PAGE_SIZE));
+  const currentQuestionPage = Math.min(questionPage, questionPageCount - 1);
+  const questionPageStart = currentQuestionPage * PAGE_SIZE;
+  const questionPageEnd = Math.min(questionPageStart + PAGE_SIZE, questions.length);
+  const visibleQuestions = questions.slice(questionPageStart, questionPageStart + PAGE_SIZE);
 
   useEffect(() => {
     setPage(0);
@@ -152,12 +165,28 @@ export function ReportPanel({
     setPage((value) => Math.min(value, pageCount - 1));
   }, [pageCount]);
 
+  useEffect(() => {
+    setQuestionPage(0);
+    if (questionListRef.current !== null) questionListRef.current.scrollTop = 0;
+  }, [report?.reviewId, report?.round, partial]);
+
+  useEffect(() => {
+    setQuestionPage((value) => Math.min(value, questionPageCount - 1));
+  }, [questionPageCount]);
+
   const previousPage = useRef(currentPage);
   useEffect(() => {
     if (previousPage.current === currentPage) return;
     previousPage.current = currentPage;
     if (listRef.current !== null) listRef.current.scrollTop = 0;
   }, [currentPage]);
+
+  const previousQuestionPage = useRef(currentQuestionPage);
+  useEffect(() => {
+    if (previousQuestionPage.current === currentQuestionPage) return;
+    previousQuestionPage.current = currentQuestionPage;
+    if (questionListRef.current !== null) questionListRef.current.scrollTop = 0;
+  }, [currentQuestionPage]);
 
   if (report === null || report === undefined) {
     return pending ? (
@@ -289,7 +318,8 @@ export function ReportPanel({
                   ) : (
                     <>
                       {findings.length > PAGE_SIZE ? (
-                        <ReportPagination
+                        <PaginationBar
+                          kind="report"
                           placement="top"
                           page={currentPage}
                           pageCount={pageCount}
@@ -368,7 +398,8 @@ export function ReportPanel({
                         </ol>
                       </div>
                       {findings.length > PAGE_SIZE ? (
-                        <ReportPagination
+                        <PaginationBar
+                          kind="report"
                           placement="bottom"
                           page={currentPage}
                           pageCount={pageCount}
@@ -393,33 +424,61 @@ export function ReportPanel({
               ),
               content: (
                 <div className="cr-report-questions">
-                  {report.questions.length === 0 ? (
+                  {questions.length === 0 ? (
                     <EmptyState
                       title="No open questions"
                       description="The reviewer did not ask any questions for this round."
                     />
                   ) : (
-                    <ul className="cr-question-list" aria-label="Open questions">
-                      {report.questions.map((question) => (
-                        <li key={question.id}>
-                          <button
-                            type="button"
-                            className="cr-link-button"
-                            onClick={() =>
-                              onJump({
-                                file: question.file,
-                                lineStart: question.line,
-                                lineEnd: question.line,
-                              })
-                            }
-                          >
-                            {question.file}:{question.line}
-                          </button>
-                          <strong>{question.question}</strong>
-                          <p className="cr-meta">{question.why}</p>
-                        </li>
-                      ))}
-                    </ul>
+                    <>
+                      {questions.length > PAGE_SIZE ? (
+                        <PaginationBar
+                          kind="question"
+                          placement="top"
+                          page={currentQuestionPage}
+                          pageCount={questionPageCount}
+                          pageStart={questionPageStart}
+                          pageEnd={questionPageEnd}
+                          total={questions.length}
+                          onPageChange={setQuestionPage}
+                        />
+                      ) : null}
+                      <div className="cr-report-scroll" ref={questionListRef}>
+                        <ul className="cr-question-list" aria-label="Open questions">
+                          {visibleQuestions.map((question) => (
+                            <li key={question.id}>
+                              <button
+                                type="button"
+                                className="cr-link-button"
+                                onClick={() =>
+                                  onJump({
+                                    file: question.file,
+                                    lineStart: question.line,
+                                    lineEnd: question.line,
+                                  })
+                                }
+                              >
+                                {question.file}:{question.line}
+                              </button>
+                              <strong>{question.question}</strong>
+                              <p className="cr-meta">{question.why}</p>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      {questions.length > PAGE_SIZE ? (
+                        <PaginationBar
+                          kind="question"
+                          placement="bottom"
+                          page={currentQuestionPage}
+                          pageCount={questionPageCount}
+                          pageStart={questionPageStart}
+                          pageEnd={questionPageEnd}
+                          total={questions.length}
+                          onPageChange={setQuestionPage}
+                        />
+                      ) : null}
+                    </>
                   )}
                 </div>
               ),

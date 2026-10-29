@@ -66,6 +66,18 @@ function pageButton(placement: 'top' | 'bottom', name: RegExp): HTMLElement {
   return within(pages(placement)).getByRole('button', { name });
 }
 
+function renderedQuestions(): number {
+  return screen.getByRole('list', { name: 'Open questions' }).querySelectorAll('li').length;
+}
+
+function questionPages(placement: 'top' | 'bottom'): HTMLElement {
+  return screen.getByRole('navigation', { name: `Question pages (${placement})` });
+}
+
+function questionPageButton(placement: 'top' | 'bottom', name: RegExp): HTMLElement {
+  return within(questionPages(placement)).getByRole('button', { name });
+}
+
 describe('ReportPanel browser', () => {
   it('pages findings in blocks of 50 with navigation above and below the list', async () => {
     const user = userEvent.setup();
@@ -154,6 +166,61 @@ describe('ReportPanel browser', () => {
     rerender(<ReportPanel report={report(findings)} onJump={() => undefined} />);
 
     expect(await screen.findAllByText('1–50 of 127')).toHaveLength(2);
+  });
+
+  it('pages questions in blocks of 50 with navigation above and below the list', async () => {
+    const user = userEvent.setup();
+    render(
+      <ReportPanel
+        report={report(
+          [],
+          Array.from({ length: 57 }, (_, index) => question(index)),
+        )}
+        onJump={() => undefined}
+      />,
+    );
+
+    await user.click(screen.getByRole('tab', { name: /Questions/ }));
+
+    expect(screen.getAllByText('1–50 of 57')).toHaveLength(2);
+    expect(screen.getByText('Question 1?')).toBeInTheDocument();
+    expect(screen.queryByText('Question 51?')).not.toBeInTheDocument();
+    expect(renderedQuestions()).toBe(50);
+    expect(questionPageButton('top', /Next question page/)).toBeEnabled();
+    expect(questionPageButton('bottom', /Next question page/)).toBeEnabled();
+
+    await user.click(questionPageButton('bottom', /Next question page/));
+    expect(screen.getAllByText('51–57 of 57')).toHaveLength(2);
+    expect(screen.getByText('Question 51?')).toBeInTheDocument();
+    expect(renderedQuestions()).toBe(7);
+    expect(questionPageButton('top', /Next question page/)).toBeDisabled();
+    expect(questionPageButton('bottom', /Next question page/)).toBeDisabled();
+
+    await user.click(questionPageButton('top', /Previous question page/));
+    expect(screen.getAllByText('1–50 of 57')).toHaveLength(2);
+  });
+
+  it('scrolls the questions pane back to the top when the page changes', async () => {
+    const user = userEvent.setup();
+    render(
+      <ReportPanel
+        report={report(
+          [],
+          Array.from({ length: 57 }, (_, index) => question(index)),
+        )}
+        onJump={() => undefined}
+      />,
+    );
+    await user.click(screen.getByRole('tab', { name: /Questions/ }));
+    const scroller = document.querySelector('.cr-report-questions .cr-report-scroll');
+    if (!(scroller instanceof HTMLElement)) throw new Error('expected questions scroller');
+    scroller.scrollTop = 300;
+
+    await user.click(questionPageButton('bottom', /Next question page/));
+
+    await waitFor(() => {
+      expect(scroller.scrollTop).toBe(0);
+    });
   });
 
   it('keeps questions in their own tab without mixing them into the issue list', async () => {

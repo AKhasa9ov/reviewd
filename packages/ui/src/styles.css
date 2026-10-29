@@ -3281,13 +3281,10 @@ body.cr-selecting-lines {
 }
 
 .cr-report-questions {
-  max-height: clamp(20rem, 58vh, 46rem);
+  display: grid;
+  gap: var(--cr-space-3);
   padding: var(--cr-space-4);
-  overflow-x: hidden;
-  overflow-y: auto;
   overflow-wrap: anywhere;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
 }
 
 .cr-report-scroll {
@@ -3301,7 +3298,9 @@ body.cr-selecting-lines {
   scrollbar-width: thin;
 }
 
-.cr-report-scroll .cr-findings {
+.cr-report-scroll .cr-findings,
+.cr-report-scroll .cr-question-list {
+  margin: 0;
   padding: 0;
 }
 

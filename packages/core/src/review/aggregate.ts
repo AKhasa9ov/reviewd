@@ -6,7 +6,6 @@ import type {
   TestCommand,
   Verification,
 } from '../reviewer/types.js';
-import { MAX_QUESTIONS } from '../reviewer/validate.js';
 import type { ReviewPlan } from './plan.js';
 import { coverageFromPlan } from './plan.js';
 import { summarizeCoverage } from './coverage.js';
@@ -71,7 +70,6 @@ function mergeQuestions(reports: readonly ShardReportInput[]): ReviewQuestion[] 
       if (seen.has(key)) continue;
       seen.add(key);
       questions.push({ ...question });
-      if (questions.length >= MAX_QUESTIONS) return questions;
     }
   }
   return questions;

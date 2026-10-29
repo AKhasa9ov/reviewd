@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentReport, Finding } from '../../src/reviewer/types.js';
+import type { AgentReport, Finding, ReviewQuestion } from '../../src/reviewer/types.js';
 import type { ManifestFile, ReviewManifest } from '../../src/types.js';
 import { aggregateShardReports, mergeShardReports } from '../../src/review/aggregate.js';
 import { buildReviewPlan } from '../../src/review/plan.js';
@@ -58,6 +58,10 @@ function finding(filePath: string, id = 'f1', title = 'risk'): Finding {
     rationale: 'why',
     evidence: 'code',
   };
+}
+
+function question(filePath: string, id = 'q1', text = 'why?'): ReviewQuestion {
+  return { id, file: filePath, line: 1, question: text, why: 'because' };
 }
 
 function report(overrides: Partial<AgentReport> = {}): AgentReport {
@@ -247,6 +251,30 @@ describe('mergeShardReports', () => {
     expect(partial.riskLevel).toBe('high');
     expect(partial.warnings).toEqual([]);
   });
+  it('keeps every question beyond the old 50 cap', () => {
+    const reports = Array.from({ length: 3 }, (_, shardIndex) => ({
+      shardId: `shard_${String(shardIndex + 1).padStart(3, '0')}`,
+      report: report({
+        questions: Array.from({ length: 20 }, (_, index) =>
+          question(
+            `src/question-${shardIndex}-${index}.ts`,
+            `q-${shardIndex}-${index}`,
+            `question ${shardIndex}-${index}`,
+          ),
+        ),
+      }),
+    }));
+
+    const merged = mergeShardReports({
+      reviewId: 'rev_1',
+      round: 1,
+      backend: 'worker',
+      reports,
+    });
+
+    expect(merged.questions).toHaveLength(60);
+  });
+
   it('keeps every finding beyond the old 200 cap', () => {
     const reports = Array.from({ length: 3 }, (_, shardIndex) => ({
       shardId: `shard_${String(shardIndex + 1).padStart(3, '0')}`,

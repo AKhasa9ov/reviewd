@@ -3027,379 +3027,6 @@ function coverageFromPlan(plan) {
   };
 }
 
-// packages/core/src/reviewer/validate.ts
-var MAX_QUESTIONS = 50;
-var MAX_TEXT_BYTES = 32 * 1024;
-var CATEGORIES = /* @__PURE__ */ new Set([
-  "security",
-  "correctness",
-  "tests",
-  "performance",
-  "maintainability",
-  "api",
-  "concurrency",
-  "docs",
-  "other"
-]);
-var CONFIDENCES = /* @__PURE__ */ new Set(["high", "medium", "low"]);
-var KINDS = /* @__PURE__ */ new Set(["issue", "question", "praise"]);
-var RISKS = /* @__PURE__ */ new Set(["low", "medium", "high", "critical"]);
-var TEST_RESULTS = /* @__PURE__ */ new Set(["pass", "fail", "unknown"]);
-var VERIFICATION_STATUSES = /* @__PURE__ */ new Set(["fixed", "not-fixed", "unclear"]);
-var REPORT_FIELDS = /* @__PURE__ */ new Set([
-  "schemaVersion",
-  "summary",
-  "riskLevel",
-  "findings",
-  "questions",
-  "tests",
-  "verification"
-]);
-var FINDING_FIELDS = /* @__PURE__ */ new Set([
-  "id",
-  "severity",
-  "category",
-  "confidence",
-  "kind",
-  "file",
-  "lineStart",
-  "lineEnd",
-  "title",
-  "rationale",
-  "evidence",
-  "suggestion"
-]);
-var QUESTION_FIELDS = /* @__PURE__ */ new Set(["id", "file", "line", "question", "why"]);
-var SEVERITY_ALIASES = {
-  blocker: "blocker",
-  critical: "blocker",
-  high: "blocker",
-  major: "major",
-  medium: "major",
-  minor: "minor",
-  low: "minor",
-  nit: "nit",
-  info: "nit"
-};
-function autoFindingId(value) {
-  const basis = [value.file, value.lineStart, value.lineEnd, value.title, value.evidence].join(
-    "\0"
-  );
-  let hash = 2166136261;
-  for (let index = 0; index < basis.length; index += 1) {
-    hash ^= basis.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return `f_auto_${(hash >>> 0).toString(36)}`;
-}
-function autoQuestionId(value) {
-  const basis = [value.file, value.line, value.question].join("\0");
-  let hash = 2166136261;
-  for (let index = 0; index < basis.length; index += 1) {
-    hash ^= basis.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return `q_auto_${(hash >>> 0).toString(36)}`;
-}
-var ReportValidationError = class extends Error {
-  constructor(message) {
-    super(message);
-    this.name = "ReportValidationError";
-  }
-};
-function isRecord2(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-function isNonEmpty(value) {
-  return typeof value === "string" && value.trim() !== "";
-}
-function isPositiveInt(value) {
-  return typeof value === "number" && Number.isInteger(value) && value >= 1;
-}
-function textWithin(ctx, value) {
-  return typeof value === "string" && Buffer.byteLength(value, "utf8") <= ctx.maxTextBytes;
-}
-function reject(ctx, kind, reason, id, index) {
-  ctx.rejected.push({
-    kind,
-    ...id === void 0 ? {} : { id },
-    ...index === void 0 ? {} : { index },
-    reason
-  });
-}
-function warnUnknown(ctx, value, allowed, label) {
-  for (const key of Object.keys(value)) {
-    if (!allowed.has(key)) ctx.warnings.push(`unknown-${label}-field:${key}`);
-  }
-}
-function fileLines(file) {
-  return file?.newLines ?? file?.oldLines;
-}
-function findFile(snapshot, path) {
-  return snapshot?.files.find((file) => file.path === path);
-}
-function normalizeCode(value) {
-  return value.split("\n").map((line) => line.trim().replace(/[ \t]+/g, " ")).join("\n");
-}
-function validateSuggestion(ctx, file, lineStart, lineEnd, value) {
-  if (!isRecord2(value)) return { unanchored: true };
-  const { original, replacement } = value;
-  if (!textWithin(ctx, original) || !textWithin(ctx, replacement)) return { unanchored: true };
-  const lines = fileLines(file);
-  if (lines === void 0) return { unanchored: true };
-  const current = lines.slice(lineStart - 1, lineEnd).join("\n");
-  if (normalizeCode(current) !== normalizeCode(original)) return { unanchored: true };
-  return { suggestion: { original, replacement } };
-}
-function validateFinding(ctx, value, index, ids) {
-  if (!isRecord2(value)) {
-    reject(ctx, "finding", "finding must be an object", void 0, index);
-    return null;
-  }
-  warnUnknown(ctx, value, FINDING_FIELDS, "finding");
-  const id = isNonEmpty(value.id) ? value.id : autoFindingId(value);
-  const rejected = (reason) => {
-    reject(ctx, "finding", reason, id, index);
-    return null;
-  };
-  if (ids.has(id)) return rejected(`duplicate finding id: ${id}`);
-  const severityKey = typeof value.severity === "string" ? value.severity.toLowerCase() : "";
-  const severity = Object.prototype.hasOwnProperty.call(SEVERITY_ALIASES, severityKey) ? SEVERITY_ALIASES[severityKey] : void 0;
-  if (severity === void 0) return rejected("severity must be blocker|major|minor|nit");
-  let category = "other";
-  if (value.category !== void 0) {
-    if (!CATEGORIES.has(value.category)) {
-      return rejected("category is not a known category");
-    }
-    category = value.category;
-  }
-  let confidence = "medium";
-  if (value.confidence !== void 0) {
-    if (!CONFIDENCES.has(value.confidence)) {
-      return rejected("confidence must be high|medium|low");
-    }
-    confidence = value.confidence;
-  }
-  let kind = "issue";
-  if (value.kind !== void 0) {
-    if (!KINDS.has(value.kind))
-      return rejected("kind must be issue|question|praise");
-    kind = value.kind;
-  }
-  if (!isNonEmpty(value.file)) return rejected("file must be a non-empty string");
-  const lineStart = value.lineStart;
-  const lineEnd = value.lineEnd === void 0 ? lineStart : value.lineEnd;
-  if (!isPositiveInt(lineStart) || !isPositiveInt(lineEnd)) {
-    return rejected("lineStart and lineEnd must be positive integers");
-  }
-  if (lineEnd < lineStart) return rejected("lineEnd must not precede lineStart");
-  const title = value.title;
-  if (!textWithin(ctx, title)) {
-    return rejected(`title must be a string no larger than ${ctx.maxTextBytes} bytes`);
-  }
-  let rationale = value.rationale;
-  if (rationale === void 0) {
-    rationale = textWithin(ctx, value.recommendation) ? value.recommendation : title;
-  }
-  if (!textWithin(ctx, rationale)) {
-    return rejected(`rationale must be a string no larger than ${ctx.maxTextBytes} bytes`);
-  }
-  const evidence = value.evidence;
-  if (!textWithin(ctx, evidence)) {
-    return rejected(`evidence must be a string no larger than ${ctx.maxTextBytes} bytes`);
-  }
-  const file = findFile(ctx.snapshot, value.file);
-  if (ctx.snapshot !== void 0 && file === void 0) {
-    return rejected(`file is not present in the snapshot: ${value.file}`);
-  }
-  const lines = fileLines(file);
-  if (lines !== void 0 && lineEnd > lines.length) {
-    return rejected(`line range ${lineStart}..${lineEnd} exceeds ${lines.length} lines`);
-  }
-  const finding = {
-    id,
-    severity,
-    category,
-    confidence,
-    kind,
-    file: value.file,
-    lineStart,
-    lineEnd,
-    title,
-    rationale,
-    evidence
-  };
-  if (value.suggestion !== void 0 && file !== void 0) {
-    const suggestion = validateSuggestion(ctx, file, lineStart, lineEnd, value.suggestion);
-    if (suggestion.suggestion !== void 0) finding.suggestion = suggestion.suggestion;
-    if (suggestion.unanchored === true) finding.unanchored = true;
-  } else if (value.suggestion !== void 0) {
-    finding.unanchored = true;
-  }
-  ids.add(id);
-  return finding;
-}
-function validateFindingItem(value, options = {}) {
-  const ctx = {
-    rejected: [],
-    warnings: [],
-    maxTextBytes: options.maxTextBytes ?? MAX_TEXT_BYTES,
-    ...options.snapshot === void 0 ? {} : { snapshot: options.snapshot }
-  };
-  const finding = validateFinding(ctx, value, 0, /* @__PURE__ */ new Set());
-  return { finding, rejected: ctx.rejected, warnings: ctx.warnings };
-}
-function validateQuestion(ctx, value, index, ids) {
-  if (!isRecord2(value)) {
-    reject(ctx, "question", "question must be an object", void 0, index);
-    return null;
-  }
-  warnUnknown(ctx, value, QUESTION_FIELDS, "question");
-  const id = isNonEmpty(value.id) ? value.id : autoQuestionId(value);
-  const rejected = (reason) => {
-    reject(ctx, "question", reason, id, index);
-    return null;
-  };
-  if (ids.has(id)) return rejected(`duplicate question id: ${id}`);
-  if (!isNonEmpty(value.file)) return rejected("file must be a non-empty string");
-  if (!isPositiveInt(value.line)) return rejected("line must be a positive integer");
-  if (!textWithin(ctx, value.question) || !textWithin(ctx, value.why)) {
-    return rejected(`question text must be no larger than ${ctx.maxTextBytes} bytes`);
-  }
-  const file = findFile(ctx.snapshot, value.file);
-  if (ctx.snapshot !== void 0 && file === void 0) {
-    return rejected(`file is not present in the snapshot: ${value.file}`);
-  }
-  const lines = fileLines(file);
-  if (lines !== void 0 && value.line > lines.length) {
-    return rejected(`line ${value.line} exceeds ${lines.length} lines`);
-  }
-  ids.add(id);
-  return {
-    id,
-    file: value.file,
-    line: value.line,
-    question: value.question,
-    why: value.why
-  };
-}
-function validateTests(ctx, value) {
-  if (value === void 0) return { ran: false, commands: [] };
-  if (!isRecord2(value)) {
-    reject(ctx, "test", "tests must be an object");
-    return { ran: false, commands: [] };
-  }
-  const ran = value.ran === true;
-  const commands = [];
-  if (Array.isArray(value.commands)) {
-    value.commands.forEach((entry, index) => {
-      if (!isRecord2(entry)) {
-        reject(ctx, "test", "test command must be an object", void 0, index);
-        return;
-      }
-      if (typeof entry.command !== "string" || typeof entry.summary !== "string" || typeof entry.result !== "string" || !TEST_RESULTS.has(entry.result)) {
-        reject(ctx, "test", "invalid test command", void 0, index);
-        return;
-      }
-      if (Buffer.byteLength(entry.command, "utf8") > ctx.maxTextBytes || Buffer.byteLength(entry.summary, "utf8") > ctx.maxTextBytes) {
-        reject(ctx, "test", "test command text exceeds the text limit", void 0, index);
-        return;
-      }
-      commands.push({
-        command: entry.command,
-        result: entry.result,
-        summary: entry.summary
-      });
-    });
-  }
-  return { ran, commands };
-}
-function validateVerification(ctx, value, index) {
-  if (!isRecord2(value)) {
-    reject(ctx, "verification", "verification must be an object", void 0, index);
-    return null;
-  }
-  if (!isNonEmpty(value.commentId) || typeof value.status !== "string" || !VERIFICATION_STATUSES.has(value.status) || !textWithin(ctx, value.evidence)) {
-    reject(ctx, "verification", "invalid verification entry", void 0, index);
-    return null;
-  }
-  return {
-    commentId: value.commentId,
-    status: value.status,
-    evidence: value.evidence
-  };
-}
-function validateReport(raw, options = {}) {
-  if (!isRecord2(raw)) throw new ReportValidationError("reviewer report must be an object");
-  if (raw.schemaVersion !== 1) {
-    throw new ReportValidationError("reviewer report schemaVersion must be 1");
-  }
-  const ctx = {
-    rejected: [],
-    warnings: [],
-    maxTextBytes: options.maxTextBytes ?? MAX_TEXT_BYTES,
-    ...options.snapshot === void 0 ? {} : { snapshot: options.snapshot }
-  };
-  warnUnknown(ctx, raw, REPORT_FIELDS, "report");
-  const riskLevel = typeof raw.riskLevel === "string" && RISKS.has(raw.riskLevel) ? raw.riskLevel : "medium";
-  if (typeof raw.riskLevel !== "string" || !RISKS.has(raw.riskLevel)) {
-    ctx.warnings.push("invalid-risk-level");
-  }
-  let summary2 = typeof raw.summary === "string" ? raw.summary : "";
-  if (typeof raw.summary !== "string") ctx.warnings.push("invalid-summary");
-  if (Buffer.byteLength(summary2, "utf8") > ctx.maxTextBytes) {
-    summary2 = Buffer.from(summary2, "utf8").subarray(0, ctx.maxTextBytes).toString("utf8");
-    ctx.warnings.push("summary-truncated");
-  }
-  const findings = [];
-  const findingIds = /* @__PURE__ */ new Set();
-  if (Array.isArray(raw.findings)) {
-    raw.findings.forEach((entry, index) => {
-      const finding = validateFinding(ctx, entry, index, findingIds);
-      if (finding !== null) findings.push(finding);
-    });
-  } else if (raw.findings !== void 0) {
-    reject(ctx, "report", "findings must be an array");
-  }
-  const questions = [];
-  const questionIds = /* @__PURE__ */ new Set();
-  if (Array.isArray(raw.questions)) {
-    const max = options.maxQuestions ?? MAX_QUESTIONS;
-    raw.questions.forEach((entry, index) => {
-      if (index >= max) {
-        reject(ctx, "question", `more than ${max} questions`, void 0, index);
-        return;
-      }
-      const question = validateQuestion(ctx, entry, index, questionIds);
-      if (question !== null) questions.push(question);
-    });
-  } else if (raw.questions !== void 0) {
-    reject(ctx, "report", "questions must be an array");
-  }
-  const verification = [];
-  if (Array.isArray(raw.verification)) {
-    raw.verification.forEach((entry, index) => {
-      const item = validateVerification(ctx, entry, index);
-      if (item !== null) verification.push(item);
-    });
-  } else if (raw.verification !== void 0) {
-    reject(ctx, "report", "verification must be an array");
-  }
-  return {
-    report: {
-      schemaVersion: 1,
-      summary: summary2,
-      riskLevel,
-      findings,
-      questions,
-      tests: validateTests(ctx, raw.tests),
-      verification
-    },
-    rejected: ctx.rejected,
-    warnings: ctx.warnings
-  };
-}
-
 // packages/core/src/review/aggregate.ts
 var RISK_ORDER = {
   low: 0,
@@ -3435,7 +3062,6 @@ function mergeQuestions(reports) {
       if (seen.has(key)) continue;
       seen.add(key);
       questions.push({ ...question });
-      if (questions.length >= MAX_QUESTIONS) return questions;
     }
   }
   return questions;
@@ -3544,7 +3170,7 @@ function aggregateShardReports(input) {
 }
 
 // packages/core/src/review/outcomes.ts
-function findFile2(anchor, snapshot) {
+function findFile(anchor, snapshot) {
   return snapshot.files.find((file) => file.path === anchor.path) ?? snapshot.files.find((file) => file.oldPath === anchor.path);
 }
 function contentAt(anchor, file) {
@@ -3573,7 +3199,7 @@ function containsBlock(lines, block) {
   return false;
 }
 function deriveOutcome(previous, next, nextSnapshot, suggestion) {
-  const file = findFile2(next, nextSnapshot);
+  const file = findFile(next, nextSnapshot);
   const content = file === void 0 ? null : contentAt(next, file);
   if (next.state === "outdated" || file === void 0 || content === null) {
     return { round: next.round, status: "outdated", confidence: "high" };
@@ -3903,7 +3529,7 @@ var ReviewNotFoundError = class extends Error {
     this.reviewId = reviewId;
   }
 };
-function isRecord3(value) {
+function isRecord2(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function isTimestamp(value) {
@@ -3913,19 +3539,19 @@ function isTimestamp(value) {
 }
 var REVIEW_STATUSES = /* @__PURE__ */ new Set(["open", "closed"]);
 function isActor2(value) {
-  if (!isRecord3(value)) return false;
+  if (!isRecord2(value)) return false;
   return typeof value.name === "string" && (value.kind === "human" || value.kind === "agent" || value.kind === "system");
 }
 function isComment(value) {
-  if (!isRecord3(value)) return false;
+  if (!isRecord2(value)) return false;
   return typeof value.id === "string" && typeof value.reviewId === "string" && isTimestamp(value.createdAt) && typeof value.body === "string" && (value.state === "open" || value.state === "resolved" || value.state === "dismissed") && Array.isArray(value.replies) && Array.isArray(value.anchors) && Array.isArray(value.outcomes) && (value.editedAt === void 0 || isTimestamp(value.editedAt)) && (value.editedBy === void 0 || isActor2(value.editedBy)) && (value.deletedAt === void 0 || isTimestamp(value.deletedAt)) && (value.deletedBy === void 0 || isActor2(value.deletedBy));
 }
 function isFindingDecision(value) {
-  if (!isRecord3(value)) return false;
-  return typeof value.findingId === "string" && typeof value.round === "number" && Number.isInteger(value.round) && value.round > 0 && (value.state === "accepted" || value.state === "dismissed") && (value.note === void 0 || typeof value.note === "string") && isRecord3(value.by) && typeof value.by.name === "string" && (value.by.kind === "human" || value.by.kind === "agent" || value.by.kind === "system") && isTimestamp(value.at);
+  if (!isRecord2(value)) return false;
+  return typeof value.findingId === "string" && typeof value.round === "number" && Number.isInteger(value.round) && value.round > 0 && (value.state === "accepted" || value.state === "dismissed") && (value.note === void 0 || typeof value.note === "string") && isRecord2(value.by) && typeof value.by.name === "string" && (value.by.kind === "human" || value.by.kind === "agent" || value.by.kind === "system") && isTimestamp(value.at);
 }
 function isReviewState(value) {
-  if (!isRecord3(value)) return false;
+  if (!isRecord2(value)) return false;
   return typeof value.id === "string" && typeof value.title === "string" && typeof value.repoRoot === "string" && typeof value.status === "string" && REVIEW_STATUSES.has(value.status) && isTimestamp(value.createdAt) && (value.closedAt === void 0 || isTimestamp(value.closedAt)) && (value.updatedAt === void 0 || isTimestamp(value.updatedAt)) && (value.updatedBy === void 0 || isActor2(value.updatedBy)) && (value.deletedAt === void 0 || isTimestamp(value.deletedAt)) && (value.deletedBy === void 0 || isActor2(value.deletedBy)) && Array.isArray(value.rounds) && Array.isArray(value.comments) && value.comments.every(isComment) && (value.findingDecisions === void 0 || Array.isArray(value.findingDecisions) && value.findingDecisions.every(isFindingDecision)) && typeof value.version === "number" && Number.isInteger(value.version) && value.version >= 0 && (value.warnings === void 0 || Array.isArray(value.warnings) && value.warnings.every((item) => typeof item === "string"));
 }
 function safeReviewId(reviewId) {
@@ -3960,7 +3586,7 @@ var MANIFEST_REASONS = /* @__PURE__ */ new Set([
   "symlink"
 ]);
 function isManifestFile(value) {
-  if (!isRecord3(value)) return false;
+  if (!isRecord2(value)) return false;
   if (typeof value.path !== "string") return false;
   if (value.oldPath !== void 0 && typeof value.oldPath !== "string") return false;
   if (typeof value.status !== "string" || !FILE_STATUSES.has(value.status)) {
@@ -3981,11 +3607,11 @@ function isManifestFile(value) {
   return true;
 }
 function isManifest(value) {
-  if (!isRecord3(value)) return false;
+  if (!isRecord2(value)) return false;
   if (value.schemaVersion !== 1) return false;
-  if (!isRecord3(value.scope) || typeof value.scope.baseSha !== "string") return false;
+  if (!isRecord2(value.scope) || typeof value.scope.baseSha !== "string") return false;
   if (!Array.isArray(value.files) || !value.files.every(isManifestFile)) return false;
-  if (!isRecord3(value.totals)) return false;
+  if (!isRecord2(value.totals)) return false;
   for (const field of ["files", "added", "deleted", "patchBytes"]) {
     if (typeof value.totals[field] !== "number" || !Number.isFinite(value.totals[field])) {
       return false;
@@ -3994,11 +3620,11 @@ function isManifest(value) {
   return Array.isArray(value.warnings) && value.warnings.every((item) => typeof item === "string");
 }
 function isSnapshot(value) {
-  if (!isRecord3(value)) return false;
+  if (!isRecord2(value)) return false;
   if (value.schemaVersion !== 1 && value.schemaVersion !== 2) return false;
-  if (!isRecord3(value.scope) || typeof value.scope.baseSha !== "string") return false;
+  if (!isRecord2(value.scope) || typeof value.scope.baseSha !== "string") return false;
   if (!Array.isArray(value.files)) return false;
-  if (!isRecord3(value.totals)) return false;
+  if (!isRecord2(value.totals)) return false;
   if (value.schemaVersion === 2 && typeof value.totals.truncated !== "boolean") return false;
   if (value.schemaVersion === 1 && value.totals.truncated !== void 0 && typeof value.totals.truncated !== "boolean") {
     return false;
@@ -4006,7 +3632,7 @@ function isSnapshot(value) {
   if (!Array.isArray(value.warnings)) return false;
   if (value.manifest !== void 0 && !isManifest(value.manifest)) return false;
   return value.files.every(
-    (file) => isRecord3(file) && typeof file.path === "string" && Array.isArray(file.hunks)
+    (file) => isRecord2(file) && typeof file.path === "string" && Array.isArray(file.hunks)
   );
 }
 function normalizeSnapshot(snapshot) {
@@ -4029,7 +3655,7 @@ function isPidAlive(pid) {
 function parseLock(raw) {
   try {
     const value = JSON.parse(raw);
-    if (!isRecord3(value)) return {};
+    if (!isRecord2(value)) return {};
     return {
       ...typeof value.pid === "number" ? { pid: value.pid } : {},
       ...typeof value.createdAt === "string" ? { createdAt: value.createdAt } : {}
@@ -4472,7 +4098,7 @@ var ReviewStore = class _ReviewStore {
     }
     try {
       const value = JSON.parse(raw);
-      if (!isRecord3(value)) return null;
+      if (!isRecord2(value)) return null;
       if (value.reviewId !== reviewId) return null;
       if (typeof value.eventCount !== "number" || !Number.isInteger(value.eventCount)) return null;
       if (value.eventBytes !== void 0 && typeof value.eventBytes !== "number") return null;
@@ -5256,6 +4882,373 @@ var CommandReviewer = class {
     });
   }
 };
+
+// packages/core/src/reviewer/validate.ts
+var MAX_TEXT_BYTES = 32 * 1024;
+var CATEGORIES = /* @__PURE__ */ new Set([
+  "security",
+  "correctness",
+  "tests",
+  "performance",
+  "maintainability",
+  "api",
+  "concurrency",
+  "docs",
+  "other"
+]);
+var CONFIDENCES = /* @__PURE__ */ new Set(["high", "medium", "low"]);
+var KINDS = /* @__PURE__ */ new Set(["issue", "question", "praise"]);
+var RISKS = /* @__PURE__ */ new Set(["low", "medium", "high", "critical"]);
+var TEST_RESULTS = /* @__PURE__ */ new Set(["pass", "fail", "unknown"]);
+var VERIFICATION_STATUSES = /* @__PURE__ */ new Set(["fixed", "not-fixed", "unclear"]);
+var REPORT_FIELDS = /* @__PURE__ */ new Set([
+  "schemaVersion",
+  "summary",
+  "riskLevel",
+  "findings",
+  "questions",
+  "tests",
+  "verification"
+]);
+var FINDING_FIELDS = /* @__PURE__ */ new Set([
+  "id",
+  "severity",
+  "category",
+  "confidence",
+  "kind",
+  "file",
+  "lineStart",
+  "lineEnd",
+  "title",
+  "rationale",
+  "evidence",
+  "suggestion"
+]);
+var QUESTION_FIELDS = /* @__PURE__ */ new Set(["id", "file", "line", "question", "why"]);
+var SEVERITY_ALIASES = {
+  blocker: "blocker",
+  critical: "blocker",
+  high: "blocker",
+  major: "major",
+  medium: "major",
+  minor: "minor",
+  low: "minor",
+  nit: "nit",
+  info: "nit"
+};
+function autoFindingId(value) {
+  const basis = [value.file, value.lineStart, value.lineEnd, value.title, value.evidence].join(
+    "\0"
+  );
+  let hash = 2166136261;
+  for (let index = 0; index < basis.length; index += 1) {
+    hash ^= basis.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `f_auto_${(hash >>> 0).toString(36)}`;
+}
+function autoQuestionId(value) {
+  const basis = [value.file, value.line, value.question].join("\0");
+  let hash = 2166136261;
+  for (let index = 0; index < basis.length; index += 1) {
+    hash ^= basis.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `q_auto_${(hash >>> 0).toString(36)}`;
+}
+var ReportValidationError = class extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "ReportValidationError";
+  }
+};
+function isRecord3(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function isNonEmpty(value) {
+  return typeof value === "string" && value.trim() !== "";
+}
+function isPositiveInt(value) {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1;
+}
+function textWithin(ctx, value) {
+  return typeof value === "string" && Buffer.byteLength(value, "utf8") <= ctx.maxTextBytes;
+}
+function reject(ctx, kind, reason, id, index) {
+  ctx.rejected.push({
+    kind,
+    ...id === void 0 ? {} : { id },
+    ...index === void 0 ? {} : { index },
+    reason
+  });
+}
+function warnUnknown(ctx, value, allowed, label) {
+  for (const key of Object.keys(value)) {
+    if (!allowed.has(key)) ctx.warnings.push(`unknown-${label}-field:${key}`);
+  }
+}
+function fileLines(file) {
+  return file?.newLines ?? file?.oldLines;
+}
+function findFile2(snapshot, path) {
+  return snapshot?.files.find((file) => file.path === path);
+}
+function normalizeCode(value) {
+  return value.split("\n").map((line) => line.trim().replace(/[ \t]+/g, " ")).join("\n");
+}
+function validateSuggestion(ctx, file, lineStart, lineEnd, value) {
+  if (!isRecord3(value)) return { unanchored: true };
+  const { original, replacement } = value;
+  if (!textWithin(ctx, original) || !textWithin(ctx, replacement)) return { unanchored: true };
+  const lines = fileLines(file);
+  if (lines === void 0) return { unanchored: true };
+  const current = lines.slice(lineStart - 1, lineEnd).join("\n");
+  if (normalizeCode(current) !== normalizeCode(original)) return { unanchored: true };
+  return { suggestion: { original, replacement } };
+}
+function validateFinding(ctx, value, index, ids) {
+  if (!isRecord3(value)) {
+    reject(ctx, "finding", "finding must be an object", void 0, index);
+    return null;
+  }
+  warnUnknown(ctx, value, FINDING_FIELDS, "finding");
+  const id = isNonEmpty(value.id) ? value.id : autoFindingId(value);
+  const rejected = (reason) => {
+    reject(ctx, "finding", reason, id, index);
+    return null;
+  };
+  if (ids.has(id)) return rejected(`duplicate finding id: ${id}`);
+  const severityKey = typeof value.severity === "string" ? value.severity.toLowerCase() : "";
+  const severity = Object.prototype.hasOwnProperty.call(SEVERITY_ALIASES, severityKey) ? SEVERITY_ALIASES[severityKey] : void 0;
+  if (severity === void 0) return rejected("severity must be blocker|major|minor|nit");
+  let category = "other";
+  if (value.category !== void 0) {
+    if (!CATEGORIES.has(value.category)) {
+      return rejected("category is not a known category");
+    }
+    category = value.category;
+  }
+  let confidence = "medium";
+  if (value.confidence !== void 0) {
+    if (!CONFIDENCES.has(value.confidence)) {
+      return rejected("confidence must be high|medium|low");
+    }
+    confidence = value.confidence;
+  }
+  let kind = "issue";
+  if (value.kind !== void 0) {
+    if (!KINDS.has(value.kind))
+      return rejected("kind must be issue|question|praise");
+    kind = value.kind;
+  }
+  if (!isNonEmpty(value.file)) return rejected("file must be a non-empty string");
+  const lineStart = value.lineStart;
+  const lineEnd = value.lineEnd === void 0 ? lineStart : value.lineEnd;
+  if (!isPositiveInt(lineStart) || !isPositiveInt(lineEnd)) {
+    return rejected("lineStart and lineEnd must be positive integers");
+  }
+  if (lineEnd < lineStart) return rejected("lineEnd must not precede lineStart");
+  const title = value.title;
+  if (!textWithin(ctx, title)) {
+    return rejected(`title must be a string no larger than ${ctx.maxTextBytes} bytes`);
+  }
+  let rationale = value.rationale;
+  if (rationale === void 0) {
+    rationale = textWithin(ctx, value.recommendation) ? value.recommendation : title;
+  }
+  if (!textWithin(ctx, rationale)) {
+    return rejected(`rationale must be a string no larger than ${ctx.maxTextBytes} bytes`);
+  }
+  const evidence = value.evidence;
+  if (!textWithin(ctx, evidence)) {
+    return rejected(`evidence must be a string no larger than ${ctx.maxTextBytes} bytes`);
+  }
+  const file = findFile2(ctx.snapshot, value.file);
+  if (ctx.snapshot !== void 0 && file === void 0) {
+    return rejected(`file is not present in the snapshot: ${value.file}`);
+  }
+  const lines = fileLines(file);
+  if (lines !== void 0 && lineEnd > lines.length) {
+    return rejected(`line range ${lineStart}..${lineEnd} exceeds ${lines.length} lines`);
+  }
+  const finding = {
+    id,
+    severity,
+    category,
+    confidence,
+    kind,
+    file: value.file,
+    lineStart,
+    lineEnd,
+    title,
+    rationale,
+    evidence
+  };
+  if (value.suggestion !== void 0 && file !== void 0) {
+    const suggestion = validateSuggestion(ctx, file, lineStart, lineEnd, value.suggestion);
+    if (suggestion.suggestion !== void 0) finding.suggestion = suggestion.suggestion;
+    if (suggestion.unanchored === true) finding.unanchored = true;
+  } else if (value.suggestion !== void 0) {
+    finding.unanchored = true;
+  }
+  ids.add(id);
+  return finding;
+}
+function validateFindingItem(value, options = {}) {
+  const ctx = {
+    rejected: [],
+    warnings: [],
+    maxTextBytes: options.maxTextBytes ?? MAX_TEXT_BYTES,
+    ...options.snapshot === void 0 ? {} : { snapshot: options.snapshot }
+  };
+  const finding = validateFinding(ctx, value, 0, /* @__PURE__ */ new Set());
+  return { finding, rejected: ctx.rejected, warnings: ctx.warnings };
+}
+function validateQuestion(ctx, value, index, ids) {
+  if (!isRecord3(value)) {
+    reject(ctx, "question", "question must be an object", void 0, index);
+    return null;
+  }
+  warnUnknown(ctx, value, QUESTION_FIELDS, "question");
+  const id = isNonEmpty(value.id) ? value.id : autoQuestionId(value);
+  const rejected = (reason) => {
+    reject(ctx, "question", reason, id, index);
+    return null;
+  };
+  if (ids.has(id)) return rejected(`duplicate question id: ${id}`);
+  if (!isNonEmpty(value.file)) return rejected("file must be a non-empty string");
+  if (!isPositiveInt(value.line)) return rejected("line must be a positive integer");
+  if (!textWithin(ctx, value.question) || !textWithin(ctx, value.why)) {
+    return rejected(`question text must be no larger than ${ctx.maxTextBytes} bytes`);
+  }
+  const file = findFile2(ctx.snapshot, value.file);
+  if (ctx.snapshot !== void 0 && file === void 0) {
+    return rejected(`file is not present in the snapshot: ${value.file}`);
+  }
+  const lines = fileLines(file);
+  if (lines !== void 0 && value.line > lines.length) {
+    return rejected(`line ${value.line} exceeds ${lines.length} lines`);
+  }
+  ids.add(id);
+  return {
+    id,
+    file: value.file,
+    line: value.line,
+    question: value.question,
+    why: value.why
+  };
+}
+function validateTests(ctx, value) {
+  if (value === void 0) return { ran: false, commands: [] };
+  if (!isRecord3(value)) {
+    reject(ctx, "test", "tests must be an object");
+    return { ran: false, commands: [] };
+  }
+  const ran = value.ran === true;
+  const commands = [];
+  if (Array.isArray(value.commands)) {
+    value.commands.forEach((entry, index) => {
+      if (!isRecord3(entry)) {
+        reject(ctx, "test", "test command must be an object", void 0, index);
+        return;
+      }
+      if (typeof entry.command !== "string" || typeof entry.summary !== "string" || typeof entry.result !== "string" || !TEST_RESULTS.has(entry.result)) {
+        reject(ctx, "test", "invalid test command", void 0, index);
+        return;
+      }
+      if (Buffer.byteLength(entry.command, "utf8") > ctx.maxTextBytes || Buffer.byteLength(entry.summary, "utf8") > ctx.maxTextBytes) {
+        reject(ctx, "test", "test command text exceeds the text limit", void 0, index);
+        return;
+      }
+      commands.push({
+        command: entry.command,
+        result: entry.result,
+        summary: entry.summary
+      });
+    });
+  }
+  return { ran, commands };
+}
+function validateVerification(ctx, value, index) {
+  if (!isRecord3(value)) {
+    reject(ctx, "verification", "verification must be an object", void 0, index);
+    return null;
+  }
+  if (!isNonEmpty(value.commentId) || typeof value.status !== "string" || !VERIFICATION_STATUSES.has(value.status) || !textWithin(ctx, value.evidence)) {
+    reject(ctx, "verification", "invalid verification entry", void 0, index);
+    return null;
+  }
+  return {
+    commentId: value.commentId,
+    status: value.status,
+    evidence: value.evidence
+  };
+}
+function validateReport(raw, options = {}) {
+  if (!isRecord3(raw)) throw new ReportValidationError("reviewer report must be an object");
+  if (raw.schemaVersion !== 1) {
+    throw new ReportValidationError("reviewer report schemaVersion must be 1");
+  }
+  const ctx = {
+    rejected: [],
+    warnings: [],
+    maxTextBytes: options.maxTextBytes ?? MAX_TEXT_BYTES,
+    ...options.snapshot === void 0 ? {} : { snapshot: options.snapshot }
+  };
+  warnUnknown(ctx, raw, REPORT_FIELDS, "report");
+  const riskLevel = typeof raw.riskLevel === "string" && RISKS.has(raw.riskLevel) ? raw.riskLevel : "medium";
+  if (typeof raw.riskLevel !== "string" || !RISKS.has(raw.riskLevel)) {
+    ctx.warnings.push("invalid-risk-level");
+  }
+  let summary2 = typeof raw.summary === "string" ? raw.summary : "";
+  if (typeof raw.summary !== "string") ctx.warnings.push("invalid-summary");
+  if (Buffer.byteLength(summary2, "utf8") > ctx.maxTextBytes) {
+    summary2 = Buffer.from(summary2, "utf8").subarray(0, ctx.maxTextBytes).toString("utf8");
+    ctx.warnings.push("summary-truncated");
+  }
+  const findings = [];
+  const findingIds = /* @__PURE__ */ new Set();
+  if (Array.isArray(raw.findings)) {
+    raw.findings.forEach((entry, index) => {
+      const finding = validateFinding(ctx, entry, index, findingIds);
+      if (finding !== null) findings.push(finding);
+    });
+  } else if (raw.findings !== void 0) {
+    reject(ctx, "report", "findings must be an array");
+  }
+  const questions = [];
+  const questionIds = /* @__PURE__ */ new Set();
+  if (Array.isArray(raw.questions)) {
+    raw.questions.forEach((entry, index) => {
+      const question = validateQuestion(ctx, entry, index, questionIds);
+      if (question !== null) questions.push(question);
+    });
+  } else if (raw.questions !== void 0) {
+    reject(ctx, "report", "questions must be an array");
+  }
+  const verification = [];
+  if (Array.isArray(raw.verification)) {
+    raw.verification.forEach((entry, index) => {
+      const item = validateVerification(ctx, entry, index);
+      if (item !== null) verification.push(item);
+    });
+  } else if (raw.verification !== void 0) {
+    reject(ctx, "report", "verification must be an array");
+  }
+  return {
+    report: {
+      schemaVersion: 1,
+      summary: summary2,
+      riskLevel,
+      findings,
+      questions,
+      tests: validateTests(ctx, raw.tests),
+      verification
+    },
+    rejected: ctx.rejected,
+    warnings: ctx.warnings
+  };
+}
 
 // packages/core/src/service/types.ts
 var ReviewError = class extends Error {
