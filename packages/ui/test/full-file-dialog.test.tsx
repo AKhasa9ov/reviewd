@@ -478,7 +478,8 @@ describe('FullFileDialog', () => {
     expect(within(dialog).getByRole('row', { name: /Line 2005/ })).toBeInTheDocument();
   }, 20_000);
 
-  it('renders an agent finding under its start line on the current version', () => {
+  it('renders an agent finding under its start line on the current version', async () => {
+    const user = userEvent.setup();
     const value = finding();
     render(<FullFileDialog file={file()} round={1} findings={[value]} onClose={vi.fn()} />);
     const dialog = screen.getByRole('dialog', { name: 'src/app.ts' });
@@ -487,6 +488,12 @@ describe('FullFileDialog', () => {
     const row = line.nextElementSibling;
 
     expect(card).toHaveTextContent('Retry budget is hard-coded');
+    expect(card).not.toHaveTextContent('The retry count cannot be configured per environment.');
+    await user.click(
+      within(card).getByRole('button', {
+        name: 'Expand finding Retry budget is hard-coded',
+      }),
+    );
     expect(card).toHaveTextContent('The retry count cannot be configured per environment.');
     expect(row).toHaveClass('cr-full-file-finding');
     expect(row).toHaveAttribute('role', 'row');
@@ -501,9 +508,10 @@ describe('FullFileDialog', () => {
     const card = within(dialog).getByLabelText('question: Why is this value 2?');
     const row = line.nextElementSibling;
 
-    expect(card).toHaveTextContent('Why is this value 2?');
+    expect(card).not.toHaveTextContent('Why is this value 2?');
     expect(card).not.toHaveTextContent('The new constant changes the retry budget.');
     await user.click(within(card).getByRole('button', { name: 'Expand question' }));
+    expect(card).toHaveTextContent('Why is this value 2?');
     expect(card).toHaveTextContent('The new constant changes the retry budget.');
     expect(row).toHaveClass('cr-full-file-question');
     expect(row).toHaveAttribute('role', 'row');
@@ -622,7 +630,8 @@ describe('FullFileDialog', () => {
     ).toHaveLength(1);
   });
 
-  it('shows the persisted decision and note on the finding card', () => {
+  it('shows the persisted decision and note on the finding card', async () => {
+    const user = userEvent.setup();
     const value = finding();
     render(
       <FullFileDialog
@@ -637,6 +646,11 @@ describe('FullFileDialog', () => {
     const dialog = screen.getByRole('dialog', { name: 'src/app.ts' });
     const card = within(dialog).getByLabelText('major finding: Retry budget is hard-coded');
 
+    await user.click(
+      within(card).getByRole('button', {
+        name: 'Expand finding Retry budget is hard-coded',
+      }),
+    );
     expect(within(card).getByText('Accepted')).toBeInTheDocument();
     expect(within(card).getByText('Will fix in this branch.')).toBeInTheDocument();
   });
@@ -657,6 +671,11 @@ describe('FullFileDialog', () => {
     const dialog = screen.getByRole('dialog', { name: 'src/app.ts' });
     const card = within(dialog).getByLabelText('major finding: Retry budget is hard-coded');
 
+    await user.click(
+      within(card).getByRole('button', {
+        name: 'Expand finding Retry budget is hard-coded',
+      }),
+    );
     await user.click(within(card).getByRole('button', { name: 'Accept' }));
     const form = within(card).getByRole('form', { name: 'Accept finding' });
     await user.type(
@@ -688,16 +707,27 @@ describe('FullFileDialog', () => {
     const dialog = screen.getByRole('dialog', { name: 'src/app.ts' });
     const card = within(dialog).getByLabelText('major finding: Retry budget is hard-coded');
 
+    await user.click(
+      within(card).getByRole('button', {
+        name: 'Expand finding Retry budget is hard-coded',
+      }),
+    );
     await user.click(within(card).getByRole('button', { name: 'Open in report' }));
 
     expect(onOpenFinding).toHaveBeenCalledWith(value);
   });
 
-  it('omits Open in report when no handler is provided', () => {
+  it('omits Open in report when no handler is provided', async () => {
+    const user = userEvent.setup();
     render(<FullFileDialog file={file()} round={1} findings={[finding()]} onClose={vi.fn()} />);
     const dialog = screen.getByRole('dialog', { name: 'src/app.ts' });
     const card = within(dialog).getByLabelText('major finding: Retry budget is hard-coded');
 
+    await user.click(
+      within(card).getByRole('button', {
+        name: 'Expand finding Retry budget is hard-coded',
+      }),
+    );
     expect(within(card).queryByRole('button', { name: 'Open in report' })).not.toBeInTheDocument();
   });
 

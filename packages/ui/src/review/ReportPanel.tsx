@@ -175,6 +175,7 @@ export function ReportPanel({
   const [page, setPage] = useState(0);
   const [questionPage, setQuestionPage] = useState(0);
   const [section, setSection] = useState<ReportSection>('issues');
+  const [expandedFindings, setExpandedFindings] = useState<ReadonlySet<string>>(() => new Set());
   const listRef = useRef<HTMLDivElement>(null);
   const questionListRef = useRef<HTMLDivElement>(null);
   const findings =
@@ -192,6 +193,15 @@ export function ReportPanel({
   const questionPageStart = currentQuestionPage * PAGE_SIZE;
   const questionPageEnd = Math.min(questionPageStart + PAGE_SIZE, questions.length);
   const visibleQuestions = questions.slice(questionPageStart, questionPageStart + PAGE_SIZE);
+
+  function toggleFinding(findingId: string): void {
+    setExpandedFindings((current) => {
+      const next = new Set(current);
+      if (next.has(findingId)) next.delete(findingId);
+      else next.add(findingId);
+      return next;
+    });
+  }
 
   useEffect(() => {
     setPage(0);
@@ -375,98 +385,129 @@ export function ReportPanel({
                       ) : null}
                       <div className="cr-report-scroll" ref={listRef}>
                         <ol className="cr-findings" aria-label="Reviewer findings">
-                          {visibleFindings.map((finding) => (
-                            <li
-                              className="cr-finding-item"
-                              key={finding.id}
-                              id={`finding-${finding.id}`}
-                              tabIndex={-1}
-                            >
-                              <div className="cr-finding">
-                                <div className="cr-finding-head">
-                                  <Badge tone={severityTone(finding.severity)}>
-                                    {finding.severity}
-                                  </Badge>
-                                  <Badge tone="neutral">{finding.category}</Badge>
-                                  {finding.kind !== 'issue' ? (
-                                    <Badge tone="info">{finding.kind}</Badge>
-                                  ) : null}
-                                  <button
-                                    type="button"
-                                    className="cr-finding-location"
-                                    onClick={() => onJump(finding)}
-                                    aria-label={`Jump to ${finding.file} line ${finding.lineStart}`}
-                                  >
-                                    {finding.file}:{finding.lineStart}
-                                  </button>
-                                  <span className="cr-meta">{finding.confidence} confidence</span>
-                                </div>
-                                <h3 className="cr-finding-title">{finding.title}</h3>
-                                <p className="cr-finding-copy">{finding.rationale}</p>
-                                {finding.evidence !== '' ? (
-                                  <pre className="cr-evidence" aria-label="Evidence">
-                                    {finding.evidence}
-                                  </pre>
-                                ) : null}
-                                {finding.suggestion !== undefined ? (
-                                  <div className="cr-suggestion" aria-label="Finding suggestion">
-                                    <div className="cr-suggestion-head">
-                                      <span className="cr-suggestion-label">Suggested change</span>
-                                      {finding.unanchored === true ? (
-                                        <Badge tone="warning">unanchored</Badge>
-                                      ) : null}
-                                    </div>
-                                    <div className="cr-suggestion-block cr-suggestion-old">
-                                      <span className="cr-suggestion-caption">Before</span>
-                                      <pre>{finding.suggestion.original}</pre>
-                                    </div>
-                                    <div className="cr-suggestion-block cr-suggestion-new">
-                                      <span className="cr-suggestion-caption">After</span>
-                                      <pre>{finding.suggestion.replacement}</pre>
-                                    </div>
+                          {visibleFindings.map((finding) => {
+                            const expanded = expandedFindings.has(finding.id);
+                            const bodyId = `report-finding-body-${finding.id}`;
+                            return (
+                              <li
+                                className="cr-finding-item"
+                                key={finding.id}
+                                id={`finding-${finding.id}`}
+                                tabIndex={-1}
+                              >
+                                <div
+                                  className={`cr-finding${
+                                    expanded ? ' cr-finding-expanded' : ' cr-finding-collapsed'
+                                  }`}
+                                >
+                                  <div className="cr-finding-head">
+                                    <button
+                                      type="button"
+                                      className="cr-finding-toggle"
+                                      aria-expanded={expanded}
+                                      aria-controls={expanded ? bodyId : undefined}
+                                      aria-label={`${
+                                        expanded ? 'Collapse' : 'Expand'
+                                      } finding ${finding.title}`}
+                                      onClick={() => toggleFinding(finding.id)}
+                                    >
+                                      <span aria-hidden="true">{expanded ? '▾' : '▸'}</span>
+                                    </button>
+                                    <Badge tone={severityTone(finding.severity)}>
+                                      {finding.severity}
+                                    </Badge>
+                                    <Badge tone="neutral">{finding.category}</Badge>
+                                    {finding.kind !== 'issue' ? (
+                                      <Badge tone="info">{finding.kind}</Badge>
+                                    ) : null}
+                                    <button
+                                      type="button"
+                                      className="cr-finding-location"
+                                      onClick={() => onJump(finding)}
+                                      aria-label={`Jump to ${finding.file} line ${finding.lineStart}`}
+                                    >
+                                      {finding.file}:{finding.lineStart}
+                                    </button>
+                                    <span className="cr-meta">{finding.confidence} confidence</span>
                                   </div>
+                                  <h3 className="cr-finding-title">{finding.title}</h3>
+                                  {expanded ? (
+                                    <div className="cr-finding-body" id={bodyId}>
+                                      <p className="cr-finding-copy">{finding.rationale}</p>
+                                      {finding.evidence !== '' ? (
+                                        <pre className="cr-evidence" aria-label="Evidence">
+                                          {finding.evidence}
+                                        </pre>
+                                      ) : null}
+                                      {finding.suggestion !== undefined ? (
+                                        <div
+                                          className="cr-suggestion"
+                                          aria-label="Finding suggestion"
+                                        >
+                                          <div className="cr-suggestion-head">
+                                            <span className="cr-suggestion-label">
+                                              Suggested change
+                                            </span>
+                                            {finding.unanchored === true ? (
+                                              <Badge tone="warning">unanchored</Badge>
+                                            ) : null}
+                                          </div>
+                                          <div className="cr-suggestion-block cr-suggestion-old">
+                                            <span className="cr-suggestion-caption">Before</span>
+                                            <pre>{finding.suggestion.original}</pre>
+                                          </div>
+                                          <div className="cr-suggestion-block cr-suggestion-new">
+                                            <span className="cr-suggestion-caption">After</span>
+                                            <pre>{finding.suggestion.replacement}</pre>
+                                          </div>
+                                        </div>
+                                      ) : null}
+                                      <FindingDecisionControls
+                                        finding={finding}
+                                        decision={decisions.get(finding.id)}
+                                        readOnly={!canDecide || onDecide === undefined}
+                                        pending={decidingFindingId === finding.id}
+                                        error={
+                                          findingDecisionError?.findingId === finding.id
+                                            ? findingDecisionError.message
+                                            : null
+                                        }
+                                        onDecide={onDecide ?? (async () => false)}
+                                      />
+                                    </div>
+                                  ) : null}
+                                </div>
+                                {expanded ? (
+                                  <ThreadConversation
+                                    comments={commentsFor(finding.file, finding.lineStart)}
+                                    action="comment"
+                                    readOnly={readOnly}
+                                    activeCommentId={activeCommentId}
+                                    pendingCommentId={pendingCommentId}
+                                    onReply={onReply}
+                                    onState={onCommentState}
+                                    onEdit={onCommentEdit}
+                                    onDelete={onCommentDelete}
+                                    onJump={onCommentJump}
+                                    onFocus={onCommentFocus}
+                                    {...(onAddComment === undefined || finding.unanchored === true
+                                      ? {}
+                                      : {
+                                          onAdd: (body: string) =>
+                                            onAddComment(
+                                              {
+                                                file: finding.file,
+                                                lineStart: finding.lineStart,
+                                                lineEnd: finding.lineEnd,
+                                              },
+                                              body,
+                                            ),
+                                        })}
+                                  />
                                 ) : null}
-                                <FindingDecisionControls
-                                  finding={finding}
-                                  decision={decisions.get(finding.id)}
-                                  readOnly={!canDecide || onDecide === undefined}
-                                  pending={decidingFindingId === finding.id}
-                                  error={
-                                    findingDecisionError?.findingId === finding.id
-                                      ? findingDecisionError.message
-                                      : null
-                                  }
-                                  onDecide={onDecide ?? (async () => false)}
-                                />
-                              </div>
-                              <ThreadConversation
-                                comments={commentsFor(finding.file, finding.lineStart)}
-                                action="comment"
-                                readOnly={readOnly}
-                                activeCommentId={activeCommentId}
-                                pendingCommentId={pendingCommentId}
-                                onReply={onReply}
-                                onState={onCommentState}
-                                onEdit={onCommentEdit}
-                                onDelete={onCommentDelete}
-                                onJump={onCommentJump}
-                                onFocus={onCommentFocus}
-                                {...(onAddComment === undefined || finding.unanchored === true
-                                  ? {}
-                                  : {
-                                      onAdd: (body: string) =>
-                                        onAddComment(
-                                          {
-                                            file: finding.file,
-                                            lineStart: finding.lineStart,
-                                            lineEnd: finding.lineEnd,
-                                          },
-                                          body,
-                                        ),
-                                    })}
-                              />
-                            </li>
-                          ))}
+                              </li>
+                            );
+                          })}
                         </ol>
                       </div>
                       {findings.length > PAGE_SIZE ? (

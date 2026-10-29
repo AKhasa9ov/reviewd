@@ -218,6 +218,11 @@ describe('review detail', () => {
     await user.click(screen.getByRole('button', { name: 'View full file for src/auth.ts' }));
     const dialog = await screen.findByRole('dialog', { name: 'src/auth.ts' });
     const finding = within(dialog).getByLabelText('major finding: Retry budget is hard-coded');
+    await user.click(
+      within(finding).getByRole('button', {
+        name: 'Expand finding Retry budget is hard-coded',
+      }),
+    );
     expect(finding).toHaveTextContent('The retry count cannot be configured per environment.');
 
     await user.click(within(finding).getByRole('button', { name: 'Open in report' }));
@@ -494,6 +499,11 @@ describe('review detail', () => {
     await user.click(screen.getByRole('tab', { name: /Issues/ }));
     const item = document.getElementById('finding-f1');
     expect(item).not.toBeNull();
+    await user.click(
+      within(item!).getByRole('button', {
+        name: 'Expand finding Retry budget is hard-coded',
+      }),
+    );
     expect(
       within(item!).getByText('This should use the configured max attempts.'),
     ).toBeInTheDocument();
@@ -545,6 +555,11 @@ describe('review detail', () => {
 
     expect(screen.getAllByLabelText('major finding: Retry budget is hard-coded')).toHaveLength(1);
     const inline = screen.getByLabelText('major finding: Retry budget is hard-coded');
+    await user.click(
+      within(inline).getByRole('button', {
+        name: 'Expand finding Retry budget is hard-coded',
+      }),
+    );
     expect(inline).toHaveTextContent('The retry count cannot be configured per environment.');
     expect(inline).toHaveTextContent('Suggested change');
     await user.click(pins[0]!);
@@ -574,6 +589,11 @@ describe('review detail', () => {
     await screen.findByRole('heading', { name: 'Billing retry semantics' });
 
     const inline = await screen.findByLabelText('major finding: Retry budget is hard-coded');
+    await user.click(
+      within(inline).getByRole('button', {
+        name: 'Expand finding Retry budget is hard-coded',
+      }),
+    );
     await user.click(within(inline).getByRole('button', { name: 'Accept' }));
 
     const form = await within(inline).findByRole('form', { name: 'Accept finding' });
@@ -600,6 +620,7 @@ describe('review detail', () => {
   });
 
   it('shows persisted finding decisions with their notes', async () => {
+    const user = userEvent.setup();
     const decided = structuredClone(reviewView);
     decided.review.findingDecisions = [
       {
@@ -617,6 +638,11 @@ describe('review detail', () => {
     await screen.findByRole('heading', { name: 'Billing retry semantics' });
     const finding = await screen.findByText('Retry budget is hard-coded');
     const card = finding.closest('.cr-finding') as HTMLElement;
+    await user.click(
+      within(card).getByRole('button', {
+        name: 'Expand finding Retry budget is hard-coded',
+      }),
+    );
     expect(within(card).getByText('Accepted')).toBeInTheDocument();
     expect(within(card).getByText('Will fix in this branch.')).toBeInTheDocument();
     expect(within(card).getByRole('button', { name: 'Accept' })).toHaveAttribute(
@@ -630,6 +656,7 @@ describe('review detail', () => {
   });
 
   it('hides finding decisions on a closed review', async () => {
+    const user = userEvent.setup();
     const closed = structuredClone(reviewView);
     closed.review.status = 'closed';
     go('/review/rev_01?round=2&tab=report');
@@ -637,6 +664,12 @@ describe('review detail', () => {
 
     await screen.findByRole('heading', { name: 'Billing retry semantics' });
     expect(await screen.findByText('Retry budget is hard-coded')).toBeInTheDocument();
+    const card = document.querySelector('#finding-f1 .cr-finding') as HTMLElement;
+    await user.click(
+      within(card).getByRole('button', {
+        name: 'Expand finding Retry budget is hard-coded',
+      }),
+    );
     expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Dismiss' })).not.toBeInTheDocument();
   });

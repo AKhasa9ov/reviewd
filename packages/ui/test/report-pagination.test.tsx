@@ -296,6 +296,7 @@ describe('ReportPanel browser', () => {
       />,
     );
 
+    await user.click(screen.getByRole('button', { name: 'Expand finding Finding 1' }));
     expect(screen.getByText('Existing answer')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Reply' }));
     await user.type(screen.getByLabelText('Reply to Reviewer'), 'Thanks');
@@ -334,6 +335,7 @@ describe('ReportPanel browser', () => {
       />,
     );
 
+    await user.click(screen.getByRole('button', { name: 'Expand finding Finding 1' }));
     await user.click(screen.getByRole('button', { name: 'Comment' }));
     await user.type(screen.getByLabelText('Your comment'), 'Looks good');
     await user.click(screen.getByRole('button', { name: 'Post comment' }));
@@ -382,6 +384,7 @@ describe('ReportPanel browser', () => {
       />,
     );
 
+    await user.click(screen.getByRole('button', { name: 'Expand finding Finding 1' }));
     expect(screen.queryByRole('button', { name: 'Comment' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('tab', { name: /Questions/ }));
     expect(screen.queryByRole('button', { name: 'Answer' })).not.toBeInTheDocument();

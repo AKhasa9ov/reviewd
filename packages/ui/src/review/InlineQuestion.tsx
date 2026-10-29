@@ -1,12 +1,14 @@
 import { useId, useState } from 'react';
 import type { Comment, CommentState, ReviewQuestion } from '@dsh-code-review/core';
 import { Badge } from '../primitives/Feedback.js';
+import type { AnnotationLineKind } from './InlineFinding.js';
 import { ThreadConversation } from './ThreadConversation.js';
 
 export interface InlineQuestionProps {
   question: ReviewQuestion;
   comments?: readonly Comment[];
   readOnly?: boolean;
+  lineKind?: AnnotationLineKind | undefined;
   activeCommentId?: string | undefined;
   pendingCommentId?: string | undefined;
   onReply?: ((comment: Comment, body: string) => Promise<void>) | undefined;
@@ -22,6 +24,7 @@ export function InlineQuestion({
   question,
   comments = [],
   readOnly = false,
+  lineKind,
   activeCommentId,
   pendingCommentId,
   onReply,
@@ -41,10 +44,23 @@ export function InlineQuestion({
       className={[
         'cr-inline-question',
         expanded ? 'cr-inline-question-expanded' : 'cr-inline-question-collapsed',
-      ].join(' ')}
+        lineKind === undefined ? '' : `cr-annotation-${lineKind}`,
+      ]
+        .filter(Boolean)
+        .join(' ')}
       role="cell"
       aria-label={`question: ${question.question}`}
     >
+      <button
+        type="button"
+        className="cr-inline-question-toggle"
+        aria-expanded={expanded}
+        aria-controls={expanded ? bodyId : undefined}
+        aria-label={expanded ? 'Collapse question' : 'Expand question'}
+        onClick={() => setExpanded((value) => !value)}
+      >
+        <span aria-hidden="true">{expanded ? '▾' : '▸'}</span>
+      </button>
       <span className="cr-inline-question-mark" aria-hidden="true">
         ?
       </span>
@@ -67,29 +83,10 @@ export function InlineQuestion({
               Answer
             </button>
           ) : null}
-          <button
-            type="button"
-            className="cr-inline-question-toggle"
-            aria-expanded={expanded}
-            aria-controls={expanded ? bodyId : undefined}
-            aria-label={expanded ? 'Collapse question' : 'Expand question'}
-            onClick={() => setExpanded((value) => !value)}
-          >
-            {expanded ? 'Collapse' : 'Expand'}
-          </button>
         </header>
-        <p
-          className={[
-            'cr-inline-question-text',
-            expanded ? '' : 'cr-inline-question-text-collapsed',
-          ]
-            .filter(Boolean)
-            .join(' ')}
-        >
-          {question.question}
-        </p>
         {expanded ? (
           <div className="cr-inline-question-body" id={bodyId}>
+            <p className="cr-inline-question-text">{question.question}</p>
             <p className="cr-inline-question-why">
               <span className="cr-meta">Why:</span> {question.why}
             </p>

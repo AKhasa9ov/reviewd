@@ -171,11 +171,18 @@ describe('DiffViewer lazy diffs', () => {
     const line = screen.getByRole('row', { name: /line 1, added:/ });
     const card = screen.getByLabelText('question: Why is this value 1?');
 
-    expect(card).toHaveTextContent('Why is this value 1?');
+    const toggle = within(card).getByRole('button', { name: 'Expand question' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(card).not.toHaveTextContent('Why is this value 1?');
     expect(card).not.toHaveTextContent('The initial value controls the retry budget.');
     expect(within(card).getByRole('button', { name: 'Answer question' })).toBeInTheDocument();
-    await user.click(within(card).getByRole('button', { name: 'Expand question' }));
+    await user.click(toggle);
+    expect(card).toHaveTextContent('Why is this value 1?');
     expect(card).toHaveTextContent('The initial value controls the retry budget.');
+    expect(within(card).getByRole('button', { name: 'Collapse question' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
     expect(line.nextElementSibling).toContainElement(card);
   });
 
