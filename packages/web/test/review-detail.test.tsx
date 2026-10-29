@@ -454,6 +454,67 @@ describe('review detail', () => {
     expect(await screen.findByText('Comment posted')).toBeInTheDocument();
   });
 
+  it('answers a reviewer question from the report', async () => {
+    const user = userEvent.setup();
+    go('/review/rev_01?round=2&tab=report');
+    const addComment = vi.fn(async () => ({ comment: reviewView.review.comments[0] }));
+    render(<App client={fakeClient({ addComment })} />);
+    await screen.findByRole('heading', { name: 'Billing retry semantics' });
+
+    await user.click(screen.getByRole('tab', { name: /Questions/ }));
+    const question = await screen.findByText('Is fetchCharge idempotent?');
+    const item = question.closest('li');
+    expect(item).not.toBeNull();
+    await user.click(within(item!).getByRole('button', { name: 'Answer' }));
+    await user.type(within(item!).getByLabelText('Your answer'), 'Yes, it is keyed by charge id.');
+    await user.click(within(item!).getByRole('button', { name: 'Send answer' }));
+
+    await waitFor(() =>
+      expect(addComment).toHaveBeenCalledWith(
+        'rev_01',
+        expect.objectContaining({
+          body: 'Yes, it is keyed by charge id.',
+          path: 'src/auth.ts',
+          side: 'new',
+          lineStart: 13,
+          lineEnd: 13,
+        }),
+      ),
+    );
+    expect(await screen.findByText('Comment posted')).toBeInTheDocument();
+  });
+
+  it('shows and posts a finding comment from the report', async () => {
+    const user = userEvent.setup();
+    go('/review/rev_01?round=2&tab=report');
+    const addComment = vi.fn(async () => ({ comment: reviewView.review.comments[0] }));
+    render(<App client={fakeClient({ addComment })} />);
+    await screen.findByRole('heading', { name: 'Billing retry semantics' });
+
+    await user.click(screen.getByRole('tab', { name: /Issues/ }));
+    const item = document.getElementById('finding-f1');
+    expect(item).not.toBeNull();
+    expect(
+      within(item!).getByText('This should use the configured max attempts.'),
+    ).toBeInTheDocument();
+    await user.click(within(item!).getByRole('button', { name: 'Comment' }));
+    await user.type(within(item!).getByLabelText('Your comment'), 'Please add a regression test.');
+    await user.click(within(item!).getByRole('button', { name: 'Post comment' }));
+
+    await waitFor(() =>
+      expect(addComment).toHaveBeenCalledWith(
+        'rev_01',
+        expect.objectContaining({
+          body: 'Please add a regression test.',
+          path: 'src/auth.ts',
+          side: 'new',
+          lineStart: 11,
+          lineEnd: 12,
+        }),
+      ),
+    );
+  });
+
   it('keeps keyboard focus on a clicked diff line', async () => {
     const user = userEvent.setup();
     go('/review/rev_01?round=2&tab=files#file=src%2Fauth.ts&line=11');

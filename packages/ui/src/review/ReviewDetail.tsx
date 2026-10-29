@@ -30,7 +30,7 @@ import type { FullFileController } from './FullFileDialog.js';
 import { clearDraft, readDraft, writeDraft, type StoredCommentDraft } from './drafts.js';
 import { FixStatusBoard } from './FixStatusBoard.js';
 import type { FindingDecisionError } from './FindingDecisionControls.js';
-import { ReportPanel } from './ReportPanel.js';
+import { ReportPanel, type ReportCommentTarget } from './ReportPanel.js';
 import { SignalsPanel } from './SignalsPanel.js';
 import { SubmitDialog } from './SubmitDialog.js';
 import {
@@ -515,6 +515,13 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
     () => (view === null ? [] : filterComments(view.review, fixFilter)),
     [view, fixFilter],
   );
+  const reportComments = useMemo(
+    () =>
+      view === null
+        ? []
+        : view.review.comments.filter((comment) => comment.deletedAt === undefined),
+    [view],
+  );
   const signals = useMemo(() => (snapshot === null ? [] : deriveSignals(snapshot)), [snapshot]);
   const fileCount = useMemo(
     () => (snapshot === null ? 0 : filesForSnapshot(snapshot).length),
@@ -781,6 +788,24 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
       setCommentError(error instanceof Error ? error.message : 'Could not post the comment.');
     } finally {
       setCommentSubmitting(false);
+    }
+  }
+
+  async function submitReportComment(target: ReportCommentTarget, body: string): Promise<void> {
+    try {
+      const result = await client.addComment(id, {
+        body,
+        path: target.file,
+        side: 'new',
+        lineStart: target.lineStart,
+        lineEnd: target.lineEnd,
+      });
+      setPendingCommentId(result.comment.id);
+      setActiveCommentId(result.comment.id);
+      toast('Comment posted');
+      void refreshView();
+    } catch (error) {
+      throw error instanceof Error ? error : new Error('Could not post the comment.');
     }
   }
 
@@ -1208,6 +1233,12 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
       onCommentState={setCommentState}
       onCommentJump={jumpToComment}
       onCommentFocus={(comment) => setActiveCommentId(comment.id)}
+      onAnswerQuestion={(question, body) =>
+        submitReportComment(
+          { file: question.file, lineStart: question.line, lineEnd: question.line },
+          body,
+        )
+      }
       readOnly={readOnly}
     />
   );
@@ -1507,6 +1538,18 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
                 decidingFindingId={decidingFindingId}
                 findingDecisionError={findingDecisionError}
                 onJump={jumpToLocation}
+                comments={reportComments}
+                round={selectedRound ?? 1}
+                readOnly={readOnly}
+                activeCommentId={activeCommentId}
+                pendingCommentId={pendingCommentId}
+                onReply={reply}
+                onCommentState={setCommentState}
+                onCommentEdit={editComment}
+                onCommentDelete={deleteComment}
+                onCommentJump={jumpToComment}
+                onCommentFocus={(comment) => setActiveCommentId(comment.id)}
+                onAddComment={submitReportComment}
                 onJumpComment={(commentId) => {
                   const comment = review.comments.find((item) => item.id === commentId);
                   if (comment !== undefined) jumpToComment(comment);

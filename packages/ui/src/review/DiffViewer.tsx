@@ -75,6 +75,7 @@ export interface DiffViewerProps {
   onCommentState: (comment: Comment, state: CommentState) => Promise<void>;
   onCommentJump: (comment: Comment) => void;
   onCommentFocus: (comment: Comment) => void;
+  onAnswerQuestion?: ((question: ReviewQuestion, body: string) => Promise<void>) | undefined;
   readOnly?: boolean;
   /** Fetch a diff omitted from the bounded round snapshot. */
   onLoadDiff?: ((path: string) => Promise<FileDiff>) | undefined;
@@ -231,6 +232,7 @@ function DiffFileSection({
   onCommentState,
   onCommentJump,
   onCommentFocus,
+  onAnswerQuestion,
   readOnly = false,
 }: {
   file: FileDiff;
@@ -261,6 +263,7 @@ function DiffFileSection({
   onCommentState: DiffViewerProps['onCommentState'];
   onCommentJump: DiffViewerProps['onCommentJump'];
   onCommentFocus: DiffViewerProps['onCommentFocus'];
+  onAnswerQuestion?: DiffViewerProps['onAnswerQuestion'];
   readOnly: boolean;
 }): JSX.Element {
   const [visible, setVisible] = useState(isVisibleFallback());
@@ -487,6 +490,7 @@ function DiffFileSection({
                       onCommentState={onCommentState}
                       onCommentJump={onCommentJump}
                       onCommentFocus={onCommentFocus}
+                      onAnswerQuestion={onAnswerQuestion}
                       readOnly={readOnly}
                     />
                   ),
@@ -543,6 +547,7 @@ function DiffLineRow({
   onCommentState,
   onCommentJump,
   onCommentFocus,
+  onAnswerQuestion,
   readOnly,
 }: {
   file: FileDiff;
@@ -570,6 +575,7 @@ function DiffLineRow({
   onCommentState: DiffViewerProps['onCommentState'];
   onCommentJump: DiffViewerProps['onCommentJump'];
   onCommentFocus: DiffViewerProps['onCommentFocus'];
+  onAnswerQuestion?: DiffViewerProps['onAnswerQuestion'];
   readOnly: boolean;
 }): JSX.Element {
   const line = row.line;
@@ -708,10 +714,22 @@ function DiffLineRow({
         ))}
       {lineQuestions.map((question) => (
         <div className="cr-inline-question-row" role="row" key={question.id}>
-          <InlineQuestion question={question} />
+          <InlineQuestion
+            question={question}
+            comments={lineComments}
+            readOnly={readOnly}
+            activeCommentId={activeCommentId}
+            onReply={onReply}
+            onState={onCommentState}
+            onJump={onCommentJump}
+            onFocus={onCommentFocus}
+            {...(onAnswerQuestion === undefined
+              ? {}
+              : { onAnswer: (body: string) => onAnswerQuestion(question, body) })}
+          />
         </div>
       ))}
-      {lineComments.length > 0 ? (
+      {lineQuestions.length === 0 && lineComments.length > 0 ? (
         <div className="cr-inline-thread" role="row">
           <div className="cr-inline-thread-cell" role="cell">
             {lineComments.map((comment) => (
@@ -781,6 +799,7 @@ export function DiffViewer({
   onCommentState,
   onCommentJump,
   onCommentFocus,
+  onAnswerQuestion,
   readOnly = false,
 }: DiffViewerProps): JSX.Element {
   const [search, setSearch] = useState('');
@@ -1184,6 +1203,7 @@ export function DiffViewer({
                 onCommentState={onCommentState}
                 onCommentJump={onCommentJump}
                 onCommentFocus={onCommentFocus}
+                onAnswerQuestion={onAnswerQuestion}
                 readOnly={readOnly}
               />
             ))}
@@ -1241,6 +1261,7 @@ export function DiffViewer({
           onState={onCommentState}
           onCommentJump={onCommentJump}
           onCommentFocus={onCommentFocus}
+          onAnswerQuestion={onAnswerQuestion}
         />
       ) : null}
     </div>

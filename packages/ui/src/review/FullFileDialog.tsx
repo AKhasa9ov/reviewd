@@ -64,6 +64,7 @@ interface FullFileDialogProps {
   onState?: (comment: Comment, state: CommentState) => Promise<void>;
   onCommentJump?: (comment: Comment) => void;
   onCommentFocus?: (comment: Comment) => void;
+  onAnswerQuestion?: ((question: ReviewQuestion, body: string) => Promise<void>) | undefined;
 }
 
 interface Selection {
@@ -134,6 +135,7 @@ export function FullFileDialog({
   onState,
   onCommentJump,
   onCommentFocus,
+  onAnswerQuestion,
 }: FullFileDialogProps): JSX.Element {
   const hasCurrent = file.newLines !== undefined && file.status !== 'deleted';
   const hasBase = file.oldLines !== undefined && file.status !== 'added';
@@ -341,6 +343,10 @@ export function FullFileDialog({
   }
 
   function threadFor(no: number): JSX.Element | null {
+    const hasQuestion =
+      activeSide === 'new' &&
+      questions.some((question) => question.file === file.path && question.line === no);
+    if (hasQuestion) return null;
     const items = commentsAtLine(comments, round, file.path, no, activeSide);
     if (items.length === 0 || onReply === undefined || onState === undefined) return null;
     return (
@@ -393,11 +399,24 @@ export function FullFileDialog({
 
   function questionRows(no: number): JSX.Element[] {
     if (activeSide !== 'new') return [];
+    const lineComments = commentsAtLine(comments, round, file.path, no, 'new');
     return questions
       .filter((question) => question.file === file.path && question.line === no)
       .map((question) => (
         <div className="cr-full-file-question" role="row" key={question.id}>
-          <InlineQuestion question={question} />
+          <InlineQuestion
+            question={question}
+            comments={lineComments}
+            readOnly={readOnly}
+            activeCommentId={activeCommentId}
+            onReply={onReply}
+            onState={onState}
+            onJump={onCommentJump}
+            onFocus={onCommentFocus}
+            {...(onAnswerQuestion === undefined
+              ? {}
+              : { onAnswer: (body: string) => onAnswerQuestion(question, body) })}
+          />
         </div>
       ));
   }

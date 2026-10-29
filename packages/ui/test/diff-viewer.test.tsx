@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import { userEvent } from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import type { FileDiff, ReviewQuestion, Snapshot } from '@dsh-code-review/core';
+import type { Anchor, Comment, FileDiff, ReviewQuestion, Snapshot } from '@dsh-code-review/core';
 import { DiffViewer } from '../src/review/DiffViewer.js';
 
 function snapshot(): Snapshot {
@@ -82,6 +83,35 @@ function question(overrides: Partial<ReviewQuestion> = {}): ReviewQuestion {
   };
 }
 
+function comment(overrides: Partial<Comment> = {}): Comment {
+  const anchor: Anchor = {
+    id: 'a1',
+    round: 1,
+    path: 'src/a.ts',
+    side: 'new',
+    lineStart: 1,
+    lineEnd: 1,
+    quote: 'const value = 1;',
+    contextBefore: [],
+    contextAfter: [],
+    hunkHeader: '@@ -0,0 +1 @@',
+    contentHash: 'hash',
+    state: 'active',
+  };
+  return {
+    id: 'c1',
+    reviewId: 'rev_1',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    author: { name: 'Reviewer', kind: 'human' },
+    body: 'Existing answer',
+    state: 'open',
+    replies: [],
+    anchors: [anchor],
+    outcomes: [],
+    ...overrides,
+  };
+}
+
 describe('DiffViewer lazy diffs', () => {
   it('loads a diff omitted from the bounded round snapshot', async () => {
     const onLoadDiff = vi.fn(async () => loadedFile());
@@ -112,6 +142,7 @@ describe('DiffViewer lazy diffs', () => {
   });
 
   it('renders an agent question under its line on the current diff', async () => {
+    const user = userEvent.setup();
     const onLoadDiff = vi.fn(async () => loadedFile());
     render(
       <DiffViewer
@@ -131,6 +162,7 @@ describe('DiffViewer lazy diffs', () => {
         onCommentState={async () => undefined}
         onCommentJump={() => undefined}
         onCommentFocus={() => undefined}
+        onAnswerQuestion={async () => undefined}
         onLoadDiff={onLoadDiff}
       />,
     );
@@ -139,7 +171,50 @@ describe('DiffViewer lazy diffs', () => {
     const line = screen.getByRole('row', { name: /line 1, added:/ });
     const card = screen.getByLabelText('question: Why is this value 1?');
 
+    expect(card).toHaveTextContent('Why is this value 1?');
+    expect(card).not.toHaveTextContent('The initial value controls the retry budget.');
+    expect(within(card).getByRole('button', { name: 'Answer question' })).toBeInTheDocument();
+    await user.click(within(card).getByRole('button', { name: 'Expand question' }));
     expect(card).toHaveTextContent('The initial value controls the retry budget.');
     expect(line.nextElementSibling).toContainElement(card);
+  });
+
+  it('answers a question inside its inline thread', async () => {
+    const user = userEvent.setup();
+    const onLoadDiff = vi.fn(async () => loadedFile());
+    const onAnswerQuestion = vi.fn(async () => undefined);
+    render(
+      <DiffViewer
+        snapshot={snapshot()}
+        comments={[comment()]}
+        round={1}
+        delta={false}
+        canDelta={false}
+        changedPaths={new Set()}
+        questions={[question()]}
+        onDeltaChange={() => undefined}
+        onJump={() => undefined}
+        onSelectLine={() => undefined}
+        onSelectRange={() => undefined}
+        onOpenComposer={() => undefined}
+        onReply={async () => undefined}
+        onCommentState={async () => undefined}
+        onCommentJump={() => undefined}
+        onCommentFocus={() => undefined}
+        onAnswerQuestion={onAnswerQuestion}
+        onLoadDiff={onLoadDiff}
+      />,
+    );
+
+    await screen.findByText('const value = 1;');
+    const card = screen.getByLabelText('question: Why is this value 1?');
+    await user.click(within(card).getByRole('button', { name: 'Expand question' }));
+
+    expect(within(card).getByText('Existing answer')).toBeInTheDocument();
+    await user.click(within(card).getByRole('button', { name: 'Answer' }));
+    await user.type(within(card).getByLabelText('Your answer'), 'Because it is the default');
+    await user.click(within(card).getByRole('button', { name: 'Send answer' }));
+
+    expect(onAnswerQuestion).toHaveBeenCalledWith(question(), 'Because it is the default');
   });
 });

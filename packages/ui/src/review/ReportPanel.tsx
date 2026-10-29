@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import type { AgentReport, Finding, FindingDecision } from '@dsh-code-review/core';
+import type {
+  AgentReport,
+  Comment,
+  CommentState,
+  Finding,
+  FindingDecision,
+} from '@dsh-code-review/core';
 import { Badge, EmptyState } from '../primitives/Feedback.js';
 import { Select } from '../primitives/Field.js';
 import { Tabs } from '../primitives/Tabs.js';
@@ -9,7 +15,14 @@ import type {
   FindingDecisionControlsProps,
   FindingDecisionError,
 } from './FindingDecisionControls.js';
-import { findingCounts, filterFindings } from './model.js';
+import { ThreadConversation } from './ThreadConversation.js';
+import { commentsAtLine, findingCounts, filterFindings } from './model.js';
+
+export interface ReportCommentTarget {
+  file: string;
+  lineStart: number;
+  lineEnd: number;
+}
 
 const SEVERITIES: Array<Finding['severity'] | 'all'> = ['all', 'blocker', 'major', 'minor', 'nit'];
 const CATEGORIES: Array<Finding['category'] | 'all'> = [
@@ -56,6 +69,18 @@ export interface ReportPanelProps {
   live?: boolean;
   /** The reviewer is active but no shard has reported yet. */
   pending?: boolean;
+  comments?: readonly Comment[];
+  round?: number;
+  readOnly?: boolean;
+  activeCommentId?: string | undefined;
+  pendingCommentId?: string | undefined;
+  onReply?: ((comment: Comment, body: string) => Promise<void>) | undefined;
+  onCommentState?: ((comment: Comment, state: CommentState) => Promise<void>) | undefined;
+  onCommentEdit?: ((comment: Comment, body: string) => Promise<void>) | undefined;
+  onCommentDelete?: ((comment: Comment) => Promise<void>) | undefined;
+  onCommentJump?: ((comment: Comment) => void) | undefined;
+  onCommentFocus?: ((comment: Comment) => void) | undefined;
+  onAddComment?: ((target: ReportCommentTarget, body: string) => Promise<void>) | undefined;
 }
 
 const EMPTY_DECISIONS = new Map<string, FindingDecision>();
@@ -132,6 +157,18 @@ export function ReportPanel({
   liveProgress,
   live = true,
   pending = false,
+  comments = [],
+  round,
+  readOnly = false,
+  activeCommentId,
+  pendingCommentId,
+  onReply,
+  onCommentState,
+  onCommentEdit,
+  onCommentDelete,
+  onCommentJump,
+  onCommentFocus,
+  onAddComment,
 }: ReportPanelProps): JSX.Element {
   const [severity, setSeverity] = useState<Finding['severity'] | 'all'>('all');
   const [category, setCategory] = useState<Finding['category'] | 'all'>('all');
@@ -204,6 +241,11 @@ export function ReportPanel({
 
   const counts = findingCounts(report);
   const filtered = severity !== 'all' || category !== 'all';
+  const reportRound = round ?? report.round;
+
+  function commentsFor(file: string, line: number): readonly Comment[] {
+    return commentsAtLine(comments, reportRound, file, line, 'new');
+  }
 
   return (
     <div className="cr-report">
@@ -335,65 +377,93 @@ export function ReportPanel({
                         <ol className="cr-findings" aria-label="Reviewer findings">
                           {visibleFindings.map((finding) => (
                             <li
-                              className="cr-finding"
+                              className="cr-finding-item"
                               key={finding.id}
                               id={`finding-${finding.id}`}
                               tabIndex={-1}
                             >
-                              <div className="cr-finding-head">
-                                <Badge tone={severityTone(finding.severity)}>
-                                  {finding.severity}
-                                </Badge>
-                                <Badge tone="neutral">{finding.category}</Badge>
-                                {finding.kind !== 'issue' ? (
-                                  <Badge tone="info">{finding.kind}</Badge>
-                                ) : null}
-                                <button
-                                  type="button"
-                                  className="cr-finding-location"
-                                  onClick={() => onJump(finding)}
-                                  aria-label={`Jump to ${finding.file} line ${finding.lineStart}`}
-                                >
-                                  {finding.file}:{finding.lineStart}
-                                </button>
-                                <span className="cr-meta">{finding.confidence} confidence</span>
-                              </div>
-                              <h3 className="cr-finding-title">{finding.title}</h3>
-                              <p className="cr-finding-copy">{finding.rationale}</p>
-                              {finding.evidence !== '' ? (
-                                <pre className="cr-evidence" aria-label="Evidence">
-                                  {finding.evidence}
-                                </pre>
-                              ) : null}
-                              {finding.suggestion !== undefined ? (
-                                <div className="cr-suggestion" aria-label="Finding suggestion">
-                                  <div className="cr-suggestion-head">
-                                    <span className="cr-suggestion-label">Suggested change</span>
-                                    {finding.unanchored === true ? (
-                                      <Badge tone="warning">unanchored</Badge>
-                                    ) : null}
-                                  </div>
-                                  <div className="cr-suggestion-block cr-suggestion-old">
-                                    <span className="cr-suggestion-caption">Before</span>
-                                    <pre>{finding.suggestion.original}</pre>
-                                  </div>
-                                  <div className="cr-suggestion-block cr-suggestion-new">
-                                    <span className="cr-suggestion-caption">After</span>
-                                    <pre>{finding.suggestion.replacement}</pre>
-                                  </div>
+                              <div className="cr-finding">
+                                <div className="cr-finding-head">
+                                  <Badge tone={severityTone(finding.severity)}>
+                                    {finding.severity}
+                                  </Badge>
+                                  <Badge tone="neutral">{finding.category}</Badge>
+                                  {finding.kind !== 'issue' ? (
+                                    <Badge tone="info">{finding.kind}</Badge>
+                                  ) : null}
+                                  <button
+                                    type="button"
+                                    className="cr-finding-location"
+                                    onClick={() => onJump(finding)}
+                                    aria-label={`Jump to ${finding.file} line ${finding.lineStart}`}
+                                  >
+                                    {finding.file}:{finding.lineStart}
+                                  </button>
+                                  <span className="cr-meta">{finding.confidence} confidence</span>
                                 </div>
-                              ) : null}
-                              <FindingDecisionControls
-                                finding={finding}
-                                decision={decisions.get(finding.id)}
-                                readOnly={!canDecide || onDecide === undefined}
-                                pending={decidingFindingId === finding.id}
-                                error={
-                                  findingDecisionError?.findingId === finding.id
-                                    ? findingDecisionError.message
-                                    : null
-                                }
-                                onDecide={onDecide ?? (async () => false)}
+                                <h3 className="cr-finding-title">{finding.title}</h3>
+                                <p className="cr-finding-copy">{finding.rationale}</p>
+                                {finding.evidence !== '' ? (
+                                  <pre className="cr-evidence" aria-label="Evidence">
+                                    {finding.evidence}
+                                  </pre>
+                                ) : null}
+                                {finding.suggestion !== undefined ? (
+                                  <div className="cr-suggestion" aria-label="Finding suggestion">
+                                    <div className="cr-suggestion-head">
+                                      <span className="cr-suggestion-label">Suggested change</span>
+                                      {finding.unanchored === true ? (
+                                        <Badge tone="warning">unanchored</Badge>
+                                      ) : null}
+                                    </div>
+                                    <div className="cr-suggestion-block cr-suggestion-old">
+                                      <span className="cr-suggestion-caption">Before</span>
+                                      <pre>{finding.suggestion.original}</pre>
+                                    </div>
+                                    <div className="cr-suggestion-block cr-suggestion-new">
+                                      <span className="cr-suggestion-caption">After</span>
+                                      <pre>{finding.suggestion.replacement}</pre>
+                                    </div>
+                                  </div>
+                                ) : null}
+                                <FindingDecisionControls
+                                  finding={finding}
+                                  decision={decisions.get(finding.id)}
+                                  readOnly={!canDecide || onDecide === undefined}
+                                  pending={decidingFindingId === finding.id}
+                                  error={
+                                    findingDecisionError?.findingId === finding.id
+                                      ? findingDecisionError.message
+                                      : null
+                                  }
+                                  onDecide={onDecide ?? (async () => false)}
+                                />
+                              </div>
+                              <ThreadConversation
+                                comments={commentsFor(finding.file, finding.lineStart)}
+                                action="comment"
+                                readOnly={readOnly}
+                                activeCommentId={activeCommentId}
+                                pendingCommentId={pendingCommentId}
+                                onReply={onReply}
+                                onState={onCommentState}
+                                onEdit={onCommentEdit}
+                                onDelete={onCommentDelete}
+                                onJump={onCommentJump}
+                                onFocus={onCommentFocus}
+                                {...(onAddComment === undefined || finding.unanchored === true
+                                  ? {}
+                                  : {
+                                      onAdd: (body: string) =>
+                                        onAddComment(
+                                          {
+                                            file: finding.file,
+                                            lineStart: finding.lineStart,
+                                            lineEnd: finding.lineEnd,
+                                          },
+                                          body,
+                                        ),
+                                    })}
                               />
                             </li>
                           ))}
@@ -464,6 +534,32 @@ export function ReportPanel({
                               </button>
                               <strong>{question.question}</strong>
                               <p className="cr-meta">{question.why}</p>
+                              <ThreadConversation
+                                comments={commentsFor(question.file, question.line)}
+                                action="answer"
+                                readOnly={readOnly}
+                                activeCommentId={activeCommentId}
+                                pendingCommentId={pendingCommentId}
+                                onReply={onReply}
+                                onState={onCommentState}
+                                onEdit={onCommentEdit}
+                                onDelete={onCommentDelete}
+                                onJump={onCommentJump}
+                                onFocus={onCommentFocus}
+                                {...(onAddComment === undefined
+                                  ? {}
+                                  : {
+                                      onAdd: (body: string) =>
+                                        onAddComment(
+                                          {
+                                            file: question.file,
+                                            lineStart: question.line,
+                                            lineEnd: question.line,
+                                          },
+                                          body,
+                                        ),
+                                    })}
+                              />
                             </li>
                           ))}
                         </ul>

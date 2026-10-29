@@ -2096,6 +2096,51 @@ body.cr-selecting-lines {
   border-top: 1px solid var(--cr-border);
 }
 
+.cr-topic-thread {
+  display: grid;
+  gap: var(--cr-space-2);
+  min-width: 0;
+  margin-top: var(--cr-space-2);
+}
+
+.cr-topic-thread-list {
+  display: grid;
+  gap: var(--cr-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cr-topic-thread-list > li {
+  min-width: 0;
+}
+
+.cr-topic-thread-actions,
+.cr-topic-thread-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--cr-space-2);
+}
+
+.cr-topic-thread-form {
+  display: grid;
+  gap: var(--cr-space-2);
+  margin-top: var(--cr-space-1);
+  padding-top: var(--cr-space-2);
+  border-top: 1px solid var(--cr-border);
+}
+
+.cr-topic-thread-form .cr-meta {
+  margin: 0;
+}
+
+.cr-topic-thread-error {
+  margin: 0;
+  color: var(--cr-danger);
+  font-size: var(--cr-text-meta);
+}
+
 /* Diff */
 .cr-diff-layout {
   display: grid;
@@ -3027,58 +3072,165 @@ body.cr-selecting-lines {
 
 .cr-inline-question {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr);
-  gap: var(--cr-space-2);
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 8px;
   min-width: 0;
-  margin: var(--cr-space-1) var(--cr-space-3) var(--cr-space-2) 140px;
-  padding: var(--cr-space-3);
-  border: 1px solid color-mix(in srgb, var(--cr-info) 35%, var(--cr-border));
-  border-left: 3px solid var(--cr-info);
-  border-radius: var(--cr-radius-control);
-  background: color-mix(in srgb, var(--cr-info) 6%, var(--cr-surface));
+  margin: 0 var(--cr-space-3) 0 140px;
+  padding: 7px 10px 8px;
+  border: 0;
+  border-block: 1px solid color-mix(in srgb, var(--cr-info) 24%, var(--cr-border));
+  border-left: 2px solid color-mix(in srgb, var(--cr-info) 70%, var(--cr-border));
+  border-radius: 0;
+  background: color-mix(in srgb, var(--cr-info) 4%, var(--cr-bg));
+  font-family: var(--cr-font-ui);
 }
 
 .cr-inline-question-mark {
   display: grid;
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   place-items: center;
+  border: 1px solid color-mix(in srgb, var(--cr-info) 45%, var(--cr-border));
   border-radius: 50%;
-  background: var(--cr-info);
-  color: var(--cr-bg);
-  font-size: 13px;
+  background: color-mix(in srgb, var(--cr-info) 12%, var(--cr-bg));
+  color: color-mix(in srgb, var(--cr-info) 82%, var(--cr-text));
+  font-family: var(--cr-font-ui);
+  font-size: 11px;
   font-weight: 800;
   line-height: 1;
 }
 
 .cr-inline-question-main {
   display: grid;
-  gap: var(--cr-space-1);
+  gap: 3px;
   min-width: 0;
 }
 
 .cr-inline-question-head {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--cr-space-2);
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.cr-inline-question-head .cr-badge {
+  flex: none;
+}
+
+.cr-inline-question-head .cr-meta {
+  margin: 0;
+  font-size: 11px;
+}
+
+.cr-inline-question-toggle {
+  min-height: 28px;
+  margin-left: auto;
+  padding: 2px 7px;
+  border: 0;
+  border-radius: var(--cr-radius-control);
+  background: transparent;
+  color: var(--cr-primary);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.cr-inline-question-cta {
+  min-height: 28px;
+  margin-left: 2px;
+  padding: 2px 7px;
+  border: 1px solid color-mix(in srgb, var(--cr-info) 30%, var(--cr-border));
+  border-radius: var(--cr-radius-control);
+  background: color-mix(in srgb, var(--cr-info) 6%, transparent);
+  color: var(--cr-text);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.cr-inline-question-cta:hover {
+  background: color-mix(in srgb, var(--cr-info) 12%, transparent);
+}
+
+.cr-inline-question-toggle:hover {
+  background: color-mix(in srgb, var(--cr-primary) 10%, transparent);
+}
+
+.cr-inline-question-toggle:focus-visible {
+  outline: 2px solid var(--cr-focus);
+  outline-offset: 2px;
+}
+
+.cr-inline-question-cta:focus-visible {
+  outline: 2px solid var(--cr-focus);
+  outline-offset: 2px;
 }
 
 .cr-inline-question-text {
   margin: 0;
   color: var(--cr-text);
-  font-size: var(--cr-text-control);
+  font-size: 13px;
   font-weight: 600;
-  line-height: 1.5;
+  line-height: 1.45;
   overflow-wrap: anywhere;
+}
+
+.cr-inline-question-text-collapsed {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.cr-inline-question-body {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
 }
 
 .cr-inline-question-why {
   margin: 0;
   color: var(--cr-text-muted);
-  font-size: var(--cr-text-meta);
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 1.45;
   overflow-wrap: anywhere;
+}
+
+.cr-inline-question-why .cr-meta {
+  font-size: 11px;
+}
+
+.cr-inline-question .cr-topic-thread {
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid color-mix(in srgb, var(--cr-info) 18%, var(--cr-border));
+}
+
+.cr-inline-question .cr-topic-thread-list {
+  gap: 0;
+}
+
+.cr-inline-question .cr-topic-thread-list > li + li {
+  border-top: 1px solid color-mix(in srgb, var(--cr-info) 14%, var(--cr-border));
+}
+
+.cr-inline-question .cr-thread-compact {
+  padding: 7px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.cr-inline-question .cr-thread-actions {
+  margin-top: var(--cr-space-2);
+}
+
+.cr-inline-question .cr-reply-form {
+  margin-top: var(--cr-space-2);
+  padding-top: var(--cr-space-2);
 }
 
 .cr-finding-decision {
@@ -3410,6 +3562,18 @@ body.cr-selecting-lines {
   background: var(--cr-surface);
 }
 
+.cr-finding-item {
+  min-width: 0;
+  max-width: 100%;
+  list-style: none;
+}
+
+.cr-finding-item:focus-visible {
+  outline: 2px solid var(--cr-focus);
+  outline-offset: 2px;
+  border-radius: var(--cr-radius-card);
+}
+
 .cr-finding:focus-visible {
   outline: 2px solid var(--cr-focus);
   outline-offset: 2px;
@@ -3508,6 +3672,24 @@ body.cr-selecting-lines {
 .cr-question-list p {
   flex-basis: 100%;
   margin: 0;
+}
+
+.cr-question-list > li {
+  align-items: flex-start;
+}
+
+.cr-question-list .cr-topic-thread {
+  flex-basis: 100%;
+  width: 100%;
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--cr-border);
+}
+
+.cr-finding-item > .cr-topic-thread {
+  margin: 8px var(--cr-space-4) 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--cr-border);
 }
 
 .cr-signals {

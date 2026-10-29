@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
-import type { AgentReport, Finding, ReviewQuestion } from '@dsh-code-review/core';
+import { describe, expect, it, vi } from 'vitest';
+import type { AgentReport, Anchor, Comment, Finding, ReviewQuestion } from '@dsh-code-review/core';
 import { ReportPanel } from '../src/review/ReportPanel.js';
 
 function finding(index: number): Finding {
@@ -28,6 +28,35 @@ function question(index: number): ReviewQuestion {
     line: 1,
     question: `Question ${index + 1}?`,
     why: 'Need context',
+  };
+}
+
+function comment(overrides: Partial<Comment> = {}): Comment {
+  const anchor: Anchor = {
+    id: 'a1',
+    round: 1,
+    path: 'src/generated-1.ts',
+    side: 'new',
+    lineStart: 1,
+    lineEnd: 1,
+    quote: 'const value = 1;',
+    contextBefore: [],
+    contextAfter: [],
+    hunkHeader: '@@ -1 +1 @@',
+    contentHash: 'hash',
+    state: 'active',
+  };
+  return {
+    id: 'c1',
+    reviewId: 'rev_1',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    author: { name: 'Reviewer', kind: 'human' },
+    body: 'Existing answer',
+    state: 'open',
+    replies: [],
+    anchors: [anchor],
+    outcomes: [],
+    ...overrides,
   };
 }
 
@@ -247,5 +276,114 @@ describe('ReportPanel browser', () => {
 
     expect(issuesTab).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('list', { name: 'Reviewer findings' })).toBeInTheDocument();
+  });
+
+  it('shows existing finding comments and posts a reply from report', async () => {
+    const user = userEvent.setup();
+    const existing = comment();
+    const onReply = vi.fn(async () => undefined);
+
+    render(
+      <ReportPanel
+        report={report([finding(0)])}
+        comments={[existing]}
+        round={1}
+        onJump={() => undefined}
+        onReply={onReply}
+        onCommentState={vi.fn(async () => undefined)}
+        onCommentJump={vi.fn()}
+        onAddComment={vi.fn(async () => undefined)}
+      />,
+    );
+
+    expect(screen.getByText('Existing answer')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Reply' }));
+    await user.type(screen.getByLabelText('Reply to Reviewer'), 'Thanks');
+    await user.click(screen.getByRole('button', { name: 'Send reply' }));
+
+    expect(onReply).toHaveBeenCalledWith(existing, 'Thanks');
+  });
+
+  it('shows existing answers under a report question', async () => {
+    const user = userEvent.setup();
+    render(
+      <ReportPanel
+        report={report([], [question(0)])}
+        comments={[comment()]}
+        round={1}
+        onJump={() => undefined}
+        onAddComment={vi.fn(async () => undefined)}
+      />,
+    );
+
+    await user.click(screen.getByRole('tab', { name: /Questions/ }));
+    expect(screen.getByText('Existing answer')).toBeInTheDocument();
+  });
+
+  it('creates a comment on a finding from report', async () => {
+    const user = userEvent.setup();
+    const onAddComment = vi.fn(async () => undefined);
+
+    render(
+      <ReportPanel
+        report={report([finding(0)])}
+        comments={[]}
+        round={1}
+        onJump={() => undefined}
+        onAddComment={onAddComment}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Comment' }));
+    await user.type(screen.getByLabelText('Your comment'), 'Looks good');
+    await user.click(screen.getByRole('button', { name: 'Post comment' }));
+
+    expect(onAddComment).toHaveBeenCalledWith(
+      { file: 'src/generated-1.ts', lineStart: 1, lineEnd: 1 },
+      'Looks good',
+    );
+  });
+
+  it('answers a question from report', async () => {
+    const user = userEvent.setup();
+    const onAddComment = vi.fn(async () => undefined);
+
+    render(
+      <ReportPanel
+        report={report([], [question(0)])}
+        comments={[]}
+        round={1}
+        onJump={() => undefined}
+        onAddComment={onAddComment}
+      />,
+    );
+
+    await user.click(screen.getByRole('tab', { name: /Questions/ }));
+    await user.click(screen.getByRole('button', { name: 'Answer' }));
+    await user.type(screen.getByLabelText('Your answer'), 'It is the retry budget');
+    await user.click(screen.getByRole('button', { name: 'Send answer' }));
+
+    expect(onAddComment).toHaveBeenCalledWith(
+      { file: 'src/generated-1.ts', lineStart: 1, lineEnd: 1 },
+      'It is the retry budget',
+    );
+  });
+
+  it('hides comment and answer actions on a closed review', async () => {
+    const user = userEvent.setup();
+    render(
+      <ReportPanel
+        report={report([finding(0)], [question(0)])}
+        comments={[]}
+        round={1}
+        readOnly
+        onJump={() => undefined}
+        onAddComment={vi.fn(async () => undefined)}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Comment' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: /Questions/ }));
+    expect(screen.queryByRole('button', { name: 'Answer' })).not.toBeInTheDocument();
   });
 });

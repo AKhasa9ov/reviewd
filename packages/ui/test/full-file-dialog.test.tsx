@@ -493,17 +493,49 @@ describe('FullFileDialog', () => {
     expect(row).toContainElement(card);
   });
 
-  it('renders an agent question under its line on the current version', () => {
+  it('renders an agent question under its line on the current version', async () => {
+    const user = userEvent.setup();
     render(<FullFileDialog file={file()} round={1} questions={[question()]} onClose={vi.fn()} />);
     const dialog = screen.getByRole('dialog', { name: 'src/app.ts' });
     const line = within(dialog).getByRole('row', { name: /Line 2, added:/ });
     const card = within(dialog).getByLabelText('question: Why is this value 2?');
     const row = line.nextElementSibling;
 
+    expect(card).toHaveTextContent('Why is this value 2?');
+    expect(card).not.toHaveTextContent('The new constant changes the retry budget.');
+    await user.click(within(card).getByRole('button', { name: 'Expand question' }));
     expect(card).toHaveTextContent('The new constant changes the retry budget.');
     expect(row).toHaveClass('cr-full-file-question');
     expect(row).toHaveAttribute('role', 'row');
     expect(row).toContainElement(card);
+  });
+
+  it('answers a question from the full-file thread', async () => {
+    const user = userEvent.setup();
+    const onAnswerQuestion = vi.fn(async () => undefined);
+    render(
+      <FullFileDialog
+        file={file()}
+        round={1}
+        comments={[humanComment()]}
+        questions={[question()]}
+        onReply={async () => undefined}
+        onState={async () => undefined}
+        onCommentJump={vi.fn()}
+        onAnswerQuestion={onAnswerQuestion}
+        onClose={vi.fn()}
+      />,
+    );
+    const dialog = screen.getByRole('dialog', { name: 'src/app.ts' });
+    const card = within(dialog).getByLabelText('question: Why is this value 2?');
+
+    await user.click(within(card).getByRole('button', { name: 'Expand question' }));
+    expect(within(card).getByText('Please explain this value.')).toBeInTheDocument();
+    await user.click(within(card).getByRole('button', { name: 'Answer' }));
+    await user.type(within(card).getByLabelText('Your answer'), 'It is the retry budget');
+    await user.click(within(card).getByRole('button', { name: 'Send answer' }));
+
+    expect(onAnswerQuestion).toHaveBeenCalledWith(question(), 'It is the retry budget');
   });
 
   it('shows questions only on the current version', async () => {
