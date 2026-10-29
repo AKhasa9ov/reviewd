@@ -139,6 +139,39 @@ describe('aggregateShardReports', () => {
     expect(byPath.get('pnpm-lock.yaml')).toMatchObject({ status: 'manifest-only' });
   });
 
+  it('merges reports in plan order even when shards finish out of order', () => {
+    const reviewPlan = plan();
+    const [first, second] = reviewPlan.shards;
+    if (first === undefined || second === undefined) throw new Error('expected shards');
+    const result = aggregateShardReports({
+      reviewId: 'rev_1',
+      round: 1,
+      backend: 'worker',
+      plan: reviewPlan,
+      reports: [
+        {
+          shardId: second.id,
+          report: report({
+            summary: 'second shard',
+            findings: [finding('src/a.test.ts', 'f2', 'second finding')],
+          }),
+        },
+        {
+          shardId: first.id,
+          report: report({
+            summary: 'first shard',
+            findings: [finding('src/a.ts', 'f1', 'first finding')],
+          }),
+        },
+      ],
+    });
+    expect(result.report.summary).toBe('first shard\n\nsecond shard');
+    expect(result.report.findings.map((item) => item.title)).toEqual([
+      'first finding',
+      'second finding',
+    ]);
+  });
+
   it('deduplicates the same finding reported by two shards', () => {
     const reviewPlan = plan();
     const [first, second] = reviewPlan.shards;

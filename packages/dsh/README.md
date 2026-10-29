@@ -57,6 +57,7 @@ Example profile override:
     embedded: true
     storeDir: /var/lib/dsh-code-review
     worker: true
+    workerConcurrency: 3
     reviewerBackend: worker
 ```
 
@@ -111,6 +112,13 @@ findings, a report and an acknowledgement. Reviewer model selection inherits the
 default; an explicit `reviewerModel` wins. A configured `reviewerPreset` is mounted
 explicitly on the root reviewer agent. When the worker resolves the initiating DSH session,
 the reviewer is created as its child and does not mount a separate preset.
+
+`workerConcurrency` (default **3**, clamped to 1–8) starts that many independent worker
+loops. Each loop registers its own worker, heartbeats and leases at most one shard at a
+time, so independent shards can finish in parallel. The cap is global to the Host and is
+shared by every review; parallel shards increase model request concurrency, not the total
+amount of review work. Set it to `1` for the previous serial behavior, or lower it when the
+model provider's concurrency or rate limit is tighter.
 
 The reviewer is read-only: every tool execution passes `tools.guard()`, which allows only
 `read`, `grep`, `glob`, `review_status` and `review_feedback`. Shell, write, network,

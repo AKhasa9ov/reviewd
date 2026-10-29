@@ -147,10 +147,10 @@ function updateCoverage(
 }
 
 /**
- * Merges shard reports without another model call. Deterministic: input order
- * is the shard arrival order, findings dedupe by file/range/title, coverage is
- * derived from the plan and the completed shards. Missing shards are failed,
- * never silently reviewed.
+ * Merges shard reports without another model call. Deterministic: reports are
+ * ordered by the review plan (not shard completion order), findings dedupe by
+ * file/range/title, coverage is derived from the plan and the completed shards.
+ * Missing shards are failed, never silently reviewed.
  */
 export function aggregateShardReports(
   input: AggregateShardReportsInput,
@@ -159,7 +159,11 @@ export function aggregateShardReports(
   for (const shard of input.plan.shards) {
     if (!input.reports.some((report) => report.shardId === shard.id)) failed.add(shard.id);
   }
-  const reports = [...input.reports];
+  const shardOrder = new Map(input.plan.shards.map((shard, index) => [shard.id, index]));
+  const rank = (shardId: string): number => shardOrder.get(shardId) ?? input.plan.shards.length;
+  const reports = [...input.reports].sort(
+    (left, right) => rank(left.shardId) - rank(right.shardId),
+  );
   const findings = mergeFindings(reports);
   const warnings = [...new Set(reports.flatMap((report) => report.report.warnings))];
   for (const shardId of [...failed].sort()) {

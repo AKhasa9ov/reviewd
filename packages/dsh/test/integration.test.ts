@@ -58,6 +58,7 @@ function config(daemonUrl: string) {
     daemonUrl,
     token: TOKEN,
     worker: false,
+    workerConcurrency: 1,
     reviewerBackend: 'none' as const,
     pollMs: 5,
     deliveryPollMs: 5,

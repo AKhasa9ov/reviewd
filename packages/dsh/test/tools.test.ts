@@ -33,6 +33,7 @@ function setup(overrides: Record<string, unknown> = {}) {
     daemonUrl: 'http://daemon',
     token: 't'.repeat(32),
     worker: false,
+    workerConcurrency: 1,
     repoHint: '/repo',
     reviewerBackend: 'worker' as const,
     pollMs: 1,

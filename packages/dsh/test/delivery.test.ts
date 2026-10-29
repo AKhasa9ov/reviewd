@@ -9,6 +9,7 @@ const config = {
   daemonUrl: 'http://d',
   token: 't'.repeat(32),
   worker: false,
+  workerConcurrency: 1,
   reviewerBackend: 'worker' as const,
   pollMs: 1,
   deliveryPollMs: 1,

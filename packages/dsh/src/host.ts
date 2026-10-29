@@ -66,13 +66,13 @@ function service<T>(ctx: HostContext, key: string): T | undefined {
 }
 
 /**
- * Start the reviewer worker and feedback delivery loops.
+ * Start the reviewer worker slots and the feedback delivery loop.
  *
  * External mode passes no `ready` promise and starts polling immediately, since
  * its daemon already exists. Embedded mode passes the daemon's readiness: the
  * ephemeral port is unknown until then, and a rejected startup is logged once
  * instead of becoming a worker registration retry loop against a dead port.
- * The returned disposer aborts both loops and wins over a readiness promise that
+ * The returned disposer aborts every loop and wins over a readiness promise that
  * settles after disposal, so a late-resolving daemon never resurrects polling.
  */
 export function startReviewLoops(
@@ -103,11 +103,15 @@ export function startReviewLoops(
         ...(defaultModel === undefined ? {} : { defaultModel }),
         ...(ctx.logger === undefined ? {} : { logger: ctx.logger }),
       };
-      void runWorkerLoop(deps, controller.signal).catch((error: unknown) => {
-        ctx.logger?.warn?.(
-          `code-review: worker stopped: ${error instanceof Error ? error.message : 'unknown'}`,
-        );
-      });
+      for (let slot = 1; slot <= config.workerConcurrency; slot += 1) {
+        void runWorkerLoop(deps, controller.signal).catch((error: unknown) => {
+          ctx.logger?.warn?.(
+            `code-review: worker ${slot}/${config.workerConcurrency} stopped: ${
+              error instanceof Error ? error.message : 'unknown'
+            }`,
+          );
+        });
+      }
     }
     if (sessionController !== undefined) {
       const deps: DeliveryDeps = {

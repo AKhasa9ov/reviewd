@@ -291,7 +291,7 @@ describe('review loop readiness', () => {
     const { api, get, post } = loopApi();
     const stop = startReviewLoops(
       loopContext(),
-      normalizeConfig({ embedded: true, worker: true }),
+      normalizeConfig({ embedded: true, worker: true, workerConcurrency: 1 }),
       api,
       ready,
     );
@@ -377,10 +377,50 @@ describe('review loop readiness', () => {
 
   it('starts immediately when no readiness promise is supplied', async () => {
     const { api, post } = loopApi();
-    const stop = startReviewLoops(loopContext(), normalizeConfig({ worker: true }), api);
+    const stop = startReviewLoops(
+      loopContext(),
+      normalizeConfig({ worker: true, workerConcurrency: 1 }),
+      api,
+    );
 
     await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(1));
     expect(post.mock.calls[0]?.[0]).toBe('/api/workers/register');
+    stop();
+  });
+
+  it('runs one independent worker poll per configured concurrency slot', async () => {
+    const ids: string[] = [];
+    const get = vi.fn(
+      (_path: string, signal?: AbortSignal) =>
+        new Promise<null>((resolve) => {
+          signal?.addEventListener('abort', () => resolve(null), { once: true });
+        }),
+    );
+    const post = vi.fn(async (path: string) => {
+      if (path === '/api/workers/register') {
+        const id = `wkr_${ids.length + 1}`;
+        ids.push(id);
+        return { id };
+      }
+      return {};
+    });
+    const stop = startReviewLoops(
+      loopContext(),
+      normalizeConfig({ worker: true, workerConcurrency: 3 }),
+      { get, post } as unknown as LoopApi,
+    );
+
+    await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(3));
+    await vi.waitFor(() => expect(get).toHaveBeenCalledTimes(3));
+    expect(ids).toHaveLength(3);
+    const polledWorkers = get.mock.calls.map(([path]) => path);
+    expect(new Set(polledWorkers)).toEqual(
+      new Set([
+        `/api/jobs/next?workerId=wkr_1&wait=25`,
+        `/api/jobs/next?workerId=wkr_2&wait=25`,
+        `/api/jobs/next?workerId=wkr_3&wait=25`,
+      ]),
+    );
     stop();
   });
 });
@@ -469,7 +509,12 @@ describe('host embedded startup failure', () => {
       services: { agents: { create: vi.fn() } },
     });
 
-    apply(ctx, { embedded: true, worker: true, reviewerBackend: 'none' });
+    apply(ctx, {
+      embedded: true,
+      worker: true,
+      workerConcurrency: 1,
+      reviewerBackend: 'none',
+    });
     await vi.waitFor(() =>
       expect(events.some((event) => event.startsWith('get /api/jobs/next'))).toBe(true),
     );

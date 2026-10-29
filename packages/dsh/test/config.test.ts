@@ -37,4 +37,11 @@ describe('embedded config', () => {
   it('omits an empty storeDir so the embedded controller can default it', () => {
     expect(normalizeConfig({ embedded: true, storeDir: '   ' }).storeDir).toBeUndefined();
   });
+  it('defaults worker concurrency to three and keeps it within the supported range', () => {
+    expect(DEFAULT_CONFIG.workerConcurrency).toBe(3);
+    expect(normalizeConfig({}).workerConcurrency).toBe(3);
+    expect(normalizeConfig({ workerConcurrency: 5 }).workerConcurrency).toBe(5);
+    expect(normalizeConfig({ workerConcurrency: 99 }).workerConcurrency).toBe(8);
+    expect(normalizeConfig({ workerConcurrency: 0 }).workerConcurrency).toBe(1);
+  });
 });

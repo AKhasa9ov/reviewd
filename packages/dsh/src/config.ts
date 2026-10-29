@@ -12,6 +12,8 @@ export interface ReviewConfig {
   publicUrl?: string;
   token: string;
   worker: boolean;
+  /** Number of independent reviewer workers this Host runs; clamped to 1..8. */
+  workerConcurrency: number;
   repoHint?: string;
   reviewerBackend: ReviewerBackend;
   sessionId?: string;
@@ -31,6 +33,7 @@ export const DEFAULT_CONFIG: ReviewConfig = {
   daemonUrl: 'http://127.0.0.1:3100',
   token: '',
   worker: false,
+  workerConcurrency: 3,
   reviewerBackend: 'worker',
   pollMs: 2_000,
   deliveryPollMs: 1_000,
@@ -47,6 +50,12 @@ function positive(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0
     ? Math.floor(value)
     : fallback;
+}
+
+function bounded(value: unknown, fallback: number, min: number, max: number): number {
+  const numeric =
+    typeof value === 'number' && Number.isFinite(value) ? Math.floor(value) : fallback;
+  return Math.max(min, Math.min(max, numeric));
 }
 
 /** Normalize the untyped Loader config; never throw during plugin activation. */
@@ -69,6 +78,7 @@ export function normalizeConfig(raw: unknown): ReviewConfig {
       : {}),
     token: typeof input.token === 'string' ? input.token : '',
     worker: input.worker === true,
+    workerConcurrency: bounded(input.workerConcurrency, DEFAULT_CONFIG.workerConcurrency, 1, 8),
     ...(typeof input.repoHint === 'string' && input.repoHint.trim() !== ''
       ? { repoHint: input.repoHint.trim() }
       : {}),

@@ -234,6 +234,7 @@ var DEFAULT_CONFIG = {
   daemonUrl: "http://127.0.0.1:3100",
   token: "",
   worker: false,
+  workerConcurrency: 3,
   reviewerBackend: "worker",
   pollMs: 2e3,
   deliveryPollMs: 1e3,
@@ -247,6 +248,10 @@ function stringValue(value, fallback) {
 function positive(value, fallback) {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
 }
+function bounded(value, fallback, min, max) {
+  const numeric = typeof value === "number" && Number.isFinite(value) ? Math.floor(value) : fallback;
+  return Math.max(min, Math.min(max, numeric));
+}
 function normalizeConfig(raw) {
   const input = typeof raw === "object" && raw !== null ? raw : {};
   const backend = input.reviewerBackend === "command" || input.reviewerBackend === "none" ? input.reviewerBackend : "worker";
@@ -259,6 +264,7 @@ function normalizeConfig(raw) {
     ...typeof input.publicUrl === "string" && input.publicUrl.trim() !== "" ? { publicUrl: input.publicUrl.trim().replace(/\/+$/, "") } : {},
     token: typeof input.token === "string" ? input.token : "",
     worker: input.worker === true,
+    workerConcurrency: bounded(input.workerConcurrency, DEFAULT_CONFIG.workerConcurrency, 1, 8),
     ...typeof input.repoHint === "string" && input.repoHint.trim() !== "" ? { repoHint: input.repoHint.trim() } : {},
     reviewerBackend: backend,
     ...typeof input.sessionId === "string" && input.sessionId !== "" ? { sessionId: input.sessionId } : {},
@@ -3506,7 +3512,11 @@ function aggregateShardReports(input) {
   for (const shard of input.plan.shards) {
     if (!input.reports.some((report2) => report2.shardId === shard.id)) failed.add(shard.id);
   }
-  const reports = [...input.reports];
+  const shardOrder = new Map(input.plan.shards.map((shard, index) => [shard.id, index]));
+  const rank = (shardId) => shardOrder.get(shardId) ?? input.plan.shards.length;
+  const reports = [...input.reports].sort(
+    (left, right) => rank(left.shardId) - rank(right.shardId)
+  );
   const findings = mergeFindings(reports);
   const warnings = [...new Set(reports.flatMap((report2) => report2.report.warnings))];
   for (const shardId of [...failed].sort()) {
@@ -10104,11 +10114,13 @@ function startReviewLoops(ctx, config, api, ready) {
         ...defaultModel === void 0 ? {} : { defaultModel },
         ...ctx.logger === void 0 ? {} : { logger: ctx.logger }
       };
-      void runWorkerLoop(deps, controller.signal).catch((error) => {
-        ctx.logger?.warn?.(
-          `code-review: worker stopped: ${error instanceof Error ? error.message : "unknown"}`
-        );
-      });
+      for (let slot = 1; slot <= config.workerConcurrency; slot += 1) {
+        void runWorkerLoop(deps, controller.signal).catch((error) => {
+          ctx.logger?.warn?.(
+            `code-review: worker ${slot}/${config.workerConcurrency} stopped: ${error instanceof Error ? error.message : "unknown"}`
+          );
+        });
+      }
     }
     if (sessionController !== void 0) {
       const deps = {

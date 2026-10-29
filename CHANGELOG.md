@@ -28,6 +28,10 @@ versions may contain breaking changes.
 
 ### Added
 
+- Host reviewer workers can run shards in parallel: `workerConcurrency` starts that many
+  independent worker loops (default 3, clamped to 1–8), each with its own registration,
+  heartbeat and reviewer agent. Shard reports are merged in plan order so completion order
+  cannot reshuffle the aggregate summary or findings.
 - In-place reviewer retry: a failed or coverage-partial worker reviewer can rerun only the
   shards that have no durable report, in the same review, round and snapshot. Completed shard
   findings and coverage are preserved; the daemon rebuilds the plan from the snapshot after a
