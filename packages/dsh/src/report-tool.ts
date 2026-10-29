@@ -122,7 +122,9 @@ export function createReviewReportTool(capture: ReviewReportCapture): {
   execute: (
     args: unknown,
     exec: { signal: AbortSignal },
-  ) => Promise<{ ok: true; received: true } | { ok: false; error: { code: string; message: string } }>;
+  ) => Promise<
+    { ok: true; received: true } | { ok: false; error: { code: string; message: string } }
+  >;
 } {
   return {
     name: REVIEW_REPORT_TOOL_NAME,

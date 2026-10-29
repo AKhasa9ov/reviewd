@@ -202,10 +202,7 @@ describe('agent coverage fold', () => {
     );
     state = fold(state, event('agent/failed', { code: 'shard-failed', message: 'shard failed' }));
 
-    const retried = fold(
-      state,
-      event('agent/retry', { round: 1, shardIds: ['shard_002'] }),
-    );
+    const retried = fold(state, event('agent/retry', { round: 1, shardIds: ['shard_002'] }));
 
     expect(retried.agent).toMatchObject({ status: 'queued', round: 1 });
     expect(retried.agent?.error).toBeUndefined();
@@ -230,10 +227,7 @@ describe('agent coverage fold', () => {
     const coverage = { files, totals: summarizeCoverage(files) };
     const queued = fold(baseState(), event('agent/coverage', { coverage, round: 1 }));
 
-    const retried = fold(
-      queued,
-      event('agent/retry', { round: 1, shardIds: ['shard_002'] }),
-    );
+    const retried = fold(queued, event('agent/retry', { round: 1, shardIds: ['shard_002'] }));
 
     expect(retried.agent?.coverage?.files).toEqual(files);
   });

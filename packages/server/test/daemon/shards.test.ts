@@ -451,5 +451,4 @@ describe('shard aggregation', () => {
       failed: 0,
     });
   }, 30_000);
-
 });

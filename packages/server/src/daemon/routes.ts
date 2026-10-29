@@ -316,10 +316,7 @@ function reviewKind(view: ReviewView, round?: { no: number }): 'initial' | 'veri
   return view.report === null ? 'initial' : 'verify';
 }
 
-function promptContextFor(
-  view: ReviewView,
-  round?: { no: number },
-): PromptContext | undefined {
+function promptContextFor(view: ReviewView, round?: { no: number }): PromptContext | undefined {
   const targetRound = round ?? view.review.rounds.at(-1);
   if (reviewKind(view, targetRound) !== 'verify') return undefined;
   const previousRound =
@@ -545,10 +542,7 @@ async function retryWorkerAgent(ctx: RouteContext, reviewId: string): Promise<Re
   }
   const active = ctx.jobs
     .listReview(reviewId)
-    .some(
-      (job) =>
-        job.round === round.no && (job.status === 'queued' || job.status === 'leased'),
-    );
+    .some((job) => job.round === round.no && (job.status === 'queued' || job.status === 'leased'));
   if (active) throw new ApiError('conflict', 'reviewer still has active jobs');
   const snapshot = view.latestSnapshot;
   if (snapshot === null) throw new ApiError('conflict', 'review has no snapshot to retry');
@@ -583,13 +577,7 @@ async function retryWorkerAgent(ctx: RouteContext, reviewId: string): Promise<Re
           coverage: aggregate.coverage,
         } as never);
       } else {
-        await enqueueShardJobs(
-          ctx,
-          view,
-          round,
-          plan,
-          new Set(targets.map((shard) => shard.id)),
-        );
+        await enqueueShardJobs(ctx, view, round, plan, new Set(targets.map((shard) => shard.id)));
       }
     } catch (error) {
       // The retry event above made the agent queued. If rebuilding the shard
