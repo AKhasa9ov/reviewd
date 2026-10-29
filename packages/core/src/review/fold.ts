@@ -163,18 +163,37 @@ export function fold(state: ReviewState, event: ReviewEvent): ReviewState {
         round: event.data.round,
         coverage: structuredClone(event.data.coverage),
         findings: [],
+        shards: [],
       };
       break;
     }
     case 'agent/started': {
       next.agent = {
         ...(next.agent?.coverage === undefined ? {} : { coverage: next.agent.coverage }),
+        ...(next.agent?.shards === undefined ? {} : { shards: next.agent.shards }),
         status: 'running',
         jobId: event.data.jobId,
         round: event.data.round,
         startedAt: event.at,
         findings: [],
       };
+      break;
+    }
+    case 'agent/shard': {
+      next.agent ??= { status: 'running', findings: [] };
+      next.agent.shards ??= [];
+      const index = next.agent.shards.findIndex(
+        (shard) => shard.shardId === event.data.shardId,
+      );
+      const shard = {
+        shardId: event.data.shardId,
+        shardIndex: event.data.shardIndex,
+        shardCount: event.data.shardCount,
+        round: event.data.round,
+        report: structuredClone(event.data.report),
+      };
+      if (index < 0) next.agent.shards.push(shard);
+      else next.agent.shards[index] = shard;
       break;
     }
     case 'agent/finding': {

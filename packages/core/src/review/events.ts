@@ -124,6 +124,15 @@ export interface AgentReportData {
   report: AgentReport;
 }
 
+export interface AgentShardData {
+  shardId: string;
+  shardIndex: number;
+  shardCount: number;
+  round: number;
+  report: AgentReport;
+}
+
+
 export interface AgentFailedData {
   code: string;
   message: string;
@@ -148,6 +157,7 @@ export interface ReviewEventDataMap {
   'review/submitted': ReviewSubmittedData;
   'agent/started': AgentStartedData;
   'agent/coverage': AgentCoverageData;
+  'agent/shard': AgentShardData;
   'agent/finding': AgentFindingData;
   'agent/report': AgentReportData;
   'agent/failed': AgentFailedData;
@@ -174,6 +184,7 @@ export const REVIEW_EVENT_TYPES: readonly ReviewEventType[] = [
   'review/submitted',
   'agent/started',
   'agent/coverage',
+  'agent/shard',
   'agent/finding',
   'agent/report',
   'agent/failed',

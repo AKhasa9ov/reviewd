@@ -44,6 +44,7 @@ export {
 } from './review/events.js';
 export type {
   AgentCoverageData,
+  AgentShardData,
   AgentFailedData,
   AgentFindingData,
   AgentReportData,
@@ -70,6 +71,7 @@ export type {
 export type {
   Actor,
   ActorKind,
+  AgentShardState,
   AgentState,
   AgentStatus,
   AddCommentInput,
@@ -133,6 +135,12 @@ export type {
   ReviewTier,
   ShardLimits,
 } from './review/plan.js';
+export { aggregateShardReports } from './review/aggregate.js';
+export type {
+  AggregateShardReportsInput,
+  AggregateShardReportsResult,
+  ShardReportInput,
+} from './review/aggregate.js';
 export { deriveOutcome } from './review/outcomes.js';
 export { fold, ReviewFoldError } from './review/fold.js';
 export { ReviewLifecycle, ReviewLifecycleError } from './review/lifecycle.js';

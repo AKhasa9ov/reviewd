@@ -162,6 +162,15 @@ export interface ReviewCoverage {
   incomplete?: boolean;
 }
 
+/** One completed shard report within a round; kept until aggregation. */
+export interface AgentShardState {
+  shardId: string;
+  shardIndex: number;
+  shardCount: number;
+  round: RoundNo;
+  report: AgentReport;
+}
+
 export interface AgentState {
   status: AgentStatus;
   jobId?: string;
@@ -171,6 +180,8 @@ export interface AgentState {
   findings?: Finding[];
   /** Coverage ledger for the round; absent on legacy states. */
   coverage?: ReviewCoverage;
+  /** Completed shard reports, in arrival order; absent on legacy states. */
+  shards?: AgentShardState[];
 }
 
 export interface ReviewState {

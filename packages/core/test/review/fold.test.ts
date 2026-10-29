@@ -213,3 +213,54 @@ describe('agent coverage fold', () => {
     expect(queued).toEqual(before);
   });
 });
+
+describe('agent shard fold', () => {
+  it('records shard reports without finishing the round', () => {
+    const queued = fold(
+      baseState(),
+      event('agent/coverage', { coverage: ledger(['pending']), round: 1 }),
+    );
+
+    const sharded = fold(
+      queued,
+      event('agent/shard', {
+        shardId: 'shard_001',
+        shardIndex: 0,
+        shardCount: 2,
+        round: 1,
+        report: report(),
+      }),
+    );
+
+    expect(sharded.agent?.status).toBe('queued');
+    expect(sharded.agent?.shards).toHaveLength(1);
+    expect(sharded.agent?.shards?.[0]).toMatchObject({ shardId: 'shard_001', round: 1 });
+    expect(sharded.report).toBeUndefined();
+  });
+
+  it('replaces a shard report by shard id', () => {
+    const first = fold(
+      baseState(),
+      event('agent/shard', {
+        shardId: 'shard_001',
+        shardIndex: 0,
+        shardCount: 1,
+        round: 1,
+        report: report(),
+      }),
+    );
+    const second = fold(
+      first,
+      event('agent/shard', {
+        shardId: 'shard_001',
+        shardIndex: 0,
+        shardCount: 1,
+        round: 1,
+        report: { ...report(), summary: 'replacement' },
+      }),
+    );
+
+    expect(second.agent?.shards).toHaveLength(1);
+    expect(second.agent?.shards?.[0]?.report.summary).toBe('replacement');
+  });
+});
