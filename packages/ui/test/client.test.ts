@@ -108,6 +108,19 @@ describe('ApiClient', () => {
     expect(onUnauthorized).not.toHaveBeenCalled();
   });
 
+  it('retries the reviewer in the current round', async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse({ review: { id: 'rev_1' } }));
+    const client = clientWith(fetchImpl as unknown as typeof fetch);
+
+    const view = await client.retryAgent('rev/1');
+
+    expect(view).toMatchObject({ review: { id: 'rev_1' } });
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('/api/reviews/rev%2F1/agent/retry');
+    expect(init.method).toBe('POST');
+    expect(init.body).toBeUndefined();
+  });
+
   it('parses the error envelope and request id', async () => {
     const fetchImpl = vi.fn(async () =>
       jsonResponse(

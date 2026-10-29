@@ -355,6 +355,12 @@ export class ApiClient {
     });
   }
 
+  async retryAgent(id: string): Promise<ReviewView> {
+    return this.request<ReviewView>(`/api/reviews/${encodeURIComponent(id)}/agent/retry`, {
+      method: 'POST',
+    });
+  }
+
   async events(id: string, options: EventsOptions = {}): Promise<EventsResponse> {
     const params = new URLSearchParams({
       wait: '25',

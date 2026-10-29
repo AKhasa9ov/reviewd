@@ -236,6 +236,7 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
   const [feedback, setFeedback] = useState<LatestFeedbackView | null>(null);
   const [delivery, setDelivery] = useState<SubmissionDelivery | null>(null);
   const [cancelPending, setCancelPending] = useState(false);
+  const [retryPending, setRetryPending] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deletePending, setDeletePending] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -879,6 +880,20 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
     }
   }
 
+  async function retryReviewer(): Promise<void> {
+    setRetryPending(true);
+    try {
+      const next = await client.retryAgent(id);
+      setView(next);
+      toast('Reviewer retry queued');
+      reloadReview();
+    } catch (error) {
+      setActionError(actionErrorFor(error));
+    } finally {
+      setRetryPending(false);
+    }
+  }
+
   async function copyText(value: string, label: string): Promise<void> {
     try {
       await navigator.clipboard.writeText(value);
@@ -1485,9 +1500,20 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
                 <p className="cr-meta">{coverageLabel(review.agent.coverage)}</p>
               ) : null}
               {review.agent?.status === 'partial' ? (
-                <p className="cr-notice cr-notice-warning">
-                  Coverage is incomplete: the reviewer did not inspect every changed file.
-                </p>
+                <>
+                  <p className="cr-notice cr-notice-warning">
+                    Coverage is incomplete: the reviewer did not inspect every changed file.
+                  </p>
+                  <Button
+                    size="small"
+                    variant="secondary"
+                    loading={retryPending}
+                    disabled={readOnly || agentActive}
+                    onClick={() => void retryReviewer()}
+                  >
+                    Retry reviewer
+                  </Button>
+                </>
               ) : null}
               {review.agent?.status === 'running' || review.agent?.status === 'queued' ? (
                 <>
@@ -1508,17 +1534,27 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
                 <>
                   <p className="cr-meta">{review.agent.error ?? 'Reviewer failed.'}</p>
                   <p className="cr-meta">
-                    In-place retry is not exposed by this daemon version. Create a new round to run
-                    the reviewer again after the issue is fixed.
+                    Retry runs only the unfinished shards in this round and keeps completed work.
                   </p>
-                  <Button
-                    size="small"
-                    variant="secondary"
-                    disabled={agentActive}
-                    onClick={() => setRefreshOpen(true)}
-                  >
-                    Create a new round
-                  </Button>
+                  <div className="cr-inline-actions">
+                    <Button
+                      size="small"
+                      variant="secondary"
+                      loading={retryPending}
+                      disabled={readOnly || agentActive}
+                      onClick={() => void retryReviewer()}
+                    >
+                      Retry reviewer
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="ghost"
+                      disabled={agentActive}
+                      onClick={() => setRefreshOpen(true)}
+                    >
+                      Create a new round
+                    </Button>
+                  </div>
                 </>
               ) : report !== null ? (
                 <p className="cr-meta">
