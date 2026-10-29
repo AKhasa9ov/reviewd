@@ -1273,9 +1273,19 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
             <strong>Reviewer failed</strong>
             <p>{review.agent.error ?? 'The reviewer did not produce a report.'}</p>
           </div>
-          <Button variant="ghost" onClick={() => setTab('report')}>
-            Open report
-          </Button>
+          <div className="cr-inline-actions">
+            <Button
+              variant="secondary"
+              loading={retryPending}
+              disabled={readOnly || agentActive}
+              onClick={() => void retryReviewer()}
+            >
+              Retry reviewer
+            </Button>
+            <Button variant="ghost" onClick={() => setTab('report')}>
+              Open report
+            </Button>
+          </div>
         </div>
       ) : null}
 
@@ -1534,27 +1544,16 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
                 <>
                   <p className="cr-meta">{review.agent.error ?? 'Reviewer failed.'}</p>
                   <p className="cr-meta">
-                    Retry runs only the unfinished shards in this round and keeps completed work.
+                    Retry unfinished shards from the alert above, or create a new round.
                   </p>
-                  <div className="cr-inline-actions">
-                    <Button
-                      size="small"
-                      variant="secondary"
-                      loading={retryPending}
-                      disabled={readOnly || agentActive}
-                      onClick={() => void retryReviewer()}
-                    >
-                      Retry reviewer
-                    </Button>
-                    <Button
-                      size="small"
-                      variant="ghost"
-                      disabled={agentActive}
-                      onClick={() => setRefreshOpen(true)}
-                    >
-                      Create a new round
-                    </Button>
-                  </div>
+                  <Button
+                    size="small"
+                    variant="ghost"
+                    disabled={agentActive}
+                    onClick={() => setRefreshOpen(true)}
+                  >
+                    Create a new round
+                  </Button>
                 </>
               ) : report !== null ? (
                 <p className="cr-meta">
