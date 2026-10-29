@@ -221,7 +221,9 @@ export function ReportPanel({
           {partial ? <Badge tone="info">partial</Badge> : null}
           {report.skipped === true ? <Badge tone="neutral">skipped</Badge> : null}
         </div>
-        <p className="cr-report-copy">{report.summary}</p>
+        <p className="cr-report-copy" tabIndex={0}>
+          {report.summary}
+        </p>
         <div className="cr-report-counts">
           {counts.blocker > 0 ? <Badge tone="danger">{counts.blocker} blocker</Badge> : null}
           {counts.major > 0 ? <Badge tone="warning">{counts.major} major</Badge> : null}

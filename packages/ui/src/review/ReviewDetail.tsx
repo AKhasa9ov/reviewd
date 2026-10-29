@@ -1541,7 +1541,7 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
                   </Badge>
                 ) : null}
               </div>
-              <p className="cr-rail-copy">
+              <p className="cr-rail-copy" tabIndex={0}>
                 {report?.summary ?? 'The reviewer has not produced a summary for this round yet.'}
               </p>
               <div className="cr-rail-meta">

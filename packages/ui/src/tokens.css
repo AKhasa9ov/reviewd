@@ -100,6 +100,7 @@
   --cr-motion-dialog: 240ms;
   --cr-sidebar: 280px;
   --cr-rail: 320px;
+  --cr-summary-max-height: clamp(14rem, 40vh, 28rem);
   --cr-focus-ring: 0 0 0 2px var(--cr-bg), 0 0 0 4px var(--cr-focus);
 }
 

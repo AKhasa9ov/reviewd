@@ -3293,6 +3293,17 @@ body.cr-selecting-lines {
   white-space: pre-wrap;
 }
 
+.cr-report-copy,
+.cr-rail-copy {
+  max-height: var(--cr-summary-max-height);
+  padding-right: var(--cr-space-2);
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
 .cr-report-counts {
   display: flex;
   flex-wrap: wrap;
