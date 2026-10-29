@@ -316,5 +316,22 @@ describe('large review sharding', () => {
     };
     expect(lazyBody).toMatchObject({ file: 'src/file-881.ts', side: 'new', lineCount: 96 });
     expect(lazyBody.lines).toHaveLength(96);
+
+    // The bounded round snapshot omits the diff; the lazy per-file diff restores it.
+    const lazyDiff = await fetch(
+      `${daemonUrl}/api/reviews/${reviewId}/snapshot/1/diff?path=${encodeURIComponent('src/file-881.ts')}`,
+      { headers: headers() },
+    );
+    expect(lazyDiff.status).toBe(200);
+    const lazyDiffBody = (await lazyDiff.json()) as {
+      file: { path: string; added: number; deleted: number; hunks: unknown[]; newLines?: string[] };
+    };
+    expect(lazyDiffBody.file).toMatchObject({
+      path: 'src/file-881.ts',
+      added: 96,
+      deleted: 0,
+    });
+    expect(lazyDiffBody.file.hunks.length).toBeGreaterThan(0);
+    expect(lazyDiffBody.file.newLines).toHaveLength(96);
   }, 120_000);
 });

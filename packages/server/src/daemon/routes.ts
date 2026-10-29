@@ -645,6 +645,49 @@ export async function handle(
       sendJson(res, 200, { ok: true });
       return;
     }
+    if (rest[0] === 'snapshot' && rest[1] !== undefined && rest[2] === 'diff' && method === 'GET') {
+      const round = Number(rest[1]);
+      if (!Number.isInteger(round) || round <= 0)
+        throw new ApiError('validation', 'round is required');
+      const rawPath = url.searchParams.get('path');
+      if (rawPath === null || rawPath.trim() === '') {
+        throw new ApiError('validation', 'path is required');
+      }
+      const filePath = rawPath.trim();
+      if (
+        filePath.includes('\0') ||
+        filePath.length > 4096 ||
+        isAbsolute(filePath) ||
+        filePath.split('/').some((part) => part === '..' || part === '')
+      ) {
+        throw new ApiError('validation', 'path must be a relative file path');
+      }
+      const view = await ctx.service.get(reviewId);
+      const roundView = view.review.rounds.find((item) => item.no === round);
+      if (roundView === undefined) throw new ApiError('not-found', `round ${round} not found`);
+      const snapshotView = await ctx.service.snapshot(reviewId, round);
+      if (!snapshotView.snapshot.manifest?.files.some((item) => item.path === filePath)) {
+        throw new ApiError('not-found', `file not found in round ${round}: ${filePath}`);
+      }
+      const filtered = await buildSnapshot({
+        repoRoot: view.review.repoRoot,
+        scope: scopeForSnapshot(snapshotView.snapshot),
+        paths: [filePath],
+        includeContent: true,
+        includeUntracked: snapshotView.snapshot.scope.kind === 'worktree',
+        maxDiffBytes: 2 * 1024 * 1024,
+        maxFiles: 4,
+        maxFileLines: 20_000,
+        maxContentBytes: 1_048_576,
+        maxTotalContentBytes: 2_097_152,
+      });
+      const file = filtered.files.find((item) => item.path === filePath);
+      if (file === undefined) {
+        throw new ApiError('not-found', `diff not available for ${filePath}`);
+      }
+      sendJson(res, 200, { file, round, path: filePath });
+      return;
+    }
     if (rest[0] === 'snapshot' && rest[1] !== undefined && rest[2] === 'file' && method === 'GET') {
       const round = Number(rest[1]);
       if (!Number.isInteger(round) || round <= 0)
