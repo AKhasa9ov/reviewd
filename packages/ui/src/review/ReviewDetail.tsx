@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { fold } from '@dsh-code-review/core/browser';
 import type {
   Comment,
   CommentState,
@@ -7,6 +8,7 @@ import type {
   FindingDecision,
   FindingDecisionState,
   ReviewCoverage,
+  ReviewEvent,
   ReviewView,
   Side,
   Snapshot,
@@ -43,6 +45,7 @@ import {
   filterComments,
   firstChangedLine,
   fixCounts,
+  liveReportFor,
   latestAnchor,
   latestVerdict,
   parseReviewLocation,
@@ -517,21 +520,99 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
     () => (snapshot === null ? 0 : filesForSnapshot(snapshot).length),
     [snapshot],
   );
-  const report = view?.report ?? null;
+  const finalReport = view?.report ?? null;
+  const finalReportForRound =
+    finalReport !== null && finalReport.round === selectedRound ? finalReport : null;
+  const liveReport = useMemo(
+    () => (view === null ? null : liveReportFor(view.review.agent, view.review.id, selectedRound)),
+    [view?.review.agent, view?.review.id, selectedRound],
+  );
+  const report = finalReportForRound ?? liveReport?.report ?? null;
+  const reportIsPartial = finalReportForRound === null && liveReport !== null;
   const readOnly = view?.review.status === 'closed';
   const findingDecisions = useMemo(() => {
     const decisions = new Map<string, FindingDecision>();
-    if (report === null) return decisions;
+    if (finalReportForRound === null) return decisions;
     for (const decision of view?.review.findingDecisions ?? []) {
-      if (decision.round === report.round) decisions.set(decision.findingId, decision);
+      if (decision.round === finalReportForRound.round) {
+        decisions.set(decision.findingId, decision);
+      }
     }
     return decisions;
-  }, [view, report]);
-  const canDecideFinding = !readOnly && report !== null && report.round === selectedRound;
+  }, [view, finalReportForRound]);
+  const canDecideFinding = !readOnly && finalReportForRound !== null;
   const agentActive =
     view?.review.agent?.status === 'running' || view?.review.agent?.status === 'queued';
   const canRetryReviewer = view?.review.reviewer?.backend === 'worker';
   const scope = snapshot?.scope;
+  const liveCursor = useRef<number | null>(null);
+
+  useEffect(() => {
+    liveCursor.current = view?.review.version ?? null;
+  }, [view]);
+
+  useEffect(() => {
+    if (!agentActive || liveCursor.current === null) return;
+    const controller = new AbortController();
+    let stopped = false;
+    let after = liveCursor.current;
+
+    const applyEvents = (current: ReviewView, events: ReviewEvent[]): ReviewView | null => {
+      let next = current;
+      for (const event of events) {
+        if (event.reviewId !== next.review.id) continue;
+        if (event.seq !== undefined && event.seq <= next.review.version) continue;
+        next = {
+          ...next,
+          review: fold(next.review, event),
+          ...(event.type === 'agent/report' ? { report: event.data.report } : {}),
+        };
+      }
+      return next;
+    };
+
+    const run = async (): Promise<void> => {
+      while (!stopped) {
+        if (liveCursor.current !== null && liveCursor.current > after) {
+          after = liveCursor.current;
+        }
+        try {
+          const response = await client.events(id, { after, signal: controller.signal });
+          if (stopped) return;
+          after = Math.max(after, response.latestSeq);
+          if (response.events.length === 0) {
+            // A mock or a truncated wait can resolve immediately; never spin
+            // the event loop when the cursor has not advanced.
+            await new Promise((resolve) => setTimeout(resolve, 250));
+            continue;
+          }
+          let failed = false;
+          setView((current) => {
+            if (current === null) return current;
+            try {
+              return applyEvents(current, response.events);
+            } catch {
+              failed = true;
+              return current;
+            }
+          });
+          if (failed) {
+            reloadReview();
+            return;
+          }
+        } catch {
+          if (controller.signal.aborted) return;
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+      }
+    };
+
+    void run();
+    return () => {
+      stopped = true;
+      controller.abort();
+    };
+  }, [agentActive, client, id, reloadReview]);
 
   const roundLabel = selectedRound === null ? 'No rounds' : `r${selectedRound}`;
 
@@ -777,7 +858,7 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
     state: FindingDecisionState,
     note: string | undefined,
   ): Promise<boolean> {
-    if (view === null || report === null || report.round !== selectedRound) return false;
+    if (view === null || finalReportForRound === null) return false;
     setDecidingFindingId(finding.id);
     setFindingDecisionError(null);
     try {
@@ -1083,10 +1164,8 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
       deltaHint={deltaHint}
       onRequestNextRound={() => setRefreshOpen(true)}
       changedPaths={changed}
-      findings={report !== null && report.round === selectedRound ? report.findings : []}
-      findingDecisions={
-        report !== null && report.round === selectedRound ? findingDecisions : undefined
-      }
+      findings={report !== null ? report.findings : []}
+      findingDecisions={finalReportForRound !== null ? findingDecisions : undefined}
       onDecideFinding={canDecideFinding ? submitFindingDecision : undefined}
       decidingFindingId={decidingFindingId}
       findingDecisionError={findingDecisionError}
@@ -1410,9 +1489,20 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
             {tab === 'report' ? (
               <ReportPanel
                 report={report}
-                decisions={findingDecisions}
+                partial={reportIsPartial}
+                liveProgress={
+                  liveReport === null
+                    ? undefined
+                    : {
+                        completedShards: liveReport.completedShards,
+                        totalShards: liveReport.totalShards,
+                      }
+                }
+                live={agentActive}
+                pending={agentActive && report === null}
+                decisions={finalReportForRound !== null ? findingDecisions : undefined}
                 canDecide={canDecideFinding}
-                onDecide={submitFindingDecision}
+                onDecide={canDecideFinding ? submitFindingDecision : undefined}
                 decidingFindingId={decidingFindingId}
                 findingDecisionError={findingDecisionError}
                 onJump={jumpToLocation}
@@ -1571,6 +1661,7 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
                 <p className="cr-meta">
                   {report.findings.length} findings · {report.backend} backend · round{' '}
                   {report.round}
+                  {reportIsPartial ? ' · partial' : ''}
                 </p>
               ) : (
                 <p className="cr-meta">No reviewer report yet.</p>

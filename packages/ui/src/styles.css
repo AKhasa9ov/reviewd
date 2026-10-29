@@ -1734,6 +1734,11 @@ body.cr-selecting-lines {
   color: var(--cr-text);
 }
 
+.cr-notice-info {
+  border-left-color: var(--cr-primary);
+  color: var(--cr-text);
+}
+
 .cr-rail {
   display: grid;
   gap: var(--cr-space-3);

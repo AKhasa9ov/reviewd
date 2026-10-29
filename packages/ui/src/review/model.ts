@@ -1,6 +1,8 @@
+import { mergeShardReports } from '@dsh-code-review/core/browser';
 import type {
   Anchor,
   AgentReport,
+  AgentState,
   Comment,
   DiffHunk,
   DiffLine,
@@ -11,6 +13,45 @@ import type {
   Side,
   Snapshot,
 } from '@dsh-code-review/core';
+
+export interface LiveReport {
+  report: AgentReport;
+  completedShards: number;
+  totalShards: number;
+}
+
+/**
+ * Builds a provisional report from shards that have already reported. It is
+ * intentionally separate from the final aggregate: missing shards are not
+ * failures while the round is still running, and no decisions may be taken
+ * against this preview.
+ */
+export function liveReportFor(
+  agent: AgentState | undefined,
+  reviewId: string,
+  round: number | null,
+): LiveReport | null {
+  if (agent === undefined || round === null) return null;
+  const shards = (agent.shards ?? [])
+    .filter((shard) => shard.round === round)
+    .sort((left, right) => left.shardIndex - right.shardIndex);
+  if (shards.length === 0) return null;
+  const totalShards = Math.max(...shards.map((shard) => shard.shardCount), shards.length);
+  const merged = mergeShardReports({
+    reviewId,
+    round,
+    backend: 'worker',
+    reports: shards.map((shard) => ({ shardId: shard.shardId, report: shard.report })),
+  });
+  return {
+    report: {
+      ...merged,
+      summary: 'Provisional findings from completed shards.',
+    },
+    completedShards: shards.length,
+    totalShards,
+  };
+}
 
 export type ReviewTab = 'conversation' | 'files' | 'report' | 'signals';
 export type FixGroup = 'addressed' | 'not-fixed' | 'outdated' | 'needs-decision';

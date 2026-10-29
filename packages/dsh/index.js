@@ -3507,6 +3507,27 @@ function updateCoverage(plan, reports, failed) {
     ...base.incomplete === true ? { incomplete: true } : {}
   };
 }
+function mergeShardReports(input) {
+  const findings = mergeFindings(input.reports);
+  const summaryParts = input.reports.map((report) => report.report.summary.trim()).filter((summary3) => summary3 !== "");
+  const summary2 = summaryParts.length === 0 ? "The review did not produce a shard report." : summaryParts.join("\n\n").slice(0, 2e4);
+  return {
+    schemaVersion: 1,
+    summary: summary2,
+    riskLevel: highestRisk(input.reports),
+    findings,
+    questions: mergeQuestions(input.reports),
+    tests: mergeTests(input.reports),
+    verification: mergeVerification(input.reports),
+    reviewId: input.reviewId,
+    round: input.round,
+    backend: input.backend,
+    rejected: input.reports.flatMap((item) => item.report.rejected),
+    warnings: [...new Set(input.reports.flatMap((report) => report.report.warnings))],
+    ...input.reports.some((item) => item.report.dirtyWorktree === true) ? { dirtyWorktree: true } : {},
+    skipped: false
+  };
+}
 function aggregateShardReports(input) {
   const failed = new Set(input.failedShards ?? []);
   for (const shard of input.plan.shards) {
@@ -3517,29 +3538,15 @@ function aggregateShardReports(input) {
   const reports = [...input.reports].sort(
     (left, right) => rank(left.shardId) - rank(right.shardId)
   );
-  const findings = mergeFindings(reports);
-  const warnings = [...new Set(reports.flatMap((report2) => report2.report.warnings))];
-  for (const shardId of [...failed].sort()) {
-    warnings.push(`shard-failed:${shardId}`);
-  }
-  const summaryParts = reports.map((report2) => report2.report.summary.trim()).filter((summary3) => summary3 !== "");
-  const summary2 = summaryParts.length === 0 ? "The review did not produce a shard report." : summaryParts.join("\n\n").slice(0, 2e4);
-  const report = {
-    schemaVersion: 1,
-    summary: summary2,
-    riskLevel: highestRisk(reports),
-    findings,
-    questions: mergeQuestions(reports),
-    tests: mergeTests(reports),
-    verification: mergeVerification(reports),
+  const report = mergeShardReports({
     reviewId: input.reviewId,
     round: input.round,
     backend: input.backend,
-    rejected: reports.flatMap((item) => item.report.rejected),
-    warnings,
-    ...reports.some((item) => item.report.dirtyWorktree === true) ? { dirtyWorktree: true } : {},
-    skipped: false
-  };
+    reports
+  });
+  for (const shardId of [...failed].sort()) {
+    report.warnings.push(`shard-failed:${shardId}`);
+  }
   return { report, coverage: updateCoverage(input.plan, reports, failed) };
 }
 

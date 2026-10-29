@@ -6,6 +6,8 @@ import { build as viteBuild } from 'vite';
 const root = join(import.meta.dirname, '..');
 const coreEntry = join(root, 'packages/core/src/index.ts');
 const coreOut = join(root, 'packages/core/dist/index.js');
+const coreBrowserEntry = join(root, 'packages/core/src/browser.ts');
+const coreBrowserOut = join(root, 'packages/core/dist/browser.js');
 const workerEntry = join(root, 'packages/worker/src/index.ts');
 const workerOut = join(root, 'packages/worker/dist/index.js');
 const webConfig = join(root, 'packages/web/vite.config.ts');
@@ -39,6 +41,18 @@ await build({
   platform: 'node',
   format: 'esm',
   target: 'node22',
+  sourcemap: true,
+  logLevel: 'info',
+});
+
+await build({
+  absWorkingDir: root,
+  entryPoints: [coreBrowserEntry],
+  outfile: coreBrowserOut,
+  bundle: true,
+  platform: 'browser',
+  format: 'esm',
+  target: 'es2022',
   sourcemap: true,
   logLevel: 'info',
 });

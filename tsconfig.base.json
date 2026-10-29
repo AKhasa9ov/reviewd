@@ -17,6 +17,7 @@
     "baseUrl": ".",
     "paths": {
       "@dsh-code-review/core": ["packages/core/src/index.ts"],
+      "@dsh-code-review/core/browser": ["packages/core/src/browser.ts"],
       "@dsh-code-review/worker": ["packages/worker/src/index.ts"]
     }
   }

@@ -46,6 +46,14 @@ export interface ReportPanelProps {
   onDecide?: FindingDecisionControlsProps['onDecide'];
   decidingFindingId?: string | undefined;
   findingDecisionError?: FindingDecisionError | null;
+  /** True while this report is a merge of shards that have already finished. */
+  partial?: boolean;
+  /** Shard completion progress for a partial report. */
+  liveProgress?: { completedShards: number; totalShards: number };
+  /** The reviewer is still active, so the partial report is live. */
+  live?: boolean;
+  /** The reviewer is active but no shard has reported yet. */
+  pending?: boolean;
 }
 
 const EMPTY_DECISIONS = new Map<string, FindingDecision>();
@@ -59,12 +67,21 @@ export function ReportPanel({
   onDecide,
   decidingFindingId,
   findingDecisionError,
+  partial = false,
+  liveProgress,
+  live = true,
+  pending = false,
 }: ReportPanelProps): JSX.Element {
   const [severity, setSeverity] = useState<Finding['severity'] | 'all'>('all');
   const [category, setCategory] = useState<Finding['category'] | 'all'>('all');
 
   if (report === null || report === undefined) {
-    return (
+    return pending ? (
+      <EmptyState
+        title="Waiting for the first shard report"
+        description="Findings appear here as soon as a shard finishes. The final report follows when the reviewer completes."
+      />
+    ) : (
       <EmptyState
         title="No reviewer report"
         description="The reviewer has not produced a report for this review. Findings appear here when the agent finishes."
@@ -78,10 +95,18 @@ export function ReportPanel({
 
   return (
     <div className="cr-report">
+      {partial && liveProgress !== undefined ? (
+        <p className="cr-notice cr-notice-info" role="status">
+          <strong>{live ? 'Live partial report' : 'Partial report'}</strong> ·{' '}
+          {liveProgress.completedShards} of {liveProgress.totalShards} shards reported. Findings are
+          provisional; decisions unlock with the final report.
+        </p>
+      ) : null}
       <section className="cr-report-summary" aria-label="Reviewer summary">
         <div className="cr-report-summary-head">
           <h2 className="cr-card-title">Reviewer summary</h2>
           <Badge tone={riskTone(report.riskLevel)}>{report.riskLevel} risk</Badge>
+          {partial ? <Badge tone="info">partial</Badge> : null}
           {report.skipped === true ? <Badge tone="neutral">skipped</Badge> : null}
         </div>
         <p className="cr-report-copy">{report.summary}</p>
