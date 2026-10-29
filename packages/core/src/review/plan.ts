@@ -1,4 +1,6 @@
-import type { ManifestFile } from '../types.js';
+import type { ManifestFile, ReviewManifest } from '../types.js';
+import type { FileCoverage, ReviewCoverage } from './types.js';
+import { summarizeCoverage } from './coverage.js';
 
 export type ReviewTier = 'deep' | 'light' | 'manifest-only';
 export type FileKind =
@@ -316,4 +318,274 @@ export function isUserFacingDoc(path: string): boolean {
   if (path.startsWith('docs/')) return true;
   const name = basename(path);
   return DOC_FILES.has(name) || /^README\./i.test(name);
+}
+
+export interface ShardLimits {
+  maxFiles: number;
+  maxPatchBytes: number;
+}
+
+export const DEFAULT_SHARD_LIMITS: ShardLimits = Object.freeze({
+  maxFiles: 12,
+  maxPatchBytes: 120_000,
+});
+
+export interface PlanFile {
+  path: string;
+  moduleId: string;
+  kind: FileKind;
+  tier: ReviewTier;
+  shardId?: string;
+  /** Policy reason for a manifest-only file; absent for reviewed files. */
+  reason?: string;
+}
+
+export interface ReviewShard {
+  id: string;
+  moduleId: string;
+  tier: 'deep' | 'light';
+  effort: 'deep' | 'light';
+  paths: string[];
+  fileCount: number;
+  patchBytes: number;
+}
+
+export interface ReviewPlan {
+  schemaVersion: 1;
+  files: PlanFile[];
+  shards: ReviewShard[];
+  coverage: ReviewCoverage;
+  coveragePlan: {
+    total: number;
+    byTier: Record<ReviewTier, number>;
+  };
+  riskFlags: string[];
+  limits: ShardLimits;
+}
+
+const INCOMPLETE_MANIFEST_WARNINGS = new Set([
+  'manifest-listing-truncated',
+  'untracked-list-truncated',
+  'manifest-missing',
+]);
+
+function byteCompare(left: string, right: string): number {
+  return Buffer.compare(Buffer.from(left, 'utf8'), Buffer.from(right, 'utf8'));
+}
+
+function isNoHunks(file: ManifestFile): boolean {
+  return (
+    file.reason === undefined &&
+    !file.binary &&
+    !file.ignored &&
+    file.hunkCount === 0 &&
+    file.added === 0 &&
+    file.deleted === 0
+  );
+}
+
+function policyReason(file: ManifestFile, kind: FileKind): string | undefined {
+  if (file.reason !== undefined && ['generated', 'binary', 'ignored'].includes(file.reason)) {
+    return file.reason;
+  }
+  if (file.ignored) return 'ignored';
+  if (file.binary) return 'binary';
+  if (kind === 'generated') return 'generated';
+  return undefined;
+}
+
+function tierFor(file: ManifestFile, kind: FileKind, moduleHasSource: boolean): ReviewTier {
+  if (kind === 'binary' || kind === 'generated' || file.ignored) return 'manifest-only';
+  switch (kind) {
+    case 'source':
+    case 'config':
+    case 'migration':
+    case 'instructions':
+      return 'deep';
+    case 'test':
+      return moduleHasSource ? 'deep' : 'light';
+    case 'docs':
+      return isUserFacingDoc(file.path) ? 'deep' : 'light';
+    case 'other':
+      return 'light';
+  }
+}
+
+function riskFlags(input: {
+  manifest: ReviewManifest;
+  files: readonly PlanFile[];
+  modules: number;
+}): string[] {
+  const flags: string[] = [];
+  const generated = input.files.filter((file) => file.tier === 'manifest-only').length;
+  if (input.manifest.totals.files >= 100 || input.manifest.totals.patchBytes >= 1_000_000) {
+    flags.push('large-diff');
+  }
+  if (input.files.length >= 10 && generated * 10 >= input.files.length) {
+    flags.push('generated-heavy');
+  }
+  if (input.manifest.warnings.some((warning) => INCOMPLETE_MANIFEST_WARNINGS.has(warning))) {
+    flags.push('manifest-incomplete');
+  }
+  if (
+    input.files.some((file) => /(^|\/)(auth|security|crypto|migrations?|config)\//.test(file.path))
+  ) {
+    flags.push('security-sensitive');
+  }
+  if (!input.files.some((file) => file.tier === 'deep' && file.kind === 'source')) {
+    flags.push('no-source');
+  }
+  if (input.modules > 8) flags.push('many-modules');
+  return flags;
+}
+
+/**
+ * Builds a pure, deterministic review plan. The planner never executes a
+ * shard, calls a model, or marks work complete; every deep/light file starts
+ * pending in the returned coverage ledger.
+ */
+export function buildReviewPlan(input: {
+  manifest: ReviewManifest;
+  moduleRoots?: readonly ModuleRoot[];
+  limits?: Partial<ShardLimits>;
+}): ReviewPlan {
+  const limits: ShardLimits = {
+    maxFiles: Math.max(1, Math.trunc(input.limits?.maxFiles ?? DEFAULT_SHARD_LIMITS.maxFiles)),
+    maxPatchBytes: Math.max(
+      1,
+      Math.trunc(input.limits?.maxPatchBytes ?? DEFAULT_SHARD_LIMITS.maxPatchBytes),
+    ),
+  };
+  const modules = buildModuleMap(input.manifest.files, input.moduleRoots);
+  const kinds = new Map<string, FileKind>();
+  for (const file of input.manifest.files) {
+    kinds.set(file.path, classifyFile(file));
+  }
+  const sourceModules = new Set<string>();
+  for (const file of input.manifest.files) {
+    if (kinds.get(file.path) === 'source') sourceModules.add(modules.moduleFor(file.path));
+  }
+
+  const files: PlanFile[] = input.manifest.files.map((file) => {
+    const kind = kinds.get(file.path) ?? 'other';
+    const moduleId = modules.moduleFor(file.path);
+    const tier = tierFor(file, kind, sourceModules.has(moduleId));
+    const reason = tier === 'manifest-only' ? policyReason(file, kind) : undefined;
+    return {
+      path: file.path,
+      moduleId,
+      kind,
+      tier,
+      ...(reason === undefined ? {} : { reason }),
+    };
+  });
+  const byPath = new Map(files.map((file) => [file.path, file]));
+
+  const groups = new Map<string, PlanFile[]>();
+  for (const file of files) {
+    if (file.tier === 'manifest-only') continue;
+    const manifestFile = input.manifest.files.find((item) => item.path === file.path);
+    if (manifestFile === undefined || isNoHunks(manifestFile)) continue;
+    const key = `${file.moduleId}\0${file.tier}`;
+    const group = groups.get(key) ?? [];
+    group.push(file);
+    groups.set(key, group);
+  }
+
+  const shards: ReviewShard[] = [];
+  const keys = [...groups.keys()].sort(byteCompare);
+  for (const key of keys) {
+    const group = groups.get(key) ?? [];
+    group.sort((left, right) => byteCompare(left.path, right.path));
+    let current: PlanFile[] = [];
+    let currentBytes = 0;
+    const flush = (): void => {
+      if (current.length === 0) return;
+      const id = `shard_${String(shards.length + 1).padStart(3, '0')}`;
+      const first = current[0];
+      if (first === undefined) return;
+      const shard: ReviewShard = {
+        id,
+        moduleId: first.moduleId,
+        tier: first.tier === 'deep' ? 'deep' : 'light',
+        effort: first.tier === 'deep' ? 'deep' : 'light',
+        paths: current.map((file) => file.path),
+        fileCount: current.length,
+        patchBytes: currentBytes,
+      };
+      shards.push(shard);
+      for (const file of current) file.shardId = id;
+      current = [];
+      currentBytes = 0;
+    };
+    for (const file of group) {
+      const manifestFile = input.manifest.files.find((item) => item.path === file.path);
+      const bytes = manifestFile?.patchBytes ?? 0;
+      if (
+        current.length > 0 &&
+        (current.length >= limits.maxFiles || currentBytes + bytes > limits.maxPatchBytes)
+      ) {
+        flush();
+      }
+      current.push(file);
+      currentBytes += bytes;
+    }
+    flush();
+  }
+
+  const coverageFiles: FileCoverage[] = input.manifest.files.map((manifestFile) => {
+    const planFile = byPath.get(manifestFile.path);
+    if (planFile === undefined) {
+      return { path: manifestFile.path, status: 'skipped', reason: 'render-budget' };
+    }
+    if (planFile.tier === 'manifest-only') {
+      return {
+        path: planFile.path,
+        status: 'manifest-only',
+        ...(planFile.reason === undefined ? {} : { reason: planFile.reason }),
+      };
+    }
+    if (isNoHunks(manifestFile)) {
+      return { path: planFile.path, status: 'no-hunks' };
+    }
+    if (planFile.shardId !== undefined) {
+      return { path: planFile.path, status: 'pending', shardId: planFile.shardId };
+    }
+    return { path: planFile.path, status: 'skipped', reason: 'render-budget' };
+  });
+  const coverage: ReviewCoverage = {
+    files: coverageFiles,
+    totals: summarizeCoverage(coverageFiles),
+    ...(input.manifest.warnings.some((warning) => INCOMPLETE_MANIFEST_WARNINGS.has(warning))
+      ? { incomplete: true }
+      : {}),
+  };
+
+  const byTier: Record<ReviewTier, number> = {
+    deep: files.filter((file) => file.tier === 'deep').length,
+    light: files.filter((file) => file.tier === 'light').length,
+    'manifest-only': files.filter((file) => file.tier === 'manifest-only').length,
+  };
+  return {
+    schemaVersion: 1,
+    files,
+    shards,
+    coverage,
+    coveragePlan: { total: files.length, byTier },
+    riskFlags: riskFlags({
+      manifest: input.manifest,
+      files,
+      modules: modules.modules.length,
+    }),
+    limits,
+  };
+}
+
+/** Returns a detached copy of the plan's coverage ledger for event persistence. */
+export function coverageFromPlan(plan: ReviewPlan): ReviewCoverage {
+  return {
+    files: plan.coverage.files.map((file) => ({ ...file })),
+    totals: summarizeCoverage(plan.coverage.files),
+    ...(plan.coverage.incomplete === true ? { incomplete: true } : {}),
+  };
 }

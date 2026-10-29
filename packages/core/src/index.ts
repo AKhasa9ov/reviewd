@@ -114,6 +114,25 @@ export {
   promotePendingToLight,
   summarizeCoverage,
 } from './review/coverage.js';
+export {
+  buildModuleMap,
+  buildReviewPlan,
+  classifyFile,
+  coverageFromPlan,
+  DEFAULT_SHARD_LIMITS,
+  isUserFacingDoc,
+} from './review/plan.js';
+export type {
+  FileKind,
+  ModuleInfo,
+  ModuleMap,
+  ModuleRoot,
+  PlanFile,
+  ReviewPlan,
+  ReviewShard,
+  ReviewTier,
+  ShardLimits,
+} from './review/plan.js';
 export { deriveOutcome } from './review/outcomes.js';
 export { fold, ReviewFoldError } from './review/fold.js';
 export { ReviewLifecycle, ReviewLifecycleError } from './review/lifecycle.js';
