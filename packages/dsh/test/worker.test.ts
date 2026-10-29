@@ -26,6 +26,7 @@ function reviewerAgent(options: {
   whenIdle?: () => Promise<void>;
   restrict?: (filter: unknown) => void;
   guard?: (guard: (execution: { name: string }) => string | undefined) => void;
+  register?: (definition: any) => void;
 }): { agent: any; dispose: () => Promise<void> } {
   return {
     agent: {
@@ -37,6 +38,10 @@ function reviewerAgent(options: {
         tools: {
           guard: (guard: (execution: { name: string }) => string | undefined) => {
             options.guard?.(guard);
+            return () => undefined;
+          },
+          register: (definition: any) => {
+            options.register?.(definition);
             return () => undefined;
           },
           restrict: (filter: unknown) => {
@@ -218,6 +223,79 @@ describe('worker loop', () => {
     expect(calls.some((call) => call.path.endsWith('/report'))).toBe(true);
     expect(calls.some((call) => call.path.endsWith('/ack'))).toBe(true);
     expect(disposed).toBe(1);
+  });
+
+  it('submits a structured review_report tool call without a fenced JSON message', async () => {
+    const controller = new AbortController();
+    const calls: Array<{ method: string; path: string; body?: any }> = [];
+    let served = false;
+    const api = {
+      get: async (path: string) => {
+        calls.push({ method: 'GET', path });
+        if (path.includes('/api/jobs/next')) {
+          if (served) {
+            controller.abort();
+            return null;
+          }
+          served = true;
+          return {
+            job: { id: 'job_1', attemptId: 'att_1', reviewId: 'rev_1', round: 1 },
+            bundle: { prompt: 'Review this diff' },
+          };
+        }
+        return null;
+      },
+      post: async (path: string, body: any) => {
+        calls.push({ method: 'POST', path, body });
+        if (path === '/api/workers/register') return { id: body.id };
+        return {};
+      },
+    } as any;
+    let reportTool: any;
+    let guardFn: ((execution: { name: string }) => string | undefined) | undefined;
+    const agents = {
+      create: async () =>
+        reviewerAgent({
+          events: [
+            {
+              type: 'assistant/message',
+              data: {
+                message: { content: [{ type: 'text', text: 'The report tool was used.' }] },
+              },
+            },
+          ],
+          register: (definition) => {
+            reportTool = definition;
+          },
+          guard: (guard) => {
+            guardFn = guard;
+          },
+          whenIdle: async () => {
+            await reportTool.execute(
+              {
+                summary: 'Structured report',
+                riskLevel: 'low',
+                findings: [],
+              },
+              { signal: controller.signal },
+            );
+          },
+        }),
+    };
+    await drive({ api, agents, signal: controller.signal });
+
+    expect(guardFn?.({ name: 'review_report' })).toBeUndefined();
+    const report = calls.find((call) => call.path.endsWith('/report'));
+    expect(report?.body).toMatchObject({
+      report: {
+        schemaVersion: 1,
+        summary: 'Structured report',
+        riskLevel: 'low',
+        findings: [],
+      },
+    });
+    expect(calls.some((call) => call.path.endsWith('/ack'))).toBe(true);
+    expect(calls.some((call) => call.path.endsWith('/fail'))).toBe(false);
   });
 
   it('passes the host default model to the reviewer agent', async () => {

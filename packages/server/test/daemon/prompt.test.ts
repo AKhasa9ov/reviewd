@@ -150,6 +150,8 @@ describe('buildReviewPrompt', () => {
     expect(prompt).toContain('Kind: verify');
     expect(prompt).toContain('Read-only review');
     expect(prompt).toContain('at most 15 tool calls');
+    expect(prompt).toContain('review_report');
+    expect(prompt).toContain('If the tool is unavailable');
     expect(prompt).toContain('ONLY one fenced');
     expect(prompt).toContain('"schemaVersion": 1');
     expect(prompt).toContain('diff --git a/src/a.ts b/src/a.ts');

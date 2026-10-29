@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { ReviewApiError } from './api.js';
 import type { ReviewApiLike } from './api.js';
 import type { ReviewConfig } from './config.js';
+import { createReviewReportTool } from './report-tool.js';
 
 /** Tools a reviewer may execute; everything else is denied by the guard. */
 const READ_ONLY_REVIEWER_TOOLS = new Set([
@@ -10,6 +11,7 @@ const READ_ONLY_REVIEWER_TOOLS = new Set([
   'glob',
   'review_status',
   'review_feedback',
+  'review_report',
 ]);
 
 export interface WorkerAgent {
@@ -25,6 +27,7 @@ export interface WorkerAgent {
     tools?: {
       restrict?(filter: { deny?: string[]; allow?: string[] }): () => void;
       guard?(guard: (execution: { name: string }) => string | undefined): () => void;
+      register?(definition: unknown): () => void;
     };
   };
 }
@@ -242,6 +245,8 @@ async function runJob(deps: WorkerDeps, lease: JobLease, signal: AbortSignal): P
     }
   }
   let release: (() => void) | undefined;
+  let releaseReportTool: (() => void) | undefined;
+  let capturedReport: Record<string, unknown> | undefined;
   try {
     const tools = agent.ctx?.tools;
     if (tools?.guard === undefined) throw new Error('reviewer tool service is unavailable');
@@ -252,6 +257,23 @@ async function runJob(deps: WorkerDeps, lease: JobLease, signal: AbortSignal): P
         ? undefined
         : `reviewer is read-only: ${execution.name} is not allowed`,
     );
+    if (tools.register !== undefined) {
+      try {
+        releaseReportTool = tools.register(
+          createReviewReportTool((report) => {
+            capturedReport = report;
+          }),
+        );
+      } catch (error) {
+        // The fenced-JSON fallback still works when an older harness has no
+        // scoped tool registry. Do not fail the whole review for that alone.
+        deps.logger?.warn?.(
+          `code-review: cannot register review_report tool: ${
+            error instanceof Error ? error.message : 'unknown error'
+          }`,
+        );
+      }
+    }
   } catch (error) {
     // Fail closed: never run a reviewer with the default tool surface.
     await deps.api
@@ -292,7 +314,7 @@ async function runJob(deps: WorkerDeps, lease: JobLease, signal: AbortSignal): P
       }),
     ]);
     const events = agent.session?.snapshotEvents?.() ?? agent.snapshotEvents?.() ?? [];
-    const report = extractReviewerReport(events);
+    const report = capturedReport ?? extractReviewerReport(events);
     if (report === undefined) {
       await deps.api.post(
         `/api/jobs/${encodeURIComponent(job.id)}/fail`,
@@ -363,6 +385,7 @@ async function runJob(deps: WorkerDeps, lease: JobLease, signal: AbortSignal): P
     if (timeout !== undefined) clearTimeout(timeout);
     signal.removeEventListener('abort', onAbort);
     release?.();
+    releaseReportTool?.();
     // The handle owns the reviewer session; release it exactly once so timed-out
     // and failed runs do not leak agents between jobs.
     const disposal = handle.dispose?.();
