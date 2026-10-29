@@ -39,6 +39,7 @@ import {
   diffFileId,
   diffLineId,
   fileLineCount,
+  filesForSnapshot,
   filterComments,
   firstChangedLine,
   fixCounts,
@@ -512,6 +513,10 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
     [view, fixFilter],
   );
   const signals = useMemo(() => (snapshot === null ? [] : deriveSignals(snapshot)), [snapshot]);
+  const fileCount = useMemo(
+    () => (snapshot === null ? 0 : filesForSnapshot(snapshot).length),
+    [snapshot],
+  );
   const report = view?.report ?? null;
   const readOnly = view?.review.status === 'closed';
   const findingDecisions = useMemo(() => {
@@ -1300,7 +1305,7 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
                 item.id === 'conversation'
                   ? filteredComments.length
                   : item.id === 'files'
-                    ? (snapshot?.files.length ?? 0)
+                    ? fileCount
                     : item.id === 'report'
                       ? (report?.findings.length ?? 0)
                       : signals.length;

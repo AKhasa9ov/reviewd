@@ -18,6 +18,8 @@ versions may contain breaking changes.
 ### Fixed
 
 - Review appends are serialized per review; the derived cache is best-effort and rebuilt when missing, and GC uses `closedAt` and preserves referenced snapshots.
+- The Files changed tab counts every path from the complete snapshot manifest, matching the file
+  panel and lazy diff loader for bounded snapshots instead of showing only the retained diff count.
 - Pending deliveries survive a daemon restart (atomic `deliveries.json`), and SSE/long-poll replay stored events with a daemon-wide cursor.
 - DSH proxy requires DSH authentication, forwards attribution/idempotency headers, and the reviewer is restricted to read-only tools with a bounded unified diff and correct worktree.
 - Health now probes store writability and git availability; command reviewers get a minimal environment and bounded output; reviewed repo mounts default to read-only.
