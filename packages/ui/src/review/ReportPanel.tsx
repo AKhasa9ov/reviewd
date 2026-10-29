@@ -400,7 +400,10 @@ export function ReportPanel({
                                     expanded ? ' cr-finding-expanded' : ' cr-finding-collapsed'
                                   }`}
                                 >
-                                  <div className="cr-finding-head">
+                                  <div
+                                    className="cr-finding-head"
+                                    onClick={() => toggleFinding(finding.id)}
+                                  >
                                     <button
                                       type="button"
                                       className="cr-finding-toggle"
@@ -409,7 +412,10 @@ export function ReportPanel({
                                       aria-label={`${
                                         expanded ? 'Collapse' : 'Expand'
                                       } finding ${finding.title}`}
-                                      onClick={() => toggleFinding(finding.id)}
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        toggleFinding(finding.id);
+                                      }}
                                     >
                                       <span aria-hidden="true">{expanded ? '▾' : '▸'}</span>
                                     </button>
@@ -423,7 +429,10 @@ export function ReportPanel({
                                     <button
                                       type="button"
                                       className="cr-finding-location"
-                                      onClick={() => onJump(finding)}
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        onJump(finding);
+                                      }}
                                       aria-label={`Jump to ${finding.file} line ${finding.lineStart}`}
                                     >
                                       {finding.file}:{finding.lineStart}

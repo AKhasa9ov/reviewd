@@ -278,6 +278,19 @@ describe('ReportPanel browser', () => {
     expect(screen.getByRole('list', { name: 'Reviewer findings' })).toBeInTheDocument();
   });
 
+  it('expands a finding by clicking anywhere in its header row', async () => {
+    const user = userEvent.setup();
+    render(<ReportPanel report={report([finding(0)])} onJump={() => undefined} />);
+
+    await user.click(screen.getByText('high confidence'));
+
+    expect(screen.getByRole('button', { name: 'Collapse finding Finding 1' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    expect(screen.getByText('why')).toBeInTheDocument();
+  });
+
   it('shows existing finding comments and posts a reply from report', async () => {
     const user = userEvent.setup();
     const existing = comment();

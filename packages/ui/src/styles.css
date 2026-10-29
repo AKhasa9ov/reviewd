@@ -3677,6 +3677,7 @@ body.cr-selecting-lines {
   gap: var(--cr-space-2);
   min-width: 0;
   margin-bottom: var(--cr-space-2);
+  cursor: pointer;
 }
 
 .cr-finding-location {
