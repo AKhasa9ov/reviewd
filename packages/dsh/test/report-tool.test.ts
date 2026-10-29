@@ -22,6 +22,9 @@ describe('review_report tool', () => {
       'minor',
       'nit',
     ]);
+    // DSH's tool registry only accepts type/properties/required/items/enum/const
+    // and annotations. Numeric keyword validation (minimum, maximum) is rejected.
+    expect(JSON.stringify(tool.parameters)).not.toContain('"minimum"');
   });
 
   it('captures the typed report and normalizes a missing schemaVersion', async () => {
