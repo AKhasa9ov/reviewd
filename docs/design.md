@@ -434,6 +434,8 @@ interface Submission {
 | `agent/queued` | jobId, backend, attemptId |
 | `agent/started` | jobId, workerId, attemptId |
 | `agent/coverage` | coverage ledger, round; пишется один раз на раунд перед enqueue worker-job, если у снапшота есть manifest |
+| `agent/shard` | shardId, report; инкрементальный отчёт одного шарда |
+| `agent/retry` | round, shardIds; сохраняет завершённые шарды, сбрасывает только незавершённые и возвращает агента в `queued` |
 | `agent/finding` | finding |
 | `agent/finding-rejected` | raw, reason |
 | `agent/report` | report |

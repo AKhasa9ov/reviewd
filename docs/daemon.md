@@ -45,47 +45,48 @@ Codes: `unauthorized`, `forbidden`, `not-found`, `validation`, `conflict`, `stal
 
 ## Endpoints
 
-| Method | Path                                        | Notes                                                                   |
-| ------ | ------------------------------------------- | ----------------------------------------------------------------------- |
-| GET    | `/api/health`                               | probes store/git; `200` healthy or `503` degraded                       |
-| GET    | `/api/version`                              | daemon and schema versions                                              |
-| POST   | `/api/auth`                                 | body `{token}`; sets cookie                                             |
-| POST   | `/api/auth/logout`                          | clears cookie                                                           |
-| GET    | `/api/config/public`                        | public URL, limits, default base                                        |
-| GET    | `/api/repos/branches?path=`                 | validates the repo and returns branch names                             |
-| GET    | `/api/repos/commits?path=&base=&head=`      | merge base and commits between two branches, oldest first               |
-| GET    | `/api/settings/repositories`                | saved repositories and default target branches                          |
-| PUT    | `/api/settings/repositories`                | validates and persists `{repositories:[{name,path,defaultTarget?}]}`    |
-| GET    | `/api/fs/dirs?path=`                        | subdirectories (max 500) with git markers; defaults to the home dir     |
-| POST   | `/api/reviews`                              | `{repoRoot,title,scope,reviewer}`; returns `{review,url,warnings}`      |
-| GET    | `/api/reviews`                              | `status`, `limit`, `offset`                                             |
-| GET    | `/api/reviews/:id`                          | `{review,latestSnapshot,report}`                                        |
-| PATCH  | `/api/reviews/:id`                          | `{title?,reviewer?,scope?}`; scope change appends a round               |
-| DELETE | `/api/reviews/:id`                          | optional `{reason}`; soft-deletes and cancels a reviewer                |
-| GET    | `/api/reviews/:id/snapshot?round=&file=`    | round diff; `file` lazily selects one file                              |
-| POST   | `/api/reviews/:id/comments`                 | body, path, side, lineStart/lineEnd, optional suggestion                |
-| POST   | `/api/reviews/:id/comments/:cid/replies`    | `{body}`                                                                |
-| PATCH  | `/api/reviews/:id/comments/:cid`            | exactly one of `{body}` or `{state: open\|resolved\|dismissed}`         |
-| DELETE | `/api/reviews/:id/comments/:cid`            | soft-deletes; replies stay as a tombstone                               |
-| POST   | `/api/reviews/:id/comments/:cid/suggestion` | `{action: accept\|decline\|apply}`                                      |
-| POST   | `/api/reviews/:id/findings/:fid/decision`   | `{state: accepted\|dismissed, note?}`; latest report round only         |
-| POST   | `/api/reviews/:id/refresh`                  | optional `{scope}`; appends a round                                     |
-| POST   | `/api/reviews/:id/submit`                   | `{verdict,summary?,includeResolved?,harness?}`                          |
-| POST   | `/api/reviews/:id/close`                    | `{verdict: approved\|closed}`                                           |
-| POST   | `/api/reviews/:id/fix-status`               | `{items:[{commentId,status,evidence?}]}`                                |
-| POST   | `/api/reviews/:id/agent/cancel`             | cancels queued/leased jobs                                              |
-| GET    | `/api/reviews/:id/events?after=`            | long-poll (default 25s) or SSE with `Accept`                            |
-| GET    | `/api/events?after=`                        | global long-poll/SSE stream                                             |
-| POST   | `/api/workers/register`                     | `{name?,harness?}`; returns worker + lease timings                      |
-| POST   | `/api/workers/:id/heartbeat`                | liveness and lease extension                                            |
-| GET    | `/api/jobs/next?workerId=&wait=25`          | long-poll; `204` on timeout                                             |
-| POST   | `/api/jobs/:id/findings`                    | `{attemptId,findings[]}`; each validated, returns `{accepted,rejected}` |
-| POST   | `/api/jobs/:id/report`                      | `{attemptId,report}` idempotent by attempt id                           |
-| POST   | `/api/jobs/:id/fail`                        | `{attemptId,code,message,retryable}`                                    |
-| GET    | `/api/deliveries/pending?harness=dsh`       | reconnect recovery                                                      |
-| POST   | `/api/deliveries/:id/ack`                   | `{by}`                                                                  |
-| POST   | `/api/deliveries/:id/fail`                  | `{error}`                                                               |
-| POST   | `/api/gc`                                   | `{olderThanDays}`; closed-by-age reviews and unreferenced snapshots     |
+| Method | Path                                        | Notes                                                                       |
+| ------ | ------------------------------------------- | --------------------------------------------------------------------------- |
+| GET    | `/api/health`                               | probes store/git; `200` healthy or `503` degraded                           |
+| GET    | `/api/version`                              | daemon and schema versions                                                  |
+| POST   | `/api/auth`                                 | body `{token}`; sets cookie                                                 |
+| POST   | `/api/auth/logout`                          | clears cookie                                                               |
+| GET    | `/api/config/public`                        | public URL, limits, default base                                            |
+| GET    | `/api/repos/branches?path=`                 | validates the repo and returns branch names                                 |
+| GET    | `/api/repos/commits?path=&base=&head=`      | merge base and commits between two branches, oldest first                   |
+| GET    | `/api/settings/repositories`                | saved repositories and default target branches                              |
+| PUT    | `/api/settings/repositories`                | validates and persists `{repositories:[{name,path,defaultTarget?}]}`        |
+| GET    | `/api/fs/dirs?path=`                        | subdirectories (max 500) with git markers; defaults to the home dir         |
+| POST   | `/api/reviews`                              | `{repoRoot,title,scope,reviewer}`; returns `{review,url,warnings}`          |
+| GET    | `/api/reviews`                              | `status`, `limit`, `offset`                                                 |
+| GET    | `/api/reviews/:id`                          | `{review,latestSnapshot,report}`                                            |
+| PATCH  | `/api/reviews/:id`                          | `{title?,reviewer?,scope?}`; scope change appends a round                   |
+| DELETE | `/api/reviews/:id`                          | optional `{reason}`; soft-deletes and cancels a reviewer                    |
+| GET    | `/api/reviews/:id/snapshot?round=&file=`    | round diff; `file` lazily selects one file                                  |
+| POST   | `/api/reviews/:id/comments`                 | body, path, side, lineStart/lineEnd, optional suggestion                    |
+| POST   | `/api/reviews/:id/comments/:cid/replies`    | `{body}`                                                                    |
+| PATCH  | `/api/reviews/:id/comments/:cid`            | exactly one of `{body}` or `{state: open\|resolved\|dismissed}`             |
+| DELETE | `/api/reviews/:id/comments/:cid`            | soft-deletes; replies stay as a tombstone                                   |
+| POST   | `/api/reviews/:id/comments/:cid/suggestion` | `{action: accept\|decline\|apply}`                                          |
+| POST   | `/api/reviews/:id/findings/:fid/decision`   | `{state: accepted\|dismissed, note?}`; latest report round only             |
+| POST   | `/api/reviews/:id/refresh`                  | optional `{scope}`; appends a round                                         |
+| POST   | `/api/reviews/:id/submit`                   | `{verdict,summary?,includeResolved?,harness?}`                              |
+| POST   | `/api/reviews/:id/close`                    | `{verdict: approved\|closed}`                                               |
+| POST   | `/api/reviews/:id/fix-status`               | `{items:[{commentId,status,evidence?}]}`                                    |
+| POST   | `/api/reviews/:id/agent/retry`              | reruns only unfinished shards in the latest round; returns the updated view |
+| POST   | `/api/reviews/:id/agent/cancel`             | cancels queued/leased jobs                                                  |
+| GET    | `/api/reviews/:id/events?after=`            | long-poll (default 25s) or SSE with `Accept`                                |
+| GET    | `/api/events?after=`                        | global long-poll/SSE stream                                                 |
+| POST   | `/api/workers/register`                     | `{name?,harness?}`; returns worker + lease timings                          |
+| POST   | `/api/workers/:id/heartbeat`                | liveness and lease extension                                                |
+| GET    | `/api/jobs/next?workerId=&wait=25`          | long-poll; `204` on timeout                                                 |
+| POST   | `/api/jobs/:id/findings`                    | `{attemptId,findings[]}`; each validated, returns `{accepted,rejected}`     |
+| POST   | `/api/jobs/:id/report`                      | `{attemptId,report}` idempotent by attempt id                               |
+| POST   | `/api/jobs/:id/fail`                        | `{attemptId,code,message,retryable}`                                        |
+| GET    | `/api/deliveries/pending?harness=dsh`       | reconnect recovery                                                          |
+| POST   | `/api/deliveries/:id/ack`                   | `{by}`                                                                      |
+| POST   | `/api/deliveries/:id/fail`                  | `{error}`                                                                   |
+| POST   | `/api/gc`                                   | `{olderThanDays}`; closed-by-age reviews and unreferenced snapshots         |
 
 ### Finding decisions
 

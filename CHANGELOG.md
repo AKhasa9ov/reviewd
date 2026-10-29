@@ -26,6 +26,13 @@ versions may contain breaking changes.
 
 ### Added
 
+- In-place reviewer retry: a failed or coverage-partial worker reviewer can rerun only the
+  shards that have no durable report, in the same review, round and snapshot. Completed shard
+  findings and coverage are preserved; the daemon rebuilds the plan from the snapshot after a
+  restart and leaves a retryable failed state if requeueing itself fails.
+- The DSH reviewer gets a scoped `review_report` tool with a typed JSON schema for its final
+  report. The worker accepts the captured tool call, normalizes a missing `schemaVersion`, and
+  still falls back to the fenced-JSON parser for older harnesses and command reviewers.
 - Fat DSH package `@dsh-code-review/dsh`: one installable Cordis bundle now ships the Host,
   reviewer worker and review daemon/SPA, so embedded mode (the default) needs no separate
   server. It starts `reviewd` in-process on an ephemeral loopback port and serves the full

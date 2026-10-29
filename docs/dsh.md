@@ -184,13 +184,16 @@ The subagent:
   resolves the initiating DSH session, the reviewer is created as a child agent and no
   separate preset is mounted;
 - is strictly read-only: every tool execution passes through `tools.guard()`, which
-  allows only `read`, `grep`, `glob`, `review_status` and `review_feedback`; shell,
-  write, network, delegation and review-mutating tools fail closed. Global
-  `tools.restrict()` cannot hide preset-scoped tools, so the guard is the boundary;
+  allows only `read`, `grep`, `glob`, `review_status`, `review_feedback` and the scoped
+  `review_report` tool; shell, write, network, delegation and review-mutating tools fail
+  closed. Global `tools.restrict()` cannot hide preset-scoped tools, so the guard is the
+  boundary;
 - inherits the Host's default model unless `reviewerModel` is set; the explicit override
   wins;
-- receives the job prompt with a bounded unified diff (60k characters, with an explicit
-  truncation marker) and an exact report schema, then returns one JSON report;
+- receives one bounded shard prompt at a time: the shard spans at most 12 files / 120,000
+  patch bytes by default, carries a module-aware path filter and only that shard's unified
+  diff, and ends with the report contract. The hard per-job diff cap is 220,000 characters;
+  an over-cap prompt is marked as truncated instead of silently losing the marker;
 - works under honest coverage: the daemon records every changed path in the manifest (up
   to its 64 MiB metadata listing cap) and marks the round `done` only when no known path
   is pending, deferred, failed or skipped, and the manifest is complete. A large review
@@ -202,10 +205,13 @@ The subagent:
   followed: there is nothing to inspect. A `manifest-listing-truncated` or synthesized `manifest-missing` warning marks
   the ledger `incomplete`, so the round stays `partial` rather than pretending the known
   manifest is the whole range;
-- reads the report from the durable session log (`agent.session.snapshotEvents()`),
-  falling back to the newest earlier parseable report if the last message is prose;
-- must return `schemaVersion: 1`; anything else is rejected as non-retryable
-  `invalid-output` without posting findings or a report;
+- calls the scoped `review_report` tool with the final structured report whenever the
+  harness exposes a tool registry; the worker captures the typed call and falls back to
+  the newest parseable fenced-JSON report in the durable session log
+  (`agent.session.snapshotEvents()`) for older harnesses and command reviewers;
+- the tool normalizes a missing `schemaVersion` to `1`; fenced reports without
+  `schemaVersion: 1` are rejected as non-retryable `invalid-output` without posting
+  findings or a report;
 - posts findings (server-side validated), report and ack;
 - is cancelled with `kind: 'timeout'` and failed with retryable `reviewer-timeout` when
   `reviewerTimeoutMs` expires, and its agent handle is disposed in `finally` on every
