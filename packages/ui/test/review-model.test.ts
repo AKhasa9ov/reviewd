@@ -9,6 +9,7 @@ import {
   deriveSignals,
   filterComments,
   fileLineCount,
+  filesForSnapshot,
   filterFindings,
   findingCounts,
   firstChangedLine,
@@ -121,6 +122,57 @@ function snapshot(files: FileDiff[]): Snapshot {
     warnings: [],
   };
 }
+
+describe('review model snapshot files', () => {
+  it('keeps manifest paths visible when the bounded snapshot omits their diffs', () => {
+    const visible = file({ path: 'src/visible.ts' });
+    const bounded: Snapshot = { ...snapshot([visible]), schemaVersion: 2 };
+    bounded.manifest = {
+      schemaVersion: 1,
+      scope: bounded.scope,
+      files: [
+        {
+          path: 'src/visible.ts',
+          status: 'modified',
+          binary: false,
+          ignored: false,
+          oversized: false,
+          added: 1,
+          deleted: 1,
+          hunkCount: 1,
+          patchBytes: 20,
+        },
+        {
+          path: 'src/omitted.ts',
+          status: 'added',
+          binary: false,
+          ignored: false,
+          oversized: false,
+          added: 113,
+          deleted: 0,
+          hunkCount: 0,
+          patchBytes: 0,
+          reason: 'diff-truncated',
+        },
+      ],
+      totals: { files: 2, added: 114, deleted: 1, patchBytes: 20 },
+      warnings: ['diff-truncated'],
+    };
+
+    const files = filesForSnapshot(bounded);
+    expect(files.map((item) => item.path)).toEqual(['src/visible.ts', 'src/omitted.ts']);
+    expect(files[0]).toBe(visible);
+    expect(files[1]).toMatchObject({
+      path: 'src/omitted.ts',
+      status: 'added',
+      added: 113,
+      deleted: 0,
+      truncated: true,
+      reason: 'diff-truncated',
+      hunks: [],
+    });
+  });
+});
 
 describe('review model anchors and status', () => {
   it('tracks anchor history and per-round fallbacks', () => {

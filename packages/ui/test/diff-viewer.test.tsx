@@ -1,0 +1,102 @@
+// @vitest-environment jsdom
+import { render, screen, waitFor } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import type { FileDiff, Snapshot } from '@dsh-code-review/core';
+import { DiffViewer } from '../src/review/DiffViewer.js';
+
+function snapshot(): Snapshot {
+  return {
+    schemaVersion: 2,
+    scope: {
+      kind: 'range',
+      repoRoot: '/repo',
+      baseSha: 'a',
+      headSha: 'b',
+      label: 'main → feature',
+      worktreeDigest: 'd',
+    },
+    files: [],
+    manifest: {
+      schemaVersion: 1,
+      scope: {
+        kind: 'range',
+        repoRoot: '/repo',
+        baseSha: 'a',
+        headSha: 'b',
+        label: 'main → feature',
+        worktreeDigest: 'd',
+      },
+      files: [
+        {
+          path: 'src/a.ts',
+          status: 'added',
+          binary: false,
+          ignored: false,
+          oversized: false,
+          added: 1,
+          deleted: 0,
+          hunkCount: 0,
+          patchBytes: 0,
+          reason: 'diff-truncated',
+        },
+      ],
+      totals: { files: 1, added: 1, deleted: 0, patchBytes: 0 },
+      warnings: ['diff-truncated'],
+    },
+    totals: { files: 1, added: 1, deleted: 0, truncated: true },
+    warnings: ['diff-truncated'],
+  };
+}
+
+function loadedFile(): FileDiff {
+  return {
+    path: 'src/a.ts',
+    status: 'added',
+    binary: false,
+    oversized: false,
+    added: 1,
+    deleted: 0,
+    contentHash: 'h1',
+    hunks: [
+      {
+        oldStart: 0,
+        oldLines: 0,
+        newStart: 1,
+        newLines: 1,
+        header: '@@ -0,0 +1 @@',
+        lines: [{ kind: 'add', oldNo: null, newNo: 1, text: 'const value = 1;' }],
+      },
+    ],
+    newLines: ['const value = 1;'],
+  };
+}
+
+describe('DiffViewer lazy diffs', () => {
+  it('loads a diff omitted from the bounded round snapshot', async () => {
+    const onLoadDiff = vi.fn(async () => loadedFile());
+    render(
+      <DiffViewer
+        snapshot={snapshot()}
+        comments={[]}
+        round={1}
+        delta={false}
+        canDelta={false}
+        changedPaths={new Set()}
+        onDeltaChange={() => undefined}
+        onJump={() => undefined}
+        onSelectLine={() => undefined}
+        onSelectRange={() => undefined}
+        onOpenComposer={() => undefined}
+        onReply={async () => undefined}
+        onCommentState={async () => undefined}
+        onCommentJump={() => undefined}
+        onCommentFocus={() => undefined}
+        onLoadDiff={onLoadDiff}
+      />,
+    );
+
+    expect(screen.getAllByText('src/a.ts').length).toBeGreaterThan(0);
+    await waitFor(() => expect(onLoadDiff).toHaveBeenCalledWith('src/a.ts'));
+    expect(await screen.findByText('const value = 1;')).toBeInTheDocument();
+  });
+});

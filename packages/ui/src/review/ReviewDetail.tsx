@@ -470,6 +470,14 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
   }, [deep.file, deep.line]);
 
   const selectedRound = round;
+  const loadFileDiff = useCallback(
+    async (path: string): Promise<FileDiff> => {
+      if (selectedRound === null) throw new Error('No snapshot round is selected.');
+      const result = await client.getFileDiff(id, selectedRound, path);
+      return result.file;
+    },
+    [client, id, selectedRound],
+  );
   const canDelta = selectedRound !== null && selectedRound > 1 && previousSnapshot !== null;
   const deltaHint =
     selectedRound === null
@@ -1072,6 +1080,7 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
       onCancelComposer={cancelComposer}
       onDeltaChange={setDelta}
       onJump={jumpTo}
+      onLoadDiff={loadFileDiff}
       onSelectLine={onSelectLine}
       onSelectRange={onSelectRange}
       onOpenComposer={openComposer}

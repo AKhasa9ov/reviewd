@@ -40,6 +40,40 @@ export interface DiffRow {
   lineIndex: number;
 }
 
+/**
+ * The round snapshot is intentionally bounded for rendering. The manifest is
+ * complete, so use it to keep every changed path visible and let the caller
+ * lazily fetch omitted diffs.
+ */
+export function filesForSnapshot(snapshot: Snapshot): FileDiff[] {
+  const present = new Map(snapshot.files.map((item) => [item.path, item]));
+  const manifest = snapshot.manifest?.files;
+  if (manifest === undefined) return snapshot.files;
+  const files: FileDiff[] = [];
+  for (const entry of manifest) {
+    const existing = present.get(entry.path);
+    if (existing !== undefined) {
+      files.push(existing);
+      continue;
+    }
+    files.push({
+      path: entry.path,
+      ...(entry.oldPath === undefined ? {} : { oldPath: entry.oldPath }),
+      status: entry.status,
+      binary: entry.binary,
+      oversized: entry.oversized,
+      ...(entry.ignored ? { ignored: true } : {}),
+      truncated: true,
+      reason: entry.reason === 'unreadable' ? 'unreadable' : 'diff-truncated',
+      added: entry.added,
+      deleted: entry.deleted,
+      hunks: [],
+      contentHash: null,
+    });
+  }
+  return files;
+}
+
 export function buildDiffRows(file: FileDiff): DiffRow[] {
   const rows: DiffRow[] = [];
   file.hunks.forEach((hunk, hunkIndex) => {

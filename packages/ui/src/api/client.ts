@@ -3,6 +3,7 @@ import type {
   CommentView,
   EventsResponse,
   CreateReviewRequest,
+  FileDiff,
   CreateReviewResponse,
   DirectoryListing,
   FindingDecisionInput,
@@ -260,6 +261,17 @@ export class ApiClient {
     if (file !== undefined) params.set('file', file);
     return this.request<ServiceSnapshotView>(
       `/api/reviews/${encodeURIComponent(id)}/snapshot?${params.toString()}`,
+    );
+  }
+
+  async getFileDiff(
+    id: string,
+    round: number,
+    path: string,
+  ): Promise<{ file: FileDiff; round: number; path: string }> {
+    const params = new URLSearchParams({ path });
+    return this.request<{ file: FileDiff; round: number; path: string }>(
+      `/api/reviews/${encodeURIComponent(id)}/snapshot/${round}/diff?${params.toString()}`,
     );
   }
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent, MutableRefObject } from 'react';
 import type {
   Comment,
@@ -25,6 +25,7 @@ import {
   commentsAtLine,
   diffFileId,
   diffLineId,
+  filesForSnapshot,
   firstChangedLine,
   latestAnchor,
   type DiffRow,
@@ -72,6 +73,8 @@ export interface DiffViewerProps {
   onCommentJump: (comment: Comment) => void;
   onCommentFocus: (comment: Comment) => void;
   readOnly?: boolean;
+  /** Fetch a diff omitted from the bounded round snapshot. */
+  onLoadDiff?: ((path: string) => Promise<FileDiff>) | undefined;
 }
 
 const MAX_DIFF_ROWS = 800;
@@ -201,6 +204,7 @@ function DiffFileSection({
   decidingFindingId,
   findingDecisionError,
   onJump,
+  onLoadDiff,
   onViewFullFile,
   onSelectLine,
   onLineDragStart,
@@ -229,6 +233,7 @@ function DiffFileSection({
   decidingFindingId?: string | undefined;
   findingDecisionError?: FindingDecisionError | null;
   onJump: DiffViewerProps['onJump'];
+  onLoadDiff?: ((path: string) => Promise<FileDiff>) | undefined;
   onViewFullFile: (file: FileDiff) => void;
   onSelectLine: DiffViewerProps['onSelectLine'];
   onLineDragStart: (file: FileDiff, side: Side, line: number, event: ReactMouseEvent) => void;
@@ -243,15 +248,56 @@ function DiffFileSection({
   onCommentFocus: DiffViewerProps['onCommentFocus'];
   readOnly: boolean;
 }): JSX.Element {
-  const rows = buildDiffRows(file);
   const [visible, setVisible] = useState(isVisibleFallback());
   const [showAll, setShowAll] = useState(false);
   const [open, setOpen] = useState(true);
+  const [loaded, setLoaded] = useState<FileDiff | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const requested = useRef(false);
+  const generation = useRef(0);
   const ref = useRef<HTMLElement>(null);
+  const shownFile = loaded ?? file;
+  const rows = buildDiffRows(shownFile);
+  const first = firstChangedLine(shownFile);
+  const needsLoad = loaded === null && file.truncated === true && onLoadDiff !== undefined;
+
+  const load = useCallback(async (): Promise<FileDiff | null> => {
+    if (requested.current || onLoadDiff === undefined) return null;
+    requested.current = true;
+    const requestGeneration = generation.current;
+    setLoading(true);
+    try {
+      const next = await onLoadDiff(file.path);
+      if (generation.current !== requestGeneration) return null;
+      setLoaded(next);
+      setLoadError(null);
+      return next;
+    } catch (error) {
+      if (generation.current !== requestGeneration) return null;
+      setLoadError(error instanceof Error ? error.message : String(error));
+      return null;
+    } finally {
+      if (generation.current === requestGeneration) setLoading(false);
+    }
+  }, [file.path, onLoadDiff]);
 
   useEffect(() => {
     if (active) setVisible(true);
   }, [active]);
+
+  useEffect(() => {
+    generation.current += 1;
+    requested.current = false;
+    setLoaded(null);
+    setLoadError(null);
+    setLoading(false);
+  }, [file.path, round]);
+
+  useEffect(() => {
+    if (!visible || !needsLoad || requested.current) return;
+    void load();
+  }, [load, needsLoad, visible]);
 
   useEffect(() => {
     if (visible || isVisibleFallback() || typeof IntersectionObserver === 'undefined') {
@@ -274,7 +320,6 @@ function DiffFileSection({
   }, [visible]);
 
   const shown = showAll ? rows : rows.slice(0, MAX_DIFF_ROWS);
-  const first = firstChangedLine(file);
 
   return (
     <section
@@ -307,10 +352,10 @@ function DiffFileSection({
         <Badge tone={statusTone(file.status)}>
           {statusLetter(file.status)} {file.status}
         </Badge>
-        <span className="cr-diff-stat cr-diff-stat-add">+{file.added}</span>
-        <span className="cr-diff-stat cr-diff-stat-del">−{file.deleted}</span>
-        {file.binary ? <Badge tone="neutral">binary</Badge> : null}
-        {file.truncated === true ? <Badge tone="warning">truncated</Badge> : null}
+        <span className="cr-diff-stat cr-diff-stat-add">+{shownFile.added}</span>
+        <span className="cr-diff-stat cr-diff-stat-del">−{shownFile.deleted}</span>
+        {shownFile.binary ? <Badge tone="neutral">binary</Badge> : null}
+        {shownFile.truncated === true ? <Badge tone="warning">truncated</Badge> : null}
         {file.ignored === true ? <Badge tone="neutral">ignored</Badge> : null}
         <Button
           variant="secondary"
@@ -318,7 +363,15 @@ function DiffFileSection({
           className="cr-diff-full-file"
           aria-label={`View full file for ${file.path}`}
           title="View full file"
-          onClick={() => onViewFullFile(file)}
+          onClick={() => {
+            if (shownFile.truncated === true && onLoadDiff !== undefined) {
+              void load().then((next) => {
+                if (next !== null) onViewFullFile(next);
+              });
+              return;
+            }
+            onViewFullFile(shownFile);
+          }}
         >
           <FileIcon size={14} />
           Full file
@@ -327,17 +380,34 @@ function DiffFileSection({
 
       {open ? (
         visible ? (
-          rows.length === 0 ? (
+          loading ? (
+            <div className="cr-diff-empty">Loading this file's diff…</div>
+          ) : loadError !== null ? (
             <div className="cr-diff-empty">
-              {file.ignored === true
+              <span>Could not load this file's diff: {loadError}</span>{' '}
+              <Button
+                variant="secondary"
+                size="small"
+                onClick={() => {
+                  requested.current = false;
+                  setLoadError(null);
+                  void load();
+                }}
+              >
+                Retry
+              </Button>
+            </div>
+          ) : rows.length === 0 ? (
+            <div className="cr-diff-empty">
+              {shownFile.ignored === true
                 ? 'This path is ignored by the review settings.'
-                : file.binary
+                : shownFile.binary
                   ? 'Binary changes are not rendered.'
-                  : file.reason === 'diff-truncated'
+                  : shownFile.reason === 'diff-truncated'
                     ? 'The diff cap cut this file before its contents. The summary is still available.'
-                    : file.reason === 'unreadable'
+                    : shownFile.reason === 'unreadable'
                       ? 'This file could not be read for the snapshot.'
-                      : `No textual diff is available (${file.added} added, ${file.deleted} deleted).`}
+                      : `No textual diff is available (${shownFile.added} added, ${shownFile.deleted} deleted).`}
             </div>
           ) : (
             <>
@@ -377,7 +447,7 @@ function DiffFileSection({
                   ) : (
                     <DiffLineRow
                       key={row.key}
-                      file={file}
+                      file={shownFile}
                       row={row}
                       comments={comments}
                       round={round}
@@ -676,6 +746,7 @@ export function DiffViewer({
   onCancelComposer,
   onDeltaChange,
   onJump,
+  onLoadDiff,
   onSelectLine,
   onSelectRange,
   onOpenComposer,
@@ -698,6 +769,7 @@ export function DiffViewer({
   const suppressClickRef = useRef(false);
   const openComposerRef = useRef(onOpenComposer);
   openComposerRef.current = onOpenComposer;
+  const allFiles = useMemo(() => filesForSnapshot(snapshot), [snapshot]);
 
   useEffect(() => {
     if (activeFile !== undefined) setCurrentFile(activeFile);
@@ -705,11 +777,29 @@ export function DiffViewer({
 
   useEffect(() => {
     if (fullFileJump === null || fullFileJump === undefined) return;
-    const file = snapshot.files.find((item) => item.path === fullFileJump.path);
+    let alive = true;
+    const file = allFiles.find((item) => item.path === fullFileJump.path);
     if (file === undefined) return;
+    if (file.truncated === true && onLoadDiff !== undefined) {
+      void onLoadDiff(file.path)
+        .then((next) => {
+          if (!alive) return;
+          setFullFile({ file: next, side: fullFileJump.side, line: fullFileJump.line });
+          onFullFileJumpHandled?.();
+        })
+        .catch(() => {
+          if (alive) onFullFileJumpHandled?.();
+        });
+      return () => {
+        alive = false;
+      };
+    }
     setFullFile({ file, side: fullFileJump.side, line: fullFileJump.line });
     onFullFileJumpHandled?.();
-  }, [fullFileJump, onFullFileJumpHandled, snapshot]);
+    return () => {
+      alive = false;
+    };
+  }, [allFiles, fullFileJump, onFullFileJumpHandled, onLoadDiff]);
 
   useEffect(() => {
     function finishDrag(): void {
@@ -775,9 +865,7 @@ export function DiffViewer({
     suppressClickRef.current = false;
     return true;
   }
-  const visibleFiles = delta
-    ? snapshot.files.filter((file) => changedPaths.has(file.path))
-    : snapshot.files;
+  const visibleFiles = delta ? allFiles.filter((file) => changedPaths.has(file.path)) : allFiles;
   const query = search.trim().toLowerCase();
   const filteredFiles =
     query === ''
@@ -849,7 +937,7 @@ export function DiffViewer({
     );
   }
 
-  if (snapshot.files.length === 0) {
+  if (allFiles.length === 0) {
     return (
       <EmptyState
         title="No changed files"
@@ -1057,6 +1145,7 @@ export function DiffViewer({
                 decidingFindingId={decidingFindingId}
                 findingDecisionError={findingDecisionError}
                 onJump={onJump}
+                onLoadDiff={onLoadDiff}
                 onViewFullFile={(file) => setFullFile({ file })}
                 onSelectLine={onSelectLine}
                 onLineDragStart={beginLineDrag}

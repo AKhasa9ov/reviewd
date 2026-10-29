@@ -28,3 +28,18 @@
 ## Gate
 
 The 882-file fixture is split into bounded shards, every path is covered exactly once, and final coverage is `done` with 882 `deep-reviewed` files. A failed shard makes the round `partial` with an explicit `shard-failed` reason.
+
+## Presentation follow-up
+
+The bounded round snapshot remains capped at 500 files / 2 MiB, but the UI now uses the complete
+`manifest.files` list for the tree and file count instead of dropping the remaining 382 paths.
+Files whose diff was omitted render a lightweight placeholder and hydrate on visibility.
+
+- Lazy diff API: `GET /api/reviews/:id/snapshot/:round/diff?path=...` returns one validated
+  `FileDiff` with hunks and content lines, so a file truncated inside the round snapshot is still
+  readable in place.
+- The "Full file" action uses the hydrated diff's content lines; the existing lazy content
+  endpoint remains available for raw line retrieval when no diff can be built.
+- Evidence: `packages/ui/test/diff-viewer.test.tsx`, `packages/ui/test/review-model.test.ts`,
+  `packages/server/test/daemon/large-review.test.ts`, and a Playwright check of
+  `omegaCatalogSearchPath.test.ts` on a live 882-file review (shows `+113`, no truncation banner).

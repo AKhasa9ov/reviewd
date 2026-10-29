@@ -184,6 +184,18 @@ describe('ApiClient', () => {
     expect(nextInit.signal).toBe(controller.signal);
   });
 
+  it('loads one omitted file diff lazily', async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({ file: { path: 'src/a b.ts', hunks: [] }, round: 2, path: 'src/a b.ts' }),
+    );
+    const client = clientWith(fetchImpl as unknown as typeof fetch);
+    const result = await client.getFileDiff('rev/1', 2, 'src/a b.ts');
+    expect(result.file.path).toBe('src/a b.ts');
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('/api/reviews/rev%2F1/snapshot/2/diff?path=src%2Fa+b.ts');
+    expect(init.method).toBe('GET');
+  });
+
   it('posts finding decisions with an optional note', async () => {
     const fetchImpl = vi.fn(async () =>
       jsonResponse({ decision: { findingId: 'f1', state: 'accepted' } }),
