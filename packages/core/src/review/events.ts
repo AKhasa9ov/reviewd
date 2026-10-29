@@ -122,6 +122,8 @@ export interface AgentFindingData {
 
 export interface AgentReportData {
   report: AgentReport;
+  /** Explicit coverage for an aggregated multi-shard report. */
+  coverage?: ReviewCoverage;
 }
 
 export interface AgentShardData {
@@ -130,8 +132,10 @@ export interface AgentShardData {
   shardCount: number;
   round: number;
   report: AgentReport;
+  /** Paths covered by this shard, used for incremental coverage progress. */
+  paths?: string[];
+  tier?: 'deep' | 'light';
 }
-
 
 export interface AgentFailedData {
   code: string;

@@ -104,6 +104,18 @@ describe('buildSnapshot', () => {
     expect(file?.hunks).toHaveLength(1);
   });
 
+  it('limits the snapshot to requested paths for shard bundles', async () => {
+    const repo = await featureRepo();
+    await repo.write('src/keep.ts', 'keep changed\n');
+    await repo.commit('change keep');
+
+    const result = await snapshot(repo.root, { paths: ['src/keep.ts'] });
+
+    expect(result.manifest?.files.map((file) => file.path)).toEqual(['src/keep.ts']);
+    expect(result.files.map((file) => file.path)).toEqual(['src/keep.ts']);
+    expect(result.files[0]?.newLines).toEqual(['keep changed']);
+  });
+
   it('includes an added file and a deleted file', async () => {
     const repo = await featureRepo();
     await repo.write('src/added.ts', 'new\n');

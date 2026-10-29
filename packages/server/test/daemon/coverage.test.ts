@@ -86,7 +86,7 @@ interface ReviewViewBody {
       status: string;
       round?: number;
       coverage?: {
-        files: Array<{ path: string; status: string; reason?: string }>;
+        files: Array<{ path: string; status: string; reason?: string; shardId?: string }>;
         totals: {
           files: number;
           byStatus: Record<string, number>;
@@ -178,7 +178,7 @@ async function sseText(response: Response, token: string): Promise<string> {
 }
 
 describe('daemon review coverage', () => {
-  it('persists enqueue coverage and turns a truncated review partial after the report', async () => {
+  it('persists enqueue coverage and completes it after every shard reports', async () => {
     const { daemonUrl } = await running();
     const repo = await truncatedRepo();
     const reviewId = await createReview(daemonUrl, repo.root);
@@ -186,13 +186,18 @@ describe('daemon review coverage', () => {
     const queued = await reviewView(daemonUrl, reviewId);
     expect(queued.review.agent?.status).toBe('queued');
     expect(queued.review.agent?.round).toBe(1);
-    expect(queued.review.agent?.coverage?.files).toEqual([
-      { path: 'src/big.ts', status: 'pending' },
-      { path: 'src/small.ts', status: 'skipped', reason: 'render-budget' },
+    expect(queued.review.agent?.coverage?.files.map((file) => file.path)).toEqual([
+      'src/big.ts',
+      'src/small.ts',
     ]);
+    expect(queued.review.agent?.coverage?.files.every((file) => file.status === 'pending')).toBe(
+      true,
+    );
+    const shardIds = queued.review.agent?.coverage?.files.map((file) => file.shardId);
+    expect(new Set(shardIds).size).toBe(2);
     expect(queued.review.agent?.coverage?.totals).toMatchObject({
       files: 2,
-      byStatus: { pending: 1, skipped: 1, 'light-reviewed': 0 },
+      byStatus: { pending: 2, skipped: 0, 'light-reviewed': 0 },
     });
 
     const persisted = await fetch(`${daemonUrl}/api/events?after=0&wait=0`, {
@@ -216,23 +221,29 @@ describe('daemon review coverage', () => {
     expect(sse.status).toBe(200);
     expect(await sseText(sse, 'event: agent/coverage')).toContain('event: agent/coverage');
 
-    const lease = await leaseWorker(daemonUrl);
-    expect(lease.job.round).toBe(1);
-    expect(lease.bundle.prompt).toContain('src/big.ts');
-    expect(lease.bundle.prompt).not.toContain('src/small.ts');
+    const first = await leaseWorker(daemonUrl);
+    expect(first.job.round).toBe(1);
+    expect(first.bundle.prompt).toContain('src/big.ts');
+    expect(first.bundle.prompt).not.toContain('src/small.ts');
+    await report(daemonUrl, first);
 
-    await report(daemonUrl, lease);
+    const midway = await reviewView(daemonUrl, reviewId);
+    expect(midway.review.agent?.status).toBe('running');
+    expect(midway.review.agent?.coverage?.totals.byStatus.pending).toBe(1);
+
+    const second = await leaseWorker(daemonUrl);
+    expect(second.bundle.prompt).toContain('src/small.ts');
+    expect(second.bundle.prompt).not.toContain('src/big.ts');
+    await report(daemonUrl, second);
 
     const reported = await reviewView(daemonUrl, reviewId);
-    expect(reported.review.agent?.status).toBe('partial');
+    expect(reported.review.agent?.status).toBe('done');
     expect(reported.review.agent?.coverage?.totals.byStatus).toMatchObject({
       pending: 0,
-      'light-reviewed': 1,
-      skipped: 1,
+      skipped: 0,
+      'deep-reviewed': 2,
+      'light-reviewed': 0,
     });
-    expect(
-      reported.review.agent?.coverage?.files.find((file) => file.path === 'src/small.ts'),
-    ).toMatchObject({ status: 'skipped', reason: 'render-budget' });
   });
 
   it('keeps a small fully included review done after the report', async () => {
@@ -241,7 +252,10 @@ describe('daemon review coverage', () => {
     const reviewId = await createReview(daemonUrl, repo.root);
 
     const queued = await reviewView(daemonUrl, reviewId);
-    expect(queued.review.agent?.coverage?.files).toEqual([{ path: 'src/a.ts', status: 'pending' }]);
+    expect(queued.review.agent?.coverage?.files).toMatchObject([
+      { path: 'src/a.ts', status: 'pending' },
+    ]);
+    expect(queued.review.agent?.coverage?.files[0]?.shardId).toMatch(/^shard_\d{3}$/);
     expect(queued.review.agent?.coverage?.totals.byStatus.skipped).toBe(0);
 
     const lease = await leaseWorker(daemonUrl);
@@ -252,7 +266,8 @@ describe('daemon review coverage', () => {
     expect(reported.review.agent?.status).toBe('done');
     expect(reported.review.agent?.coverage?.totals.byStatus).toMatchObject({
       pending: 0,
-      'light-reviewed': 1,
+      'deep-reviewed': 1,
+      'light-reviewed': 0,
       skipped: 0,
     });
   });

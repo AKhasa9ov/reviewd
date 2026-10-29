@@ -150,6 +150,8 @@ export interface SnapshotOptions {
   maxContentBytes?: number;
   maxTotalContentBytes?: number;
   maxFiles?: number;
+  /** Limit the snapshot to these changed paths; used to build one shard bundle. */
+  paths?: readonly string[];
   ignore?: readonly string[];
   signal?: AbortSignal;
 }

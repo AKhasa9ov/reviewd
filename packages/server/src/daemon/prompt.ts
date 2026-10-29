@@ -109,6 +109,14 @@ export interface ReviewPromptContext {
   }>;
 }
 
+export interface ReviewPromptShard {
+  id: string;
+  index: number;
+  count: number;
+  tier: 'deep' | 'light';
+  moduleId: string;
+}
+
 export interface ReviewPromptInput {
   title: string;
   reviewId: string;
@@ -117,6 +125,8 @@ export interface ReviewPromptInput {
   files: readonly FileDiff[];
   diffLimit?: number;
   context?: ReviewPromptContext;
+  /** Present when this prompt covers one bounded shard of a larger review. */
+  shard?: ReviewPromptShard;
 }
 
 export interface ReviewPrompt {
@@ -138,6 +148,12 @@ export function buildReviewPrompt(input: ReviewPromptInput): ReviewPrompt {
     `Review: ${input.reviewId}`,
     `Round: ${input.round}`,
     `Kind: ${input.kind}`,
+    ...(input.shard === undefined
+      ? []
+      : [
+          `Shard: ${input.shard.index + 1}/${input.shard.count} (${input.shard.tier}, module ${input.shard.moduleId})`,
+          'Review only the files in this shard. Do not report findings outside these paths.',
+        ]),
     '',
     'Read-only review: inspect the repository as needed, but do not modify files,',
     'spawn agents, or start or refresh reviews.',

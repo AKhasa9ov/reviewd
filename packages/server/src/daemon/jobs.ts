@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import type { ReviewManifest } from '@dsh-code-review/core';
+import type { ReviewManifest, ReviewPlan } from '@dsh-code-review/core';
 import { ApiError } from './errors.js';
 import { PROMPT_VERSION, PROTOCOL_VERSION } from './types.js';
 import type { LeaseView } from './types.js';
@@ -36,6 +36,13 @@ export interface JobRecord {
   protocolVersion: number;
   promptVersion: number;
   manifest?: ReviewManifest;
+  /** Full round plan for a sharded job; absent for legacy single-job rounds. */
+  plan?: ReviewPlan;
+  shardId?: string;
+  shardIndex?: number;
+  shardCount?: number;
+  effort?: 'deep' | 'light';
+  moduleId?: string;
   createdAt: string;
 }
 
@@ -68,6 +75,7 @@ export class JobQueue {
   private readonly attempts = new Map<string, AttemptState>();
   /** Finding ids accepted for a job across retries, bounded by MAX_FINDINGS. */
   private readonly findingsSeen = new Map<string, Set<string>>();
+  private readonly aggregated = new Set<string>();
   private readonly listeners = new Set<() => void>();
   private sweepTimer?: NodeJS.Timeout;
 
@@ -122,6 +130,12 @@ export class JobQueue {
     protocolVersion?: number;
     promptVersion?: number;
     manifest?: ReviewManifest;
+    plan?: ReviewPlan;
+    shardId?: string;
+    shardIndex?: number;
+    shardCount?: number;
+    effort?: 'deep' | 'light';
+    moduleId?: string;
   }): JobRecord {
     const job: JobRecord = {
       id: randomId('job'),
@@ -137,6 +151,12 @@ export class JobQueue {
       protocolVersion: input.protocolVersion ?? PROTOCOL_VERSION,
       promptVersion: input.promptVersion ?? PROMPT_VERSION,
       ...(input.manifest === undefined ? {} : { manifest: input.manifest }),
+      ...(input.plan === undefined ? {} : { plan: input.plan }),
+      ...(input.shardId === undefined ? {} : { shardId: input.shardId }),
+      ...(input.shardIndex === undefined ? {} : { shardIndex: input.shardIndex }),
+      ...(input.shardCount === undefined ? {} : { shardCount: input.shardCount }),
+      ...(input.effort === undefined ? {} : { effort: input.effort }),
+      ...(input.moduleId === undefined ? {} : { moduleId: input.moduleId }),
       createdAt: this.now().toISOString(),
     };
     this.jobs.set(job.id, job);
@@ -266,6 +286,15 @@ export class JobQueue {
       .map((job) => ({ ...job }));
   }
 
+  /** Prevents two concurrent report handlers from appending a final aggregate twice. */
+  isAggregated(reviewId: string, round: number): boolean {
+    return this.aggregated.has(`${reviewId}:${round}`);
+  }
+
+  markAggregated(reviewId: string, round: number): void {
+    this.aggregated.add(`${reviewId}:${round}`);
+  }
+
   sweep(): void {
     const now = this.now().getTime();
     for (const job of this.jobs.values()) {
@@ -324,6 +353,12 @@ export class JobQueue {
       leaseUntil: job.leaseUntil,
       protocolVersion: job.protocolVersion,
       promptVersion: job.promptVersion,
+      ...(job.shardId === undefined ? {} : { shardId: job.shardId }),
+      ...(job.shardIndex === undefined ? {} : { shardIndex: job.shardIndex }),
+      ...(job.shardCount === undefined ? {} : { shardCount: job.shardCount }),
+      ...(job.effort === undefined ? {} : { effort: job.effort }),
+      ...(job.moduleId === undefined ? {} : { moduleId: job.moduleId }),
+      ...(job.plan === undefined ? {} : { plan: job.plan }),
       bundle: {
         protocolVersion: job.protocolVersion,
         promptVersion: job.promptVersion,
@@ -331,7 +366,17 @@ export class JobQueue {
         diff: job.diff,
         ...(job.manifest === undefined ? {} : { manifest: job.manifest }),
         schema: { schemaVersion: 1 },
-        meta: { ...job.meta, reviewId: job.reviewId, round: job.round, kind: job.kind },
+        meta: {
+          ...job.meta,
+          reviewId: job.reviewId,
+          round: job.round,
+          kind: job.kind,
+          ...(job.shardId === undefined ? {} : { shardId: job.shardId }),
+          ...(job.shardIndex === undefined ? {} : { shardIndex: job.shardIndex }),
+          ...(job.shardCount === undefined ? {} : { shardCount: job.shardCount }),
+          ...(job.effort === undefined ? {} : { effort: job.effort }),
+          ...(job.moduleId === undefined ? {} : { moduleId: job.moduleId }),
+        },
       },
     };
   }

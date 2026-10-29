@@ -908,7 +908,7 @@ describe('daemon limits, leases and gc', () => {
       (entry: { event: { type: string } }) => entry.event.type === 'agent/finding',
     );
     expect(findingEvents).toHaveLength(1);
-    expect(findingEvents[0].event.data.finding.id).toBe('f-valid');
+    expect(findingEvents[0].event.data.finding.id).toMatch(/:f-valid$/);
   });
 
   it('rejects oversized bodies', async () => {
@@ -1393,6 +1393,9 @@ describe('review and comment CRUD routes', () => {
     });
     expect(reported.status).toBe(200);
 
+    await checkout.write('src/a.ts', 'one\ntwo\nthree\n');
+    await checkout.commit('more');
+
     const titleOnly = await fetch(`${daemonUrl}/api/reviews/${reviewId}`, {
       method: 'PATCH',
       headers: headers(),
@@ -1408,7 +1411,7 @@ describe('review and comment CRUD routes', () => {
     const scopeChange = await fetch(`${daemonUrl}/api/reviews/${reviewId}`, {
       method: 'PATCH',
       headers: headers(),
-      body: JSON.stringify({ scope: { kind: 'range', baseRef: 'main', headRef: 'HEAD~1' } }),
+      body: JSON.stringify({ scope: { kind: 'range', baseRef: 'main', headRef: 'HEAD' } }),
     });
     expect(scopeChange.status).toBe(200);
     const updated = await read(scopeChange);

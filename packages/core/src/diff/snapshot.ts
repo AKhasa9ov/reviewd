@@ -75,14 +75,21 @@ interface DiffText {
 
 type DiffFormat = 'patch' | 'raw' | 'numstat';
 
-function diffArgs(scope: Snapshot['scope'], format: DiffFormat = 'patch'): string[] {
+function diffArgs(
+  scope: Snapshot['scope'],
+  format: DiffFormat = 'patch',
+  paths?: readonly string[],
+): string[] {
   const common = ['diff', '--no-color', '--no-ext-diff', '--no-textconv'];
   if (format === 'raw') common.push('--raw', '-z');
   else if (format === 'numstat') common.push('--numstat', '-z');
   else common.push('--unified=3');
   common.push('--find-renames=50%', '--src-prefix=a/', '--dst-prefix=b/');
-  if (scope.kind === 'worktree') return [...common, scope.baseSha, '--'];
-  return [...common, `${scope.baseSha}..${scope.headSha}`, '--'];
+  if (scope.kind === 'worktree') common.push(scope.baseSha);
+  else common.push(`${scope.baseSha}..${scope.headSha}`);
+  common.push('--');
+  if (paths !== undefined) common.push(...paths);
+  return common;
 }
 
 function truncateAtFileBoundary(text: string, maxBytes: number): DiffText {
@@ -203,8 +210,12 @@ interface RawListing {
   truncated: boolean;
 }
 
-async function listRawChanges(scope: Snapshot['scope'], signal?: AbortSignal): Promise<RawListing> {
-  const result = await runGit(scope.repoRoot, diffArgs(scope, 'raw'), {
+async function listRawChanges(
+  scope: Snapshot['scope'],
+  signal?: AbortSignal,
+  paths?: readonly string[],
+): Promise<RawListing> {
+  const result = await runGit(scope.repoRoot, diffArgs(scope, 'raw', paths), {
     signal,
     maxBytes: MAX_MANIFEST_LISTING_BYTES,
     truncateOnOverflow: true,
@@ -258,8 +269,9 @@ function parseNumstat(raw: string): Map<string, NumstatEntry> {
 async function listNumstatChanges(
   scope: Snapshot['scope'],
   signal?: AbortSignal,
+  paths?: readonly string[],
 ): Promise<NumstatListing> {
-  const result = await runGit(scope.repoRoot, diffArgs(scope, 'numstat'), {
+  const result = await runGit(scope.repoRoot, diffArgs(scope, 'numstat', paths), {
     signal,
     maxBytes: MAX_MANIFEST_LISTING_BYTES,
     truncateOnOverflow: true,
@@ -527,13 +539,14 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
 
   // The complete changed-path listing is independent of the render budget.
   // It is metadata only, so it stays cheap even when patch bytes are capped.
-  const rawListing = await listRawChanges(scope, options.signal);
-  const numstatListing = await listNumstatChanges(scope, options.signal);
+  const paths = options.paths;
+  const rawListing = await listRawChanges(scope, options.signal, paths);
+  const numstatListing = await listNumstatChanges(scope, options.signal, paths);
   const listingTruncated = rawListing.truncated || numstatListing.truncated;
   if (listingTruncated) warnings.push('manifest-listing-truncated');
   const seeds = rawSeeds(rawListing.entries, numstatListing.entries, ignore);
 
-  const diff = await runGit(scope.repoRoot, diffArgs(scope), {
+  const diff = await runGit(scope.repoRoot, diffArgs(scope, 'patch', paths), {
     signal: options.signal,
     maxBytes: Math.max(maxDiffBytes * 8, 16 * 1024 * 1024),
     truncateOnOverflow: true,

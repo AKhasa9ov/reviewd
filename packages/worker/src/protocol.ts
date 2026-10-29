@@ -38,6 +38,12 @@ export interface JobLease {
   leaseUntil: string;
   protocolVersion?: number;
   promptVersion?: number;
+  /** Present when this lease is one bounded shard of a larger review. */
+  shardId?: string;
+  shardIndex?: number;
+  shardCount?: number;
+  effort?: 'deep' | 'light';
+  moduleId?: string;
   bundle: JobBundle;
 }
 

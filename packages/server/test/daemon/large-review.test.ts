@@ -18,7 +18,7 @@ afterEach(async () => {
     cleanups
       .splice(0)
       .reverse()
-      .map(async (cleanup) => cleanup()),
+      .map(async (cleanup) => await cleanup()),
   );
 });
 
@@ -49,6 +49,7 @@ interface CoverageFile {
   path: string;
   status: string;
   reason?: string;
+  shardId?: string;
 }
 
 interface Coverage {
@@ -57,6 +58,7 @@ interface Coverage {
     files: number;
     byStatus: Record<string, number>;
   };
+  incomplete?: boolean;
 }
 
 interface ReviewBody {
@@ -66,6 +68,7 @@ interface ReviewBody {
       status: string;
       round?: number;
       coverage?: Coverage;
+      shards?: Array<{ shardId: string; shardIndex: number; shardCount: number }>;
     };
   };
 }
@@ -79,6 +82,11 @@ interface LeaseBody {
     attemptId: string;
     protocolVersion: number;
     promptVersion: number;
+    shardId: string;
+    shardIndex: number;
+    shardCount: number;
+    effort: 'deep' | 'light';
+    moduleId: string;
   };
   bundle: {
     protocolVersion: number;
@@ -89,6 +97,7 @@ interface LeaseBody {
       files: Array<{ path: string; reason?: string }>;
       totals: { files: number };
     };
+    meta: { paths: string[]; shardId: string };
   };
 }
 
@@ -114,7 +123,7 @@ async function reviewView(daemonUrl: string, id: string): Promise<ReviewBody> {
   return (await response.json()) as ReviewBody;
 }
 
-async function leaseWorker(daemonUrl: string): Promise<LeaseBody> {
+async function registerWorker(daemonUrl: string): Promise<string> {
   const registered = await fetch(`${daemonUrl}/api/workers/register`, {
     method: 'POST',
     headers: headers(),
@@ -122,9 +131,14 @@ async function leaseWorker(daemonUrl: string): Promise<LeaseBody> {
   });
   expect(registered.status).toBe(201);
   const worker = (await registered.json()) as { id: string };
-  const leased = await fetch(`${daemonUrl}/api/jobs/next?workerId=${worker.id}&wait=2`, {
+  return worker.id;
+}
+
+async function leaseNext(daemonUrl: string, workerId: string): Promise<LeaseBody | null> {
+  const leased = await fetch(`${daemonUrl}/api/jobs/next?workerId=${workerId}&wait=1`, {
     headers: headers(),
   });
+  if (leased.status === 204) return null;
   expect(leased.status).toBe(200);
   return (await leased.json()) as LeaseBody;
 }
@@ -150,11 +164,7 @@ async function acceptEmptyReport(daemonUrl: string, lease: LeaseBody): Promise<v
   expect(await response.json()).toMatchObject({ accepted: true });
 }
 
-/**
- * Paths whose complete header was rendered into the prompt. This mirrors the
- * header the daemon emits (`diff --git`, `---`, `+++` for text; the `Binary
- * files` line for binaries), so a header cut by the budget is not counted.
- */
+/** Paths whose complete header was rendered into the prompt. */
 function promptPaths(prompt: string): string[] {
   const lines = prompt.split('\n');
   const paths: string[] = [];
@@ -175,8 +185,8 @@ function promptPaths(prompt: string): string[] {
   return paths;
 }
 
-describe('large review coverage', () => {
-  it('exposes all 882 manifest paths and stays partial after an accepted report', async () => {
+describe('large review sharding', () => {
+  it('reviews every one of the 882 paths through bounded shard jobs', async () => {
     const { daemonUrl } = await running();
     const repo = await makeRepo();
     cleanups.push(repo.cleanup);
@@ -191,81 +201,89 @@ describe('large review coverage', () => {
     expect(queued.review.agent?.round).toBe(1);
     expect(queuedCoverage?.files).toHaveLength(LARGE_REVIEW_FILE_COUNT);
     expect(queuedCoverage?.totals.files).toBe(LARGE_REVIEW_FILE_COUNT);
-    const coveragePaths = queuedCoverage?.files.map((file) => file.path) ?? [];
-    expect(new Set(coveragePaths)).toEqual(new Set(expectedPaths));
-
-    const lease = await leaseWorker(daemonUrl);
-    expect(lease.job.reviewId).toBe(reviewId);
-    expect(lease.job.round).toBe(1);
-    expect(lease.job.kind).toBe('initial');
-    expect(lease.job.attemptId.length).toBeGreaterThan(0);
-    expect(lease.job.protocolVersion).toBe(1);
-    expect(lease.job.promptVersion).toBe(1);
-    expect(lease.bundle.protocolVersion).toBe(1);
-    expect(lease.bundle.promptVersion).toBe(1);
-    expect(lease.bundle.manifest.schemaVersion).toBe(1);
-    expect(lease.bundle.manifest.files).toHaveLength(LARGE_REVIEW_FILE_COUNT);
-    expect(lease.bundle.manifest.totals.files).toBe(LARGE_REVIEW_FILE_COUNT);
-    const manifestPaths = lease.bundle.manifest.files.map((file) => file.path);
-    expect(new Set(manifestPaths)).toEqual(new Set(expectedPaths));
-
-    // The prompt is bounded: only a small prefix of the 882 files was rendered.
-    const includedPaths = new Set(promptPaths(lease.bundle.prompt));
-    expect(includedPaths.size).toBeGreaterThan(0);
-    expect(includedPaths.size).toBeLessThan(100);
-    const omittedPaths = expectedPaths.filter((path) => !includedPaths.has(path));
-    expect(omittedPaths.length).toBeGreaterThan(700);
-
-    // Every rendered file is pending; every omitted path is explicitly skipped
-    // with the manifest/prompt reason, never silently pending or done.
-    const pendingPaths = new Set(
-      (queuedCoverage?.files ?? [])
-        .filter((file) => file.status === 'pending')
-        .map((file) => file.path),
-    );
-    expect(pendingPaths).toEqual(includedPaths);
-    const omitted = (queuedCoverage?.files ?? []).filter((file) => !includedPaths.has(file.path));
-    expect(new Set(omitted.map((file) => file.path))).toEqual(new Set(omittedPaths));
-    for (const file of omitted) {
-      expect(file.status).toBe('skipped');
-      expect(['render-budget', 'diff-truncated', 'per-file-cap']).toContain(file.reason);
-    }
-    expect(omitted.some((file) => file.reason === 'render-budget')).toBe(true);
+    expect(new Set(queuedCoverage?.files.map((file) => file.path))).toEqual(new Set(expectedPaths));
     expect(queuedCoverage?.totals.byStatus).toMatchObject({
-      pending: includedPaths.size,
-      skipped: omittedPaths.length,
+      pending: LARGE_REVIEW_FILE_COUNT,
       'deep-reviewed': 0,
       'light-reviewed': 0,
+      skipped: 0,
       'manifest-only': 0,
-      deferred: 0,
       failed: 0,
     });
 
-    await acceptEmptyReport(daemonUrl, lease);
+    const workerId = await registerWorker(daemonUrl);
+    let leases = 0;
+    let shardCount: number | undefined;
+    const leasedShardIds = new Set<string>();
+    const coveredPaths = new Set<string>();
+
+    for (;;) {
+      const lease = await leaseNext(daemonUrl, workerId);
+      if (lease === null) break;
+      leases += 1;
+      expect(leases).toBeLessThan(200);
+      expect(lease.job.reviewId).toBe(reviewId);
+      expect(lease.job.round).toBe(1);
+      expect(lease.job.kind).toBe('initial');
+      expect(lease.job.shardId).toMatch(/^shard_\d{3}$/);
+      expect(lease.job.shardIndex).toBeGreaterThanOrEqual(0);
+      shardCount ??= lease.job.shardCount;
+      expect(lease.job.shardCount).toBe(shardCount);
+      expect(lease.job.shardIndex).toBeLessThan(lease.job.shardCount);
+      expect(lease.job.effort).toBe('deep');
+      expect(lease.job.moduleId).toBe('src');
+      expect(leasedShardIds.has(lease.job.shardId)).toBe(false);
+      leasedShardIds.add(lease.job.shardId);
+
+      expect(lease.bundle.protocolVersion).toBe(1);
+      expect(lease.bundle.promptVersion).toBe(1);
+      expect(lease.bundle.manifest.schemaVersion).toBe(1);
+      expect(lease.bundle.manifest.files.length).toBe(lease.bundle.meta.paths.length);
+      expect(lease.bundle.manifest.totals.files).toBe(lease.bundle.meta.paths.length);
+      expect(lease.bundle.meta.shardId).toBe(lease.job.shardId);
+      expect(lease.bundle.meta.paths.length).toBeGreaterThan(0);
+      expect(lease.bundle.meta.paths.length).toBeLessThanOrEqual(12);
+      expect(lease.bundle.prompt).toContain(
+        `Shard: ${lease.job.shardIndex + 1}/${lease.job.shardCount} (deep, module src)`,
+      );
+
+      // The prompt is a complete shard: every file assigned to it is present,
+      // and no file from another shard leaks in.
+      const included = new Set(promptPaths(lease.bundle.prompt));
+      expect(included).toEqual(new Set(lease.bundle.meta.paths));
+      expect(lease.bundle.prompt.length).toBeLessThan(200_000);
+      for (const path of included) coveredPaths.add(path);
+
+      await acceptEmptyReport(daemonUrl, lease);
+    }
+
+    expect(leases).toBeGreaterThan(1);
+    expect(shardCount).toBe(leases);
+    expect(coveredPaths).toEqual(new Set(expectedPaths));
 
     const reported = await reviewView(daemonUrl, reviewId);
     const agent = reported.review.agent;
     const coverage = agent?.coverage;
-    expect(agent?.status).toBe('partial');
-    expect(agent?.status).not.toBe('done');
+    expect(agent?.status).toBe('done');
     expect(coverage?.files).toHaveLength(LARGE_REVIEW_FILE_COUNT);
+    expect(coverage?.incomplete).toBeUndefined();
     expect(coverage?.totals.byStatus).toMatchObject({
       pending: 0,
-      'light-reviewed': includedPaths.size,
-      skipped: omittedPaths.length,
-      'deep-reviewed': 0,
+      'deep-reviewed': LARGE_REVIEW_FILE_COUNT,
+      'light-reviewed': 0,
+      skipped: 0,
       'manifest-only': 0,
-      deferred: 0,
       failed: 0,
     });
+    expect(agent?.shards).toHaveLength(leases);
+    expect(new Set(agent?.shards?.map((shard) => shard.shardId))).toEqual(leasedShardIds);
     for (const file of coverage?.files ?? []) {
-      if (!includedPaths.has(file.path)) {
-        expect(file.status).toBe('skipped');
-        expect(file.reason).toBeDefined();
-      }
+      expect(file.status).toBe('deep-reviewed');
+      expect(file.shardId).toMatch(/^shard_\d{3}$/);
+      expect(file.reason).toBeUndefined();
     }
 
-    // The snapshot API keeps the full manifest alongside the bounded render set.
+    // Snapshot v2 keeps the complete manifest alongside its bounded render set.
     const snapshotResponse = await fetch(`${daemonUrl}/api/reviews/${reviewId}/snapshot?round=1`, {
       headers: headers(),
     });
@@ -283,5 +301,20 @@ describe('large review coverage', () => {
     expect(snapshot.snapshot.files.length).toBeLessThanOrEqual(500);
     expect(snapshot.snapshot.files.length).toBeGreaterThan(0);
     expect(snapshot.snapshot.totals.truncated).toBe(true);
-  });
+
+    // A path omitted from the bounded render set is still retrievable lazily.
+    const lazy = await fetch(
+      `${daemonUrl}/api/reviews/${reviewId}/snapshot/1/file?path=${encodeURIComponent('src/file-881.ts')}`,
+      { headers: headers() },
+    );
+    expect(lazy.status).toBe(200);
+    const lazyBody = (await lazy.json()) as {
+      file: string;
+      side: string;
+      lineCount: number;
+      lines: string[];
+    };
+    expect(lazyBody).toMatchObject({ file: 'src/file-881.ts', side: 'new', lineCount: 96 });
+    expect(lazyBody.lines).toHaveLength(96);
+  }, 120_000);
 });

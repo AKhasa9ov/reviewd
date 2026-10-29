@@ -109,7 +109,7 @@ describe('worker job bundle', () => {
     expect(bundle.prompt).not.toContain('"oldLines"');
   }, 30_000);
 
-  it('caps a very large diff and marks it truncated', async () => {
+  it('puts a very large file in its own still-bounded shard', async () => {
     const { daemon, repo } = await daemonForRepo();
     const lines = Array.from(
       { length: 4000 },
@@ -118,11 +118,18 @@ describe('worker job bundle', () => {
     await repo.write('src/big.ts', `${lines}\n`);
     await repo.commit('big file');
     await createReview(daemon, repo, 'Bundle cap');
-    const lease = await leaseForNewJob(daemon);
-    const prompt = lease.bundle.prompt as string;
 
-    expect(prompt.length).toBeLessThanOrEqual(65_000);
-    expect(prompt).toContain('[diff truncated');
+    const first = await leaseForNewJob(daemon);
+    expect(first.job.shardCount).toBe(2);
+    expect(first.bundle.prompt).toContain('diff --git a/src/a.ts b/src/a.ts');
+    expect(first.bundle.prompt).not.toContain('src/big.ts');
+
+    const second = await leaseForNewJob(daemon);
+    expect(second.job.shardId).not.toBe(first.job.shardId);
+    const prompt = second.bundle.prompt as string;
+    expect(prompt.length).toBeLessThanOrEqual(230_000);
+    expect(prompt).not.toContain('[diff truncated');
     expect(prompt).toContain('diff --git a/src/big.ts b/src/big.ts');
+    expect(prompt).toContain('line 3999');
   }, 30_000);
 });

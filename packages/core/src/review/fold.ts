@@ -1,4 +1,4 @@
-import { isCoverageComplete, promotePendingToLight } from './coverage.js';
+import { isCoverageComplete, promotePendingToLight, summarizeCoverage } from './coverage.js';
 import type { ReviewEvent } from './events.js';
 import type { AgentStatus, Comment, ReviewState } from './types.js';
 
@@ -182,9 +182,7 @@ export function fold(state: ReviewState, event: ReviewEvent): ReviewState {
     case 'agent/shard': {
       next.agent ??= { status: 'running', findings: [] };
       next.agent.shards ??= [];
-      const index = next.agent.shards.findIndex(
-        (shard) => shard.shardId === event.data.shardId,
-      );
+      const index = next.agent.shards.findIndex((shard) => shard.shardId === event.data.shardId);
       const shard = {
         shardId: event.data.shardId,
         shardIndex: event.data.shardIndex,
@@ -194,6 +192,24 @@ export function fold(state: ReviewState, event: ReviewEvent): ReviewState {
       };
       if (index < 0) next.agent.shards.push(shard);
       else next.agent.shards[index] = shard;
+      if (next.agent.coverage !== undefined && event.data.paths !== undefined) {
+        const covered = new Set(event.data.paths);
+        const tier = event.data.tier ?? 'deep';
+        const files = next.agent.coverage.files.map((file) => {
+          if (!covered.has(file.path) || file.status !== 'pending') return file;
+          const nextFile = {
+            ...file,
+            status: tier === 'deep' ? ('deep-reviewed' as const) : ('light-reviewed' as const),
+          };
+          delete nextFile.reason;
+          return nextFile;
+        });
+        next.agent.coverage = {
+          ...next.agent.coverage,
+          files,
+          totals: summarizeCoverage(files),
+        };
+      }
       break;
     }
     case 'agent/finding': {
@@ -205,9 +221,11 @@ export function fold(state: ReviewState, event: ReviewEvent): ReviewState {
     case 'agent/report': {
       const reportSkipped = event.data.report.skipped === true;
       const coverage =
-        reportSkipped || next.agent?.coverage === undefined
-          ? next.agent?.coverage
-          : promotePendingToLight(next.agent.coverage);
+        event.data.coverage !== undefined
+          ? structuredClone(event.data.coverage)
+          : reportSkipped || next.agent?.coverage === undefined
+            ? next.agent?.coverage
+            : promotePendingToLight(next.agent.coverage);
       let status: AgentStatus;
       if (reportSkipped) status = 'skipped';
       else if (coverage === undefined) status = 'done';

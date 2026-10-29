@@ -59,5 +59,11 @@ export interface LeaseView {
   leaseUntil: string;
   protocolVersion: number;
   promptVersion: number;
+  /** Present when this lease is one shard of a multi-job review plan. */
+  shardId?: string;
+  shardIndex?: number;
+  shardCount?: number;
+  effort?: 'deep' | 'light';
+  moduleId?: string;
   bundle: JobBundle;
 }

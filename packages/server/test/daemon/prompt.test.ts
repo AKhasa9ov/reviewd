@@ -115,6 +115,27 @@ describe('renderBoundedDiff', () => {
 });
 
 describe('buildReviewPrompt', () => {
+  it('scopes a shard prompt and tells the worker not to report outside it', () => {
+    const result = buildReviewPrompt({
+      title: 'Large review',
+      reviewId: 'rev_1',
+      round: 1,
+      kind: 'initial',
+      files: [file()],
+      shard: {
+        id: 'shard_001',
+        index: 0,
+        count: 3,
+        tier: 'deep',
+        moduleId: 'src',
+      },
+    });
+
+    expect(result.prompt).toContain('Shard: 1/3 (deep, module src)');
+    expect(result.prompt).toContain('Review only the files in this shard');
+    expect(result.includedFiles).toEqual(['src/a.ts']);
+  });
+
   it('describes the review, the read-only contract and the strict JSON schema', () => {
     const { prompt, includedFiles } = buildReviewPrompt({
       title: 'Add search',

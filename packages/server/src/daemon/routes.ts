@@ -8,8 +8,13 @@ import {
   CORE_VERSION,
   GitError,
   ReviewError,
+  aggregateShardReports,
+  buildReviewPlan,
+  buildSnapshot,
+  coverageFromPlan,
   coverageFromPrompt,
   createEvent,
+  readBlob,
   runGit,
   resolveRepoRoot,
   validateFindingItem,
@@ -23,6 +28,7 @@ import type {
   DiffScope,
   Initiator,
   ReviewEvent,
+  ReviewPlan,
   ReviewService,
   ReviewerConfig,
   ReviewStore,
@@ -180,6 +186,66 @@ async function append(
   await ctx.hub.sync(reviewId);
 }
 
+function namespaceShardReport(report: AgentReport, shardId: string): AgentReport {
+  return {
+    ...report,
+    findings: report.findings.map((finding) => ({
+      ...finding,
+      id: `${shardId}:${finding.id}`,
+    })),
+    questions: report.questions.map((question) => ({
+      ...question,
+      id: `${shardId}:${question.id}`,
+    })),
+  };
+}
+
+const finalizing = new Map<string, Promise<void>>();
+
+async function maybeFinalizeShards(
+  ctx: Pick<RouteContext, 'jobs' | 'service' | 'store' | 'hub' | 'now'>,
+  reviewId: string,
+  round: number,
+): Promise<void> {
+  if (ctx.jobs.isAggregated(reviewId, round)) return;
+  const jobs = ctx.jobs.listReview(reviewId).filter((job) => job.round === round);
+  if (jobs.length === 0) return;
+  if (jobs.some((job) => job.status === 'queued' || job.status === 'leased')) return;
+  const key = `${reviewId}:${round}`;
+  const existing = finalizing.get(key);
+  if (existing !== undefined) return existing;
+  const task = (async (): Promise<void> => {
+    const plan = jobs.find((job) => job.plan !== undefined)?.plan;
+    if (plan === undefined) return;
+    const view = await ctx.service.get(reviewId);
+    const reports = (view.review.agent?.shards ?? [])
+      .filter((shard) => shard.round === round)
+      .map((shard) => ({ shardId: shard.shardId, report: shard.report }));
+    const failedShards = jobs
+      .filter((job) => job.status === 'failed' || job.status === 'canceled')
+      .flatMap((job) => (job.shardId === undefined ? [] : [job.shardId]));
+    const aggregate = aggregateShardReports({
+      reviewId,
+      round,
+      backend: 'worker',
+      plan,
+      reports,
+      failedShards,
+    });
+    await append(ctx, reviewId, 'agent/report', {
+      report: aggregate.report,
+      coverage: aggregate.coverage,
+    } as never);
+    ctx.jobs.markAggregated(reviewId, round);
+  })();
+  finalizing.set(key, task);
+  try {
+    await task;
+  } finally {
+    if (finalizing.get(key) === task) finalizing.delete(key);
+  }
+}
+
 /** Coverage only applies to honest v2 snapshots; v1 snapshots stay legacy. */
 export function coverageForSnapshot(
   snapshot: Snapshot | null | undefined,
@@ -256,28 +322,121 @@ async function enqueueWorkerJob(ctx: RouteContext, reviewId: string): Promise<vo
             },
           ];
     });
+  const promptContext =
+    kind === 'verify'
+      ? {
+          ...(previousRound === undefined ? {} : { previousRound }),
+          ...(view.report === null ? {} : { previousReport: view.report }),
+          unresolved,
+        }
+      : undefined;
+  const initiator = view.review.initiator;
+  const snapshot = view.latestSnapshot;
+  const fullManifest = snapshot?.manifest;
+
+  if (snapshot?.schemaVersion === 2 && fullManifest !== undefined) {
+    const plan: ReviewPlan = buildReviewPlan({ manifest: fullManifest });
+    await append(ctx, reviewId, 'agent/coverage', {
+      coverage: coverageFromPlan(plan),
+      round: round.no,
+    });
+
+    if (plan.shards.length === 0) {
+      // Nothing needs a model call: every path is binary/generated/unchanged.
+      const aggregate = aggregateShardReports({
+        reviewId,
+        round: round.no,
+        backend: 'worker',
+        plan,
+        reports: [],
+      });
+      await append(ctx, reviewId, 'agent/report', {
+        report: aggregate.report,
+        coverage: aggregate.coverage,
+      } as never);
+      return;
+    }
+
+    const shardScope = scopeForSnapshot(snapshot);
+    // Build every shard bundle before enqueueing any job: a git failure must
+    // not leave a half-covered round with pending paths and a subset of jobs.
+    const bundles = [];
+    for (const [index, shard] of plan.shards.entries()) {
+      const shardSnapshot = await buildSnapshot({
+        repoRoot: snapshot.scope.repoRoot,
+        scope: shardScope,
+        paths: shard.paths,
+        includeContent: false,
+        includeUntracked: snapshot.scope.kind === 'worktree',
+        maxDiffBytes: Math.max(256 * 1024, shard.patchBytes * 2 + 64 * 1024),
+        maxFiles: shard.fileCount + 8,
+      });
+      const prompt = buildReviewPrompt({
+        title: view.review.title,
+        reviewId,
+        round: round.no,
+        kind,
+        files: shardSnapshot.files,
+        ...(promptContext === undefined ? {} : { context: promptContext }),
+        shard: {
+          id: shard.id,
+          index,
+          count: plan.shards.length,
+          tier: shard.tier,
+          moduleId: shard.moduleId,
+        },
+        diffLimit: 220_000,
+      });
+      bundles.push({ shard, index, snapshot: shardSnapshot, prompt });
+    }
+
+    for (const bundle of bundles) {
+      const { shard, index, snapshot: shardSnapshot, prompt } = bundle;
+      ctx.jobs.enqueue({
+        reviewId,
+        round: round.no,
+        kind,
+        backend: 'worker',
+        prompt: prompt.prompt,
+        diff: shardSnapshot,
+        protocolVersion: PROTOCOL_VERSION,
+        promptVersion: PROMPT_VERSION,
+        plan,
+        shardId: shard.id,
+        shardIndex: index,
+        shardCount: plan.shards.length,
+        effort: shard.effort,
+        moduleId: shard.moduleId,
+        ...(shardSnapshot.manifest === undefined ? {} : { manifest: shardSnapshot.manifest }),
+        meta: {
+          reviewId,
+          round: round.no,
+          cwd: initiator?.cwd ?? view.review.repoRoot,
+          shardId: shard.id,
+          shardIndex: index,
+          shardCount: plan.shards.length,
+          effort: shard.effort,
+          moduleId: shard.moduleId,
+          paths: shard.paths,
+          ...(initiator === undefined ? {} : { initiator }),
+        },
+      });
+    }
+    return;
+  }
+
+  // Legacy v1 snapshots keep the original single-job path.
   const { prompt, includedFiles } = buildReviewPrompt({
     title: view.review.title,
     reviewId,
     round: round.no,
     kind,
-    files: view.latestSnapshot?.files ?? [],
-    ...(kind === 'verify'
-      ? {
-          context: {
-            ...(previousRound === undefined ? {} : { previousRound }),
-            ...(view.report === null ? {} : { previousReport: view.report }),
-            unresolved,
-          },
-        }
-      : {}),
+    files: snapshot?.files ?? [],
+    ...(promptContext === undefined ? {} : { context: promptContext }),
   });
-  const initiator = view.review.initiator;
-  const manifest = view.latestSnapshot?.manifest;
-  const coverage = coverageForSnapshot(view.latestSnapshot, includedFiles);
+  const manifest = snapshot?.manifest;
+  const coverage = coverageForSnapshot(snapshot, includedFiles);
   if (coverage !== undefined) {
-    // Record coverage before the job exists so a worker cannot lease a round
-    // whose unresolved manifest paths are still invisible to the API/UI.
     await append(ctx, reviewId, 'agent/coverage', {
       coverage,
       round: round.no,
@@ -289,19 +448,34 @@ async function enqueueWorkerJob(ctx: RouteContext, reviewId: string): Promise<vo
     kind,
     backend: 'worker',
     prompt,
-    diff: view.latestSnapshot,
+    diff: snapshot,
     protocolVersion: PROTOCOL_VERSION,
     promptVersion: PROMPT_VERSION,
     ...(manifest === undefined ? {} : { manifest }),
     meta: {
       reviewId,
       round: round.no,
-      // The worker runs the reviewer in the initiator's visible worktree; the
-      // daemon's checkout is only a fallback for reviews without an initiator.
       cwd: initiator?.cwd ?? view.review.repoRoot,
       ...(initiator === undefined ? {} : { initiator }),
     },
   });
+}
+
+function scopeForSnapshot(snapshot: Snapshot): DiffScope {
+  const scope = snapshot.scope;
+  if (scope.kind === 'worktree') return { kind: 'worktree', baseRef: scope.baseSha };
+  if (scope.kind === 'commit') return { kind: 'commit', sha: scope.headSha ?? scope.baseSha };
+  if (scope.kind === 'commits') {
+    return {
+      kind: 'commits',
+      shas: scope.shas ?? [scope.baseSha, ...(scope.headSha ? [scope.headSha] : [])],
+    };
+  }
+  return {
+    kind: 'range',
+    baseRef: scope.baseSha,
+    headRef: scope.headSha ?? scope.headRef ?? 'HEAD',
+  };
 }
 
 function parseInitiator(value: unknown): Initiator | undefined {
@@ -469,6 +643,54 @@ export async function handle(
       ctx.jobs.cancelReview(reviewId);
       await ctx.hub.sync(reviewId);
       sendJson(res, 200, { ok: true });
+      return;
+    }
+    if (rest[0] === 'snapshot' && rest[1] !== undefined && rest[2] === 'file' && method === 'GET') {
+      const round = Number(rest[1]);
+      if (!Number.isInteger(round) || round <= 0)
+        throw new ApiError('validation', 'round is required');
+      const rawPath = url.searchParams.get('path');
+      if (rawPath === null || rawPath.trim() === '') {
+        throw new ApiError('validation', 'path is required');
+      }
+      const filePath = rawPath.trim();
+      if (
+        filePath.includes('\0') ||
+        filePath.length > 4096 ||
+        isAbsolute(filePath) ||
+        filePath.split('/').some((part) => part === '..' || part === '')
+      ) {
+        throw new ApiError('validation', 'path must be a relative file path');
+      }
+      const side = url.searchParams.get('side') === 'old' ? 'old' : 'new';
+      const view = await ctx.service.get(reviewId);
+      const target = view.review.rounds.find((item) => item.no === round);
+      if (target === undefined) throw new ApiError('not-found', `round ${round} not found`);
+      const snapshotView = await ctx.service.snapshot(reviewId, round);
+      const manifestFile = snapshotView.snapshot.manifest?.files.find(
+        (item) => item.path === filePath,
+      );
+      if (manifestFile === undefined) {
+        throw new ApiError('not-found', `file not found in round ${round}: ${filePath}`);
+      }
+      const revision =
+        side === 'old' ? target.baseSha : target.headSha === '' ? null : target.headSha;
+      const content = await readBlob(view.review.repoRoot, revision, filePath, 5000, 1_048_576);
+      if (content.lines === null && content.reason === 'unreadable') {
+        throw new ApiError('not-found', `file is not present on the ${side} side: ${filePath}`);
+      }
+      sendJson(res, 200, {
+        file: filePath,
+        round,
+        side,
+        revision,
+        lines: content.lines,
+        lineCount: content.lines?.length ?? 0,
+        binary: content.binary,
+        oversized: content.oversized,
+        symlink: content.symlink,
+        ...(content.reason === undefined ? {} : { reason: content.reason }),
+      });
       return;
     }
     if (rest[0] === 'snapshot' && method === 'GET') {
@@ -853,8 +1075,10 @@ export async function handle(
         // finding permanently when the store rejects the append. A failed append
         // surfaces as an error so the worker retries; accepted findings are
         // skipped by hasFinding on that retry.
+        const persistedFinding =
+          job.shardId === undefined ? finding : { ...finding, id: `${job.shardId}:${finding.id}` };
         await append(ctx, job.reviewId, 'agent/finding', {
-          finding,
+          finding: persistedFinding,
           round: job.round,
         } as never);
         if (ctx.jobs.acceptFinding(jobId, attemptId, finding.id) !== null) {
@@ -877,10 +1101,11 @@ export async function handle(
         throw new ApiError('validation', error instanceof Error ? error.message : 'invalid report');
       }
       if (ctx.jobs.job(jobId)?.status === 'done') {
+        await maybeFinalizeShards(ctx, job.reviewId, job.round);
         sendJson(res, 200, { accepted: true, duplicate: true });
         return;
       }
-      const agentReport: AgentReport = {
+      const baseReport: AgentReport = {
         ...validation.report,
         reviewId: job.reviewId,
         round: job.round,
@@ -888,16 +1113,41 @@ export async function handle(
         rejected: validation.rejected,
         warnings: validation.warnings,
       };
+      const agentReport =
+        job.shardId === undefined ? baseReport : namespaceShardReport(baseReport, job.shardId);
       // The report is durable before the attempt is marked done. If the append
       // fails the worker can retry; the reverse order loses the report.
-      await append(ctx, job.reviewId, 'agent/report', { report: agentReport } as never);
+      await append(
+        ctx,
+        job.reviewId,
+        job.shardId === undefined ? 'agent/report' : 'agent/shard',
+        job.shardId === undefined
+          ? ({ report: agentReport } as never)
+          : ({
+              shardId: job.shardId,
+              shardIndex: job.shardIndex ?? 0,
+              shardCount: job.shardCount ?? 1,
+              round: job.round,
+              report: agentReport,
+              ...(job.plan === undefined
+                ? {}
+                : {
+                    paths: job.plan.shards.find((shard) => shard.id === job.shardId)?.paths ?? [],
+                    tier: job.effort ?? 'deep',
+                  }),
+            } as never),
+      );
       const accepted = ctx.jobs.acceptReport(jobId, attemptId);
       if (accepted === null) {
         if (ctx.jobs.job(jobId)?.status === 'done') {
+          await maybeFinalizeShards(ctx, job.reviewId, job.round);
           sendJson(res, 200, { accepted: true, duplicate: true });
           return;
         }
         throw new ApiError('conflict', 'stale or unknown job attempt');
+      }
+      if (job.shardId !== undefined) {
+        await maybeFinalizeShards(ctx, job.reviewId, job.round);
       }
       sendJson(res, 200, { accepted: true, warnings: validation.warnings });
       return;
@@ -912,6 +1162,9 @@ export async function handle(
         code: typeof body.code === 'string' ? body.code : 'failed',
         message: typeof body.message === 'string' ? body.message : 'job failed',
       } as never);
+      if (job.shardId !== undefined) {
+        await maybeFinalizeShards(ctx, job.reviewId, job.round);
+      }
       sendJson(res, 200, { ok: true, retried: result.retried, status: result.job.status });
       return;
     }
