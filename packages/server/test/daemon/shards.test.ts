@@ -49,7 +49,7 @@ interface LeaseBody {
     shardIndex: number;
     shardCount: number;
   };
-  bundle: { meta: { paths: string[] } };
+  bundle: { prompt: string; meta: { paths: string[] } };
 }
 
 interface ReviewBody {
@@ -199,5 +199,150 @@ describe('shard aggregation', () => {
     expect(failedFile).toMatchObject({ reason: 'shard-failed' });
     expect(final.review.report?.findings[0]?.id).toBe(`${first.job.shardId}:f1`);
     expect(final.review.report?.warnings).toContain(`shard-failed:${second.job.shardId}`);
+  }, 30_000);
+
+  it('retries only the unfinished shard in place and preserves completed work', async () => {
+    const { daemonUrl } = await running();
+    const repo = await makeRepo();
+    cleanups.push(repo.cleanup);
+    await repo.write('base.txt', 'base\n');
+    await repo.commit('base');
+    await repo.git('checkout', '-b', 'feature');
+    for (let index = 0; index < 13; index += 1) {
+      await repo.write(
+        `src/file-${String(index).padStart(3, '0')}.ts`,
+        `export const value${index} = ${index};\n`,
+      );
+    }
+    await repo.commit('feature');
+
+    const reviewId = await createReview(daemonUrl, repo.root);
+    const registered = await fetch(`${daemonUrl}/api/workers/register`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ name: 'retry-worker', harness: 'dsh' }),
+    });
+    expect(registered.status).toBe(201);
+    const worker = (await registered.json()) as { id: string };
+
+    const first = await leaseNext(daemonUrl, worker.id);
+    expect(first).not.toBeNull();
+    if (first === null) throw new Error('expected first shard');
+    const firstPath = first.bundle.meta.paths[0];
+    expect(firstPath).toBeDefined();
+    const firstReport = await fetch(`${daemonUrl}/api/jobs/${first.job.id}/report`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({
+        attemptId: first.job.attemptId,
+        report: {
+          schemaVersion: 1,
+          summary: 'first shard done',
+          riskLevel: 'medium',
+          findings: [
+            {
+              id: 'keep',
+              severity: 'major',
+              category: 'correctness',
+              confidence: 'high',
+              kind: 'issue',
+              file: firstPath,
+              lineStart: 1,
+              lineEnd: 1,
+              title: 'keep this finding',
+              rationale: 'because',
+              evidence: 'export const',
+            },
+          ],
+          questions: [],
+          tests: { ran: false, commands: [] },
+          verification: [],
+        },
+      }),
+    });
+    expect(firstReport.status).toBe(200);
+
+    const second = await leaseNext(daemonUrl, worker.id);
+    expect(second).not.toBeNull();
+    if (second === null) throw new Error('expected second shard');
+    const failed = await fetch(`${daemonUrl}/api/jobs/${second.job.id}/fail`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({
+        attemptId: second.job.attemptId,
+        retryable: false,
+        code: 'crash',
+        message: 'reviewer crashed',
+      }),
+    });
+    expect(failed.status).toBe(200);
+    const beforeRetry = await reviewView(daemonUrl, reviewId);
+    expect(beforeRetry.review.agent?.status).toBe('partial');
+
+    const retried = await fetch(`${daemonUrl}/api/reviews/${reviewId}/agent/retry`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({}),
+    });
+    expect(retried.status).toBe(200);
+    const queued = (await retried.json()) as ReviewBody;
+    expect(queued.review.agent?.status).toBe('queued');
+    expect(queued.review.agent?.shards).toHaveLength(1);
+    expect(queued.review.agent?.coverage?.totals.byStatus).toMatchObject({
+      'deep-reviewed': 12,
+      pending: 1,
+      failed: 0,
+    });
+    const duplicate = await fetch(`${daemonUrl}/api/reviews/${reviewId}/agent/retry`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({}),
+    });
+    expect(duplicate.status).toBe(409);
+
+    const retryJob = await leaseNext(daemonUrl, worker.id);
+    expect(retryJob).not.toBeNull();
+    if (retryJob === null) throw new Error('expected retry shard');
+    expect(retryJob.job.shardId).toBe(second.job.shardId);
+    expect(retryJob.job.shardCount).toBe(2);
+    expect(retryJob.bundle.prompt).toContain('Kind: initial');
+    expect(retryJob.bundle.prompt).not.toContain('## Verification round');
+    const retryPath = retryJob.bundle.meta.paths[0];
+    expect(retryPath).toBeDefined();
+    const retryReport = await fetch(`${daemonUrl}/api/jobs/${retryJob.job.id}/report`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({
+        attemptId: retryJob.job.attemptId,
+        report: {
+          schemaVersion: 1,
+          summary: 'retry done',
+          riskLevel: 'low',
+          findings: [],
+          questions: [],
+          tests: { ran: false, commands: [] },
+          verification: [],
+        },
+      }),
+    });
+    expect(retryReport.status).toBe(200);
+
+    const final = await reviewView(daemonUrl, reviewId);
+    expect(final.review.agent?.status).toBe('done');
+    expect(final.review.agent?.shards).toHaveLength(2);
+    expect(final.review.agent?.coverage?.totals.byStatus).toMatchObject({
+      'deep-reviewed': 13,
+      pending: 0,
+      failed: 0,
+    });
+    expect(final.review.report?.findings[0]?.id).toBe(`${first.job.shardId}:keep`);
+    expect(final.review.report?.warnings).not.toContain(`shard-failed:${second.job.shardId}`);
+    expect(await leaseNext(daemonUrl, worker.id)).toBeNull();
+    const afterDone = await fetch(`${daemonUrl}/api/reviews/${reviewId}/agent/retry`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({}),
+    });
+    expect(afterDone.status).toBe(409);
   }, 30_000);
 });

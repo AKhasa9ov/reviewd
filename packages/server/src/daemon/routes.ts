@@ -221,9 +221,19 @@ async function maybeFinalizeShards(
     const reports = (view.review.agent?.shards ?? [])
       .filter((shard) => shard.round === round)
       .map((shard) => ({ shardId: shard.shardId, report: shard.report }));
-    const failedShards = jobs
-      .filter((job) => job.status === 'failed' || job.status === 'canceled')
-      .flatMap((job) => (job.shardId === undefined ? [] : [job.shardId]));
+    const reportedShards = new Set(reports.map((report) => report.shardId));
+    // A retry leaves the previous failed job in memory. A newer successful
+    // report for the same shard is authoritative; only shards that still have
+    // no report are marked failed.
+    const failedShards = [
+      ...new Set(
+        jobs
+          .filter((job) => job.status === 'failed' || job.status === 'canceled')
+          .flatMap((job) =>
+            job.shardId === undefined || reportedShards.has(job.shardId) ? [] : [job.shardId],
+          ),
+      ),
+    ];
     const aggregate = aggregateShardReports({
       reviewId,
       round,
@@ -298,15 +308,22 @@ export async function reconcileOrphanedWorkerAgents(ctx: OrphanContext): Promise
   }
 }
 
-async function enqueueWorkerJob(ctx: RouteContext, reviewId: string): Promise<void> {
-  const view = await ctx.service.get(reviewId);
-  const round = view.review.rounds.at(-1);
-  if (round === undefined || view.review.reviewer?.backend !== 'worker') return;
-  // A repeated create/refresh with the same idempotency key must not enqueue a
-  // second job or reset coverage for a round this daemon already queued.
-  if (ctx.jobs.listReview(reviewId).some((job) => job.round === round.no)) return;
-  const kind = view.report === null ? 'initial' : 'verify';
-  const previousRound = round.no > 1 ? round.no - 1 : undefined;
+type ReviewView = Awaited<ReturnType<ReviewService['get']>>;
+type PromptContext = NonNullable<Parameters<typeof buildReviewPrompt>[0]['context']>;
+
+function reviewKind(view: ReviewView, round?: { no: number }): 'initial' | 'verify' {
+  if (round !== undefined) return round.no <= 1 ? 'initial' : 'verify';
+  return view.report === null ? 'initial' : 'verify';
+}
+
+function promptContextFor(
+  view: ReviewView,
+  round?: { no: number },
+): PromptContext | undefined {
+  const targetRound = round ?? view.review.rounds.at(-1);
+  if (reviewKind(view, targetRound) !== 'verify') return undefined;
+  const previousRound =
+    targetRound === undefined || targetRound.no <= 1 ? undefined : targetRound.no - 1;
   const unresolved = view.review.comments
     .filter((comment) => comment.state === 'open')
     .flatMap((comment) => {
@@ -322,15 +339,154 @@ async function enqueueWorkerJob(ctx: RouteContext, reviewId: string): Promise<vo
             },
           ];
     });
-  const promptContext =
-    kind === 'verify'
-      ? {
-          ...(previousRound === undefined ? {} : { previousRound }),
-          ...(view.report === null ? {} : { previousReport: view.report }),
-          unresolved,
-        }
-      : undefined;
+  return {
+    ...(previousRound === undefined ? {} : { previousRound }),
+    ...(view.report === null ? {} : { previousReport: view.report }),
+    unresolved,
+  };
+}
+
+/**
+ * Builds and queues complete shard bundles before enqueueing any of them. A
+ * git failure therefore cannot leave a half-covered retry with a subset of
+ * jobs. `shardIds` narrows the work to missing shards without changing the
+ * shard indexes or the round plan.
+ */
+async function enqueueShardJobs(
+  ctx: RouteContext,
+  view: ReviewView,
+  round: NonNullable<ReviewView['review']['rounds'][number]>,
+  plan: ReviewPlan,
+  shardIds?: ReadonlySet<string>,
+): Promise<void> {
+  const snapshot = view.latestSnapshot;
+  if (snapshot === null) return;
+  if (shardIds !== undefined && shardIds.size === 0) return;
+  const kind = reviewKind(view, round);
+  const promptContext = promptContextFor(view, round);
   const initiator = view.review.initiator;
+  const shardScope = scopeForSnapshot(snapshot);
+  const bundles: Array<{
+    shard: ReviewPlan['shards'][number];
+    index: number;
+    snapshot: Snapshot;
+    prompt: ReturnType<typeof buildReviewPrompt>;
+  }> = [];
+  for (const [index, shard] of plan.shards.entries()) {
+    if (shardIds !== undefined && !shardIds.has(shard.id)) continue;
+    const shardSnapshot = await buildSnapshot({
+      repoRoot: snapshot.scope.repoRoot,
+      scope: shardScope,
+      paths: shard.paths,
+      includeContent: false,
+      includeUntracked: snapshot.scope.kind === 'worktree',
+      maxDiffBytes: Math.max(256 * 1024, shard.patchBytes * 2 + 64 * 1024),
+      maxFiles: shard.fileCount + 8,
+    });
+    const prompt = buildReviewPrompt({
+      title: view.review.title,
+      reviewId: view.review.id,
+      round: round.no,
+      kind,
+      files: shardSnapshot.files,
+      ...(promptContext === undefined ? {} : { context: promptContext }),
+      shard: {
+        id: shard.id,
+        index,
+        count: plan.shards.length,
+        tier: shard.tier,
+        moduleId: shard.moduleId,
+      },
+      diffLimit: 220_000,
+    });
+    bundles.push({ shard, index, snapshot: shardSnapshot, prompt });
+  }
+
+  for (const bundle of bundles) {
+    const { shard, index, snapshot: shardSnapshot, prompt } = bundle;
+    ctx.jobs.enqueue({
+      reviewId: view.review.id,
+      round: round.no,
+      kind,
+      backend: 'worker',
+      prompt: prompt.prompt,
+      diff: shardSnapshot,
+      protocolVersion: PROTOCOL_VERSION,
+      promptVersion: PROMPT_VERSION,
+      plan,
+      shardId: shard.id,
+      shardIndex: index,
+      shardCount: plan.shards.length,
+      effort: shard.effort,
+      moduleId: shard.moduleId,
+      ...(shardSnapshot.manifest === undefined ? {} : { manifest: shardSnapshot.manifest }),
+      meta: {
+        reviewId: view.review.id,
+        round: round.no,
+        cwd: initiator?.cwd ?? view.review.repoRoot,
+        shardId: shard.id,
+        shardIndex: index,
+        shardCount: plan.shards.length,
+        effort: shard.effort,
+        moduleId: shard.moduleId,
+        paths: shard.paths,
+        ...(initiator === undefined ? {} : { initiator }),
+      },
+    });
+  }
+}
+
+async function enqueueLegacyJob(
+  ctx: RouteContext,
+  view: ReviewView,
+  round: NonNullable<ReviewView['review']['rounds'][number]>,
+): Promise<void> {
+  const snapshot = view.latestSnapshot;
+  const { prompt, includedFiles } = buildReviewPrompt({
+    title: view.review.title,
+    reviewId: view.review.id,
+    round: round.no,
+    kind: reviewKind(view, round),
+    files: snapshot?.files ?? [],
+    ...(promptContextFor(view, round) === undefined
+      ? {}
+      : { context: promptContextFor(view, round) }),
+  });
+  const manifest = snapshot?.manifest;
+  const coverage = coverageForSnapshot(snapshot, includedFiles);
+  if (coverage !== undefined) {
+    await append(ctx, view.review.id, 'agent/coverage', {
+      coverage,
+      round: round.no,
+    });
+  }
+  const initiator = view.review.initiator;
+  ctx.jobs.enqueue({
+    reviewId: view.review.id,
+    round: round.no,
+    kind: reviewKind(view, round),
+    backend: 'worker',
+    prompt,
+    diff: snapshot,
+    protocolVersion: PROTOCOL_VERSION,
+    promptVersion: PROMPT_VERSION,
+    ...(manifest === undefined ? {} : { manifest }),
+    meta: {
+      reviewId: view.review.id,
+      round: round.no,
+      cwd: initiator?.cwd ?? view.review.repoRoot,
+      ...(initiator === undefined ? {} : { initiator }),
+    },
+  });
+}
+
+async function enqueueWorkerJob(ctx: RouteContext, reviewId: string): Promise<void> {
+  const view = await ctx.service.get(reviewId);
+  const round = view.review.rounds.at(-1);
+  if (round === undefined || view.review.reviewer?.backend !== 'worker') return;
+  // A repeated create/refresh with the same idempotency key must not enqueue a
+  // second job or reset coverage for a round this daemon already queued.
+  if (ctx.jobs.listReview(reviewId).some((job) => job.round === round.no)) return;
   const snapshot = view.latestSnapshot;
   const fullManifest = snapshot?.manifest;
 
@@ -357,108 +513,90 @@ async function enqueueWorkerJob(ctx: RouteContext, reviewId: string): Promise<vo
       return;
     }
 
-    const shardScope = scopeForSnapshot(snapshot);
-    // Build every shard bundle before enqueueing any job: a git failure must
-    // not leave a half-covered round with pending paths and a subset of jobs.
-    const bundles = [];
-    for (const [index, shard] of plan.shards.entries()) {
-      const shardSnapshot = await buildSnapshot({
-        repoRoot: snapshot.scope.repoRoot,
-        scope: shardScope,
-        paths: shard.paths,
-        includeContent: false,
-        includeUntracked: snapshot.scope.kind === 'worktree',
-        maxDiffBytes: Math.max(256 * 1024, shard.patchBytes * 2 + 64 * 1024),
-        maxFiles: shard.fileCount + 8,
-      });
-      const prompt = buildReviewPrompt({
-        title: view.review.title,
-        reviewId,
-        round: round.no,
-        kind,
-        files: shardSnapshot.files,
-        ...(promptContext === undefined ? {} : { context: promptContext }),
-        shard: {
-          id: shard.id,
-          index,
-          count: plan.shards.length,
-          tier: shard.tier,
-          moduleId: shard.moduleId,
-        },
-        diffLimit: 220_000,
-      });
-      bundles.push({ shard, index, snapshot: shardSnapshot, prompt });
-    }
-
-    for (const bundle of bundles) {
-      const { shard, index, snapshot: shardSnapshot, prompt } = bundle;
-      ctx.jobs.enqueue({
-        reviewId,
-        round: round.no,
-        kind,
-        backend: 'worker',
-        prompt: prompt.prompt,
-        diff: shardSnapshot,
-        protocolVersion: PROTOCOL_VERSION,
-        promptVersion: PROMPT_VERSION,
-        plan,
-        shardId: shard.id,
-        shardIndex: index,
-        shardCount: plan.shards.length,
-        effort: shard.effort,
-        moduleId: shard.moduleId,
-        ...(shardSnapshot.manifest === undefined ? {} : { manifest: shardSnapshot.manifest }),
-        meta: {
-          reviewId,
-          round: round.no,
-          cwd: initiator?.cwd ?? view.review.repoRoot,
-          shardId: shard.id,
-          shardIndex: index,
-          shardCount: plan.shards.length,
-          effort: shard.effort,
-          moduleId: shard.moduleId,
-          paths: shard.paths,
-          ...(initiator === undefined ? {} : { initiator }),
-        },
-      });
-    }
+    await enqueueShardJobs(ctx, view, round, plan);
     return;
   }
 
   // Legacy v1 snapshots keep the original single-job path.
-  const { prompt, includedFiles } = buildReviewPrompt({
-    title: view.review.title,
-    reviewId,
-    round: round.no,
-    kind,
-    files: snapshot?.files ?? [],
-    ...(promptContext === undefined ? {} : { context: promptContext }),
-  });
-  const manifest = snapshot?.manifest;
-  const coverage = coverageForSnapshot(snapshot, includedFiles);
-  if (coverage !== undefined) {
-    await append(ctx, reviewId, 'agent/coverage', {
-      coverage,
-      round: round.no,
-    });
+  await enqueueLegacyJob(ctx, view, round);
+}
+
+/**
+ * Requeues only shards that have no durable report. The snapshot, round and
+ * completed reports stay unchanged, so retry does not create a new round or
+ * discard work that already succeeded.
+ */
+async function retryWorkerAgent(ctx: RouteContext, reviewId: string): Promise<ReviewView> {
+  const view = await ctx.service.get(reviewId);
+  const round = view.review.rounds.at(-1);
+  const agent = view.review.agent;
+  if (view.review.status === 'closed' || view.review.deletedAt !== undefined) {
+    throw new ApiError('conflict', 'cannot retry a closed review');
   }
-  ctx.jobs.enqueue({
-    reviewId,
-    round: round.no,
-    kind,
-    backend: 'worker',
-    prompt,
-    diff: snapshot,
-    protocolVersion: PROTOCOL_VERSION,
-    promptVersion: PROMPT_VERSION,
-    ...(manifest === undefined ? {} : { manifest }),
-    meta: {
-      reviewId,
+  if (view.review.reviewer?.backend !== 'worker') {
+    throw new ApiError('conflict', 'only worker reviewers can be retried in place');
+  }
+  if (round === undefined) throw new ApiError('conflict', 'review has no round to retry');
+  if (agent === undefined || (agent.status !== 'failed' && agent.status !== 'partial')) {
+    throw new ApiError('conflict', 'reviewer is not failed or partial');
+  }
+  if (agent.round !== undefined && agent.round !== round.no) {
+    throw new ApiError('conflict', 'reviewer belongs to a different round');
+  }
+  const active = ctx.jobs
+    .listReview(reviewId)
+    .some(
+      (job) =>
+        job.round === round.no && (job.status === 'queued' || job.status === 'leased'),
+    );
+  if (active) throw new ApiError('conflict', 'reviewer still has active jobs');
+  const snapshot = view.latestSnapshot;
+  if (snapshot === null) throw new ApiError('conflict', 'review has no snapshot to retry');
+  const manifest = snapshot.manifest;
+
+  if (snapshot.schemaVersion === 2 && manifest !== undefined) {
+    const plan = buildReviewPlan({ manifest });
+    const completed = new Set(
+      (agent.shards ?? [])
+        .filter((shard) => shard.round === round.no)
+        .map((shard) => shard.shardId),
+    );
+    const targets = plan.shards.filter((shard) => !completed.has(shard.id));
+    await append(ctx, reviewId, 'agent/retry', {
       round: round.no,
-      cwd: initiator?.cwd ?? view.review.repoRoot,
-      ...(initiator === undefined ? {} : { initiator }),
-    },
-  });
+      shardIds: targets.map((shard) => shard.id),
+    } as never);
+    ctx.jobs.clearAggregated(reviewId, round.no);
+    if (targets.length === 0) {
+      const aggregate = aggregateShardReports({
+        reviewId,
+        round: round.no,
+        backend: 'worker',
+        plan,
+        reports: (agent.shards ?? [])
+          .filter((shard) => shard.round === round.no)
+          .map((shard) => ({ shardId: shard.shardId, report: shard.report })),
+      });
+      await append(ctx, reviewId, 'agent/report', {
+        report: aggregate.report,
+        coverage: aggregate.coverage,
+      } as never);
+    } else {
+      await enqueueShardJobs(
+        ctx,
+        view,
+        round,
+        plan,
+        new Set(targets.map((shard) => shard.id)),
+      );
+    }
+    return ctx.service.get(reviewId);
+  }
+
+  await append(ctx, reviewId, 'agent/retry', { round: round.no, shardIds: [] } as never);
+  ctx.jobs.clearAggregated(reviewId, round.no);
+  await enqueueLegacyJob(ctx, view, round);
+  return ctx.service.get(reviewId);
 }
 
 function scopeForSnapshot(snapshot: Snapshot): DiffScope {
@@ -985,6 +1123,12 @@ export async function handle(
       const feedback = await ctx.service.latestFeedback(reviewId);
       if (feedback === null) throw new ApiError('not-found', 'no submission yet');
       sendJson(res, 200, feedback);
+      return;
+    }
+    if (rest[0] === 'agent' && rest[1] === 'retry' && method === 'POST') {
+      const view = await retryWorkerAgent(ctx, reviewId);
+      await ctx.hub.sync(reviewId);
+      sendJson(res, 200, view);
       return;
     }
     if (rest[0] === 'agent' && rest[1] === 'cancel' && method === 'POST') {

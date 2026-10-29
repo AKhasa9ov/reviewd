@@ -295,6 +295,11 @@ export class JobQueue {
     this.aggregated.add(`${reviewId}:${round}`);
   }
 
+  /** A retry makes the previous aggregate stale; the next terminal job may aggregate again. */
+  clearAggregated(reviewId: string, round: number): void {
+    this.aggregated.delete(`${reviewId}:${round}`);
+  }
+
   sweep(): void {
     const now = this.now().getTime();
     for (const job of this.jobs.values()) {
