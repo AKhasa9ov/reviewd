@@ -22,7 +22,7 @@ function headers(): Record<string, string> {
   return { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' };
 }
 
-async function running(): Promise<{ daemonUrl: string }> {
+async function running(): Promise<{ daemonUrl: string; daemon: ReviewDaemon; storeDir: string }> {
   const storeDir = await mkdtemp(join(tmpdir(), 'reviewd-shards-'));
   const daemon: ReviewDaemon = await startDaemon({
     host: '127.0.0.1',
@@ -38,7 +38,7 @@ async function running(): Promise<{ daemonUrl: string }> {
     await daemon.close();
     await rm(storeDir, { recursive: true, force: true });
   });
-  return { daemonUrl: daemon.url };
+  return { daemonUrl: daemon.url, daemon, storeDir };
 }
 
 interface LeaseBody {
@@ -345,4 +345,111 @@ describe('shard aggregation', () => {
     });
     expect(afterDone.status).toBe(409);
   }, 30_000);
+  it('rebuilds the shard plan from the snapshot after a daemon restart', async () => {
+    const storeDir = await mkdtemp(join(tmpdir(), 'reviewd-restart-'));
+    const repo = await makeRepo();
+    cleanups.push(repo.cleanup);
+    await repo.write('base.txt', 'base\n');
+    await repo.commit('base');
+    await repo.git('checkout', '-b', 'feature');
+    for (let index = 0; index < 13; index += 1) {
+      await repo.write(
+        `src/file-${String(index).padStart(3, '0')}.ts`,
+        `export const value${index} = ${index};\n`,
+      );
+    }
+    await repo.commit('feature');
+
+    const config = {
+      host: '127.0.0.1',
+      port: 0,
+      storeDir,
+      token: TOKEN,
+      longPollMs: 50,
+      heartbeatMs: 50,
+      jobLeaseMs: 5000,
+      rateLimit: { mutations: 100, reads: 1000, windowMs: 60_000 },
+    };
+    let daemon = await startDaemon(config);
+    cleanups.push(async () => {
+      await daemon.close().catch(() => undefined);
+      await rm(storeDir, { recursive: true, force: true });
+    });
+    const reviewId = await createReview(daemon.url, repo.root);
+    const firstWorker = await fetch(`${daemon.url}/api/workers/register`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ name: 'restart-worker-1', harness: 'dsh' }),
+    });
+    expect(firstWorker.status).toBe(201);
+    const firstWorkerId = ((await firstWorker.json()) as { id: string }).id;
+    const first = await leaseNext(daemon.url, firstWorkerId);
+    expect(first).not.toBeNull();
+    if (first === null) throw new Error('expected first shard');
+    const firstReport = await fetch(`${daemon.url}/api/jobs/${first.job.id}/report`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({
+        attemptId: first.job.attemptId,
+        report: { schemaVersion: 1, summary: 'first shard', riskLevel: 'low', findings: [] },
+      }),
+    });
+    expect(firstReport.status).toBe(200);
+    const beforeRestart = await reviewView(daemon.url, reviewId);
+    expect(beforeRestart.review.agent?.status).toBe('running');
+    expect(beforeRestart.review.agent?.shards).toHaveLength(1);
+
+    await daemon.close();
+    daemon = await startDaemon(config);
+    const recovered = await reviewView(daemon.url, reviewId);
+    expect(recovered.review.agent?.status).toBe('failed');
+    expect(recovered.review.agent?.shards).toHaveLength(1);
+
+    const retried = await fetch(`${daemon.url}/api/reviews/${reviewId}/agent/retry`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({}),
+    });
+    expect(retried.status).toBe(200);
+    const queued = (await retried.json()) as ReviewBody;
+    expect(queued.review.agent?.status).toBe('queued');
+    expect(queued.review.agent?.shards).toHaveLength(1);
+    expect(queued.review.agent?.coverage?.totals.byStatus).toMatchObject({
+      'deep-reviewed': 12,
+      pending: 1,
+    });
+
+    const secondWorker = await fetch(`${daemon.url}/api/workers/register`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ name: 'restart-worker-2', harness: 'dsh' }),
+    });
+    expect(secondWorker.status).toBe(201);
+    const secondWorkerId = ((await secondWorker.json()) as { id: string }).id;
+    const job = await leaseNext(daemon.url, secondWorkerId);
+    expect(job).not.toBeNull();
+    if (job === null) throw new Error('expected retried shard');
+    const secondReport = await fetch(`${daemon.url}/api/jobs/${job.job.id}/report`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({
+        attemptId: job.job.attemptId,
+        report: { schemaVersion: 1, summary: 'second shard', riskLevel: 'low', findings: [] },
+      }),
+    });
+    expect(secondReport.status).toBe(200);
+    let final = await reviewView(daemon.url, reviewId);
+    for (let attempt = 0; attempt < 20 && final.review.agent?.status !== 'done'; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      final = await reviewView(daemon.url, reviewId);
+    }
+    expect(final.review.agent?.status).toBe('done');
+    expect(final.review.agent?.shards).toHaveLength(2);
+    expect(final.review.agent?.coverage?.totals.byStatus).toMatchObject({
+      'deep-reviewed': 13,
+      pending: 0,
+      failed: 0,
+    });
+  }, 30_000);
+
 });
