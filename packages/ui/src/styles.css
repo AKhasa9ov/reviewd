@@ -3257,6 +3257,21 @@ body.cr-selecting-lines {
   list-style: none;
 }
 
+.cr-report-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cr-space-2);
+}
+
+.cr-report-pagination-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--cr-space-2);
+}
+
 .cr-finding {
   padding: var(--cr-space-4);
   border: 1px solid var(--cr-border);

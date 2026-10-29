@@ -73,7 +73,7 @@ export class JobQueue {
   private readonly jobs = new Map<string, JobRecord>();
   private readonly order: string[] = [];
   private readonly attempts = new Map<string, AttemptState>();
-  /** Finding ids accepted for a job across retries, bounded by MAX_FINDINGS. */
+  /** Finding ids accepted for a job across retries. */
   private readonly findingsSeen = new Map<string, Set<string>>();
   private readonly aggregated = new Set<string>();
   private readonly listeners = new Set<() => void>();

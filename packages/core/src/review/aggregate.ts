@@ -6,7 +6,7 @@ import type {
   TestCommand,
   Verification,
 } from '../reviewer/types.js';
-import { MAX_FINDINGS, MAX_QUESTIONS } from '../reviewer/validate.js';
+import { MAX_QUESTIONS } from '../reviewer/validate.js';
 import type { ReviewPlan } from './plan.js';
 import { coverageFromPlan } from './plan.js';
 import { summarizeCoverage } from './coverage.js';
@@ -57,7 +57,6 @@ function mergeFindings(reports: readonly ShardReportInput[]): Finding[] {
       if (seen.has(key)) continue;
       seen.add(key);
       findings.push({ ...finding });
-      if (findings.length >= MAX_FINDINGS) return findings;
     }
   }
   return findings;

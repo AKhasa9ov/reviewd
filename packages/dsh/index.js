@@ -3028,7 +3028,6 @@ function coverageFromPlan(plan) {
 }
 
 // packages/core/src/reviewer/validate.ts
-var MAX_FINDINGS = 200;
 var MAX_QUESTIONS = 50;
 var MAX_TEXT_BYTES = 32 * 1024;
 var CATEGORIES = /* @__PURE__ */ new Set([
@@ -3355,12 +3354,7 @@ function validateReport(raw, options = {}) {
   const findings = [];
   const findingIds = /* @__PURE__ */ new Set();
   if (Array.isArray(raw.findings)) {
-    const max = options.maxFindings ?? MAX_FINDINGS;
     raw.findings.forEach((entry, index) => {
-      if (index >= max) {
-        reject(ctx, "finding", `more than ${max} findings`, void 0, index);
-        return;
-      }
       const finding = validateFinding(ctx, entry, index, findingIds);
       if (finding !== null) findings.push(finding);
     });
@@ -3428,7 +3422,6 @@ function mergeFindings(reports) {
       if (seen.has(key)) continue;
       seen.add(key);
       findings.push({ ...finding });
-      if (findings.length >= MAX_FINDINGS) return findings;
     }
   }
   return findings;
@@ -6929,7 +6922,7 @@ var JobQueue = class {
   jobs = /* @__PURE__ */ new Map();
   order = [];
   attempts = /* @__PURE__ */ new Map();
-  /** Finding ids accepted for a job across retries, bounded by MAX_FINDINGS. */
+  /** Finding ids accepted for a job across retries. */
   findingsSeen = /* @__PURE__ */ new Map();
   aggregated = /* @__PURE__ */ new Set();
   listeners = /* @__PURE__ */ new Set();

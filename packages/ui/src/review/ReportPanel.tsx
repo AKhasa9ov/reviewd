@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { AgentReport, Finding, FindingDecision } from '@dsh-code-review/core';
 import { Badge, EmptyState } from '../primitives/Feedback.js';
 import { Select } from '../primitives/Field.js';
+import { Button } from '../primitives/Button.js';
 import { FindingDecisionControls } from './FindingDecisionControls.js';
 import type {
   FindingDecisionControlsProps,
@@ -57,6 +58,7 @@ export interface ReportPanelProps {
 }
 
 const EMPTY_DECISIONS = new Map<string, FindingDecision>();
+const PAGE_SIZE = 50;
 
 export function ReportPanel({
   report,
@@ -74,6 +76,24 @@ export function ReportPanel({
 }: ReportPanelProps): JSX.Element {
   const [severity, setSeverity] = useState<Finding['severity'] | 'all'>('all');
   const [category, setCategory] = useState<Finding['category'] | 'all'>('all');
+  const [page, setPage] = useState(0);
+  const findings =
+    report === null || report === undefined
+      ? []
+      : filterFindings(report.findings, severity, category);
+  const pageCount = Math.max(1, Math.ceil(findings.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount - 1);
+  const pageStart = currentPage * PAGE_SIZE;
+  const pageEnd = Math.min(pageStart + PAGE_SIZE, findings.length);
+  const visibleFindings = findings.slice(pageStart, pageStart + PAGE_SIZE);
+
+  useEffect(() => {
+    setPage(0);
+  }, [severity, category, report?.reviewId, report?.round, partial]);
+
+  useEffect(() => {
+    setPage((value) => Math.min(value, pageCount - 1));
+  }, [pageCount]);
 
   if (report === null || report === undefined) {
     return pending ? (
@@ -89,7 +109,6 @@ export function ReportPanel({
     );
   }
 
-  const findings = filterFindings(report.findings, severity, category);
   const counts = findingCounts(report);
   const filtered = severity !== 'all' || category !== 'all';
 
@@ -188,7 +207,7 @@ export function ReportPanel({
         />
       ) : (
         <ol className="cr-findings" aria-label="Reviewer findings">
-          {findings.map((finding) => (
+          {visibleFindings.map((finding) => (
             <li className="cr-finding" key={finding.id} id={`finding-${finding.id}`} tabIndex={-1}>
               <div className="cr-finding-head">
                 <Badge tone={severityTone(finding.severity)}>{finding.severity}</Badge>
@@ -243,6 +262,37 @@ export function ReportPanel({
           ))}
         </ol>
       )}
+
+      {findings.length > PAGE_SIZE ? (
+        <nav className="cr-report-pagination" aria-label="Report pages">
+          <span className="cr-meta">
+            {pageStart + 1}–{pageEnd} of {findings.length}
+          </span>
+          <div className="cr-report-pagination-actions">
+            <Button
+              size="small"
+              variant="secondary"
+              aria-label="Previous report page"
+              disabled={currentPage === 0}
+              onClick={() => setPage(Math.max(0, currentPage - 1))}
+            >
+              Previous
+            </Button>
+            <span className="cr-meta">
+              Page {currentPage + 1} of {pageCount}
+            </span>
+            <Button
+              size="small"
+              variant="secondary"
+              aria-label="Next report page"
+              disabled={currentPage >= pageCount - 1}
+              onClick={() => setPage(Math.min(pageCount - 1, currentPage + 1))}
+            >
+              Next
+            </Button>
+          </div>
+        </nav>
+      ) : null}
 
       {report.questions.length > 0 ? (
         <section className="cr-report-section" aria-label="Open questions">

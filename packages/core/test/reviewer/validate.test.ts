@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  MAX_FINDINGS,
   MAX_TEXT_BYTES,
   ReportValidationError,
   validateFindingItem,
@@ -224,9 +223,9 @@ describe('validateReport', () => {
     ]);
   });
 
-  it('enforces finding/question limits and records unknown fields', () => {
+  it('accepts more than 200 findings and still enforces the question limit', () => {
     const raw = valid();
-    raw.findings = Array.from({ length: MAX_FINDINGS + 1 }, (_, index) => ({
+    raw.findings = Array.from({ length: 205 }, (_, index) => ({
       ...(raw.findings as Record<string, unknown>[])[0],
       id: `f${index}`,
     }));
@@ -239,8 +238,9 @@ describe('validateReport', () => {
     }));
     raw.mystery = true;
     const result = validateReport(raw, { snapshot: snapshot() });
-    expect(result.report.findings).toHaveLength(MAX_FINDINGS);
+    expect(result.report.findings).toHaveLength(205);
     expect(result.report.questions).toHaveLength(50);
+    expect(result.rejected.some((item) => item.kind === 'finding')).toBe(false);
     expect(result.rejected.some((item) => item.reason.includes('more than'))).toBe(true);
     expect(result.warnings).toContain('unknown-report-field:mystery');
   });

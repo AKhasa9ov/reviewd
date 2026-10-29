@@ -310,7 +310,7 @@ open. A round can be submitted once.
 `ReviewerBackend.run(job, sink, signal)` returns a `ReviewerReport`; findings stream through
 `FindingSink`. `validateReport(raw, { snapshot })` is dependency-free and rejects invalid
 items individually (duplicate ids, bad enums, missing snapshot paths, out-of-range lines,
-texts over 32 KiB, more than 200 findings / 50 questions), keeping the rest. A suggestion
+texts over 32 KiB, more than 50 questions), keeping the rest. Findings are not capped. A suggestion
 whose `original` does not match the snapshot after whitespace normalization is dropped and
 the finding is marked `unanchored`.
 

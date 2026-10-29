@@ -247,4 +247,27 @@ describe('mergeShardReports', () => {
     expect(partial.riskLevel).toBe('high');
     expect(partial.warnings).toEqual([]);
   });
+  it('keeps every finding beyond the old 200 cap', () => {
+    const reports = Array.from({ length: 3 }, (_, shardIndex) => ({
+      shardId: `shard_${String(shardIndex + 1).padStart(3, '0')}`,
+      report: report({
+        findings: Array.from({ length: 100 }, (_, index) =>
+          finding(
+            `src/generated-${shardIndex}-${index}.ts`,
+            `f-${shardIndex}-${index}`,
+            `finding ${shardIndex}-${index}`,
+          ),
+        ),
+      }),
+    }));
+
+    const merged = mergeShardReports({
+      reviewId: 'rev_1',
+      round: 1,
+      backend: 'worker',
+      reports,
+    });
+
+    expect(merged.findings).toHaveLength(300);
+  });
 });
