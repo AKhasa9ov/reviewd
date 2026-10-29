@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentReport, Finding } from '../../src/reviewer/types.js';
 import type { ManifestFile, ReviewManifest } from '../../src/types.js';
-import { aggregateShardReports } from '../../src/review/aggregate.js';
+import { aggregateShardReports, mergeShardReports } from '../../src/review/aggregate.js';
 import { buildReviewPlan } from '../../src/review/plan.js';
 import { isCoverageComplete } from '../../src/review/coverage.js';
 
@@ -214,5 +214,37 @@ describe('aggregateShardReports', () => {
     });
     expect(isCoverageComplete(result.coverage)).toBe(false);
     expect(result.report.warnings).toContain(`shard-failed:${second.id}`);
+  });
+});
+
+describe('mergeShardReports', () => {
+  it('merges completed shard reports without marking unreported shards failed', () => {
+    const partial = mergeShardReports({
+      reviewId: 'rev_1',
+      round: 1,
+      backend: 'worker',
+      reports: [
+        {
+          shardId: 'shard_002',
+          report: report({
+            summary: 'second shard',
+            findings: [finding('src/b.ts', 'f2', 'second finding')],
+          }),
+        },
+        {
+          shardId: 'shard_001',
+          report: report({
+            summary: 'first shard',
+            riskLevel: 'high',
+            findings: [finding('src/a.ts', 'f1', 'first finding')],
+          }),
+        },
+      ],
+    });
+
+    expect(partial.summary).toBe('second shard\n\nfirst shard');
+    expect(partial.findings.map((item) => item.title)).toEqual(['second finding', 'first finding']);
+    expect(partial.riskLevel).toBe('high');
+    expect(partial.warnings).toEqual([]);
   });
 });

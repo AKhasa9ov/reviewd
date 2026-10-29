@@ -135,10 +135,11 @@ export type {
   ReviewTier,
   ShardLimits,
 } from './review/plan.js';
-export { aggregateShardReports } from './review/aggregate.js';
+export { aggregateShardReports, mergeShardReports } from './review/aggregate.js';
 export type {
   AggregateShardReportsInput,
   AggregateShardReportsResult,
+  MergeShardReportsInput,
   ShardReportInput,
 } from './review/aggregate.js';
 export { deriveOutcome } from './review/outcomes.js';

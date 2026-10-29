@@ -146,6 +146,53 @@ function updateCoverage(
   };
 }
 
+export interface MergeShardReportsInput {
+  reviewId: ReviewId;
+  round: RoundNo;
+  backend: ReviewerBackendKind;
+  /**
+   * Reports in display order. Callers that have a plan must sort by plan order;
+   * live previews sort by shard index before calling this helper.
+   */
+  reports: readonly ShardReportInput[];
+}
+
+/**
+ * Merges completed shard reports without another model call or coverage
+ * assumptions. Missing shards are intentionally ignored: this is the live
+ * preview path while a round is still running. Final aggregation, which also
+ * computes coverage and fails missing shards, uses this helper after ordering
+ * reports by the plan.
+ */
+export function mergeShardReports(input: MergeShardReportsInput): AgentReport {
+  const findings = mergeFindings(input.reports);
+  const summaryParts = input.reports
+    .map((report) => report.report.summary.trim())
+    .filter((summary) => summary !== '');
+  const summary =
+    summaryParts.length === 0
+      ? 'The review did not produce a shard report.'
+      : summaryParts.join('\n\n').slice(0, 20_000);
+  return {
+    schemaVersion: 1,
+    summary,
+    riskLevel: highestRisk(input.reports),
+    findings,
+    questions: mergeQuestions(input.reports),
+    tests: mergeTests(input.reports),
+    verification: mergeVerification(input.reports),
+    reviewId: input.reviewId,
+    round: input.round,
+    backend: input.backend,
+    rejected: input.reports.flatMap((item) => item.report.rejected),
+    warnings: [...new Set(input.reports.flatMap((report) => report.report.warnings))],
+    ...(input.reports.some((item) => item.report.dirtyWorktree === true)
+      ? { dirtyWorktree: true }
+      : {}),
+    skipped: false,
+  };
+}
+
 /**
  * Merges shard reports without another model call. Deterministic: reports are
  * ordered by the review plan (not shard completion order), findings dedupe by
@@ -164,33 +211,14 @@ export function aggregateShardReports(
   const reports = [...input.reports].sort(
     (left, right) => rank(left.shardId) - rank(right.shardId),
   );
-  const findings = mergeFindings(reports);
-  const warnings = [...new Set(reports.flatMap((report) => report.report.warnings))];
-  for (const shardId of [...failed].sort()) {
-    warnings.push(`shard-failed:${shardId}`);
-  }
-  const summaryParts = reports
-    .map((report) => report.report.summary.trim())
-    .filter((summary) => summary !== '');
-  const summary =
-    summaryParts.length === 0
-      ? 'The review did not produce a shard report.'
-      : summaryParts.join('\n\n').slice(0, 20_000);
-  const report: AgentReport = {
-    schemaVersion: 1,
-    summary,
-    riskLevel: highestRisk(reports),
-    findings,
-    questions: mergeQuestions(reports),
-    tests: mergeTests(reports),
-    verification: mergeVerification(reports),
+  const report = mergeShardReports({
     reviewId: input.reviewId,
     round: input.round,
     backend: input.backend,
-    rejected: reports.flatMap((item) => item.report.rejected),
-    warnings,
-    ...(reports.some((item) => item.report.dirtyWorktree === true) ? { dirtyWorktree: true } : {}),
-    skipped: false,
-  };
+    reports,
+  });
+  for (const shardId of [...failed].sort()) {
+    report.warnings.push(`shard-failed:${shardId}`);
+  }
   return { report, coverage: updateCoverage(input.plan, reports, failed) };
 }
