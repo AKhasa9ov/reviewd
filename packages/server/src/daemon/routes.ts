@@ -40,6 +40,7 @@ import { parsePositiveInt, readForm, readJson, requestId, sendJson } from './htt
 import type { DeliveryQueue } from './deliveries.js';
 import type { JobQueue } from './jobs.js';
 import { buildReviewPrompt } from './prompt.js';
+import { retryTargetShardIds } from './retry.js';
 import {
   readRepositorySettings,
   writeRepositorySettings,
@@ -519,9 +520,11 @@ async function enqueueWorkerJob(ctx: RouteContext, reviewId: string): Promise<vo
 }
 
 /**
- * Requeues only shards that have no durable report. The snapshot, round and
- * completed reports stay unchanged, so retry does not create a new round or
- * discard work that already succeeded.
+ * Requeues shards with a known failure, never shards already represented in the
+ * report. When no failure was recorded (for example after a daemon restart), it
+ * falls back to shards without a report so recovery remains possible. The
+ * snapshot, round and completed reports stay unchanged, so retry does not
+ * create a new round or discard work that already succeeded.
  */
 async function retryWorkerAgent(ctx: RouteContext, reviewId: string): Promise<ReviewView> {
   const view = await ctx.service.get(reviewId);
@@ -550,15 +553,21 @@ async function retryWorkerAgent(ctx: RouteContext, reviewId: string): Promise<Re
 
   if (snapshot.schemaVersion === 2 && manifest !== undefined) {
     const plan = buildReviewPlan({ manifest });
-    const completed = new Set(
+    const reportedShardIds = new Set(
       (agent.shards ?? [])
         .filter((shard) => shard.round === round.no)
         .map((shard) => shard.shardId),
     );
-    const targets = plan.shards.filter((shard) => !completed.has(shard.id));
+    const targets = retryTargetShardIds({
+      plan,
+      round: round.no,
+      reportedShardIds,
+      coverage: agent.coverage,
+      jobs: ctx.jobs.listReview(reviewId),
+    });
     await append(ctx, reviewId, 'agent/retry', {
       round: round.no,
-      shardIds: targets.map((shard) => shard.id),
+      shardIds: targets,
     } as never);
     ctx.jobs.clearAggregated(reviewId, round.no);
     try {
@@ -577,7 +586,7 @@ async function retryWorkerAgent(ctx: RouteContext, reviewId: string): Promise<Re
           coverage: aggregate.coverage,
         } as never);
       } else {
-        await enqueueShardJobs(ctx, view, round, plan, new Set(targets.map((shard) => shard.id)));
+        await enqueueShardJobs(ctx, view, round, plan, new Set(targets));
       }
     } catch (error) {
       // The retry event above made the agent queued. If rebuilding the shard

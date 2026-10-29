@@ -7550,6 +7550,29 @@ function buildReviewPrompt(input) {
   };
 }
 
+// packages/server/src/daemon/retry.ts
+function retryTargetShardIds(input) {
+  const reported = input.reportedShardIds;
+  const failed = /* @__PURE__ */ new Set();
+  let knownFailure = false;
+  for (const file of input.coverage?.files ?? []) {
+    if (file.status !== "failed" || file.shardId === void 0) continue;
+    knownFailure = true;
+    if (!reported.has(file.shardId)) failed.add(file.shardId);
+  }
+  for (const job of input.jobs) {
+    if (job.round !== input.round || job.status !== "failed" && job.status !== "canceled" || job.shardId === void 0) {
+      continue;
+    }
+    knownFailure = true;
+    if (!reported.has(job.shardId)) failed.add(job.shardId);
+  }
+  if (knownFailure) {
+    return input.plan.shards.filter((shard) => failed.has(shard.id)).map((shard) => shard.id);
+  }
+  return input.plan.shards.filter((shard) => !reported.has(shard.id)).map((shard) => shard.id);
+}
+
 // packages/server/src/daemon/settings.ts
 import { randomBytes as randomBytes7 } from "node:crypto";
 import { mkdir as mkdir3, open as open6, readFile as readFile5, rename as rename4, unlink as unlink4 } from "node:fs/promises";
@@ -8166,13 +8189,19 @@ async function retryWorkerAgent(ctx, reviewId) {
   const manifest = snapshot.manifest;
   if (snapshot.schemaVersion === 2 && manifest !== void 0) {
     const plan = buildReviewPlan({ manifest });
-    const completed = new Set(
+    const reportedShardIds = new Set(
       (agent.shards ?? []).filter((shard) => shard.round === round.no).map((shard) => shard.shardId)
     );
-    const targets = plan.shards.filter((shard) => !completed.has(shard.id));
+    const targets = retryTargetShardIds({
+      plan,
+      round: round.no,
+      reportedShardIds,
+      coverage: agent.coverage,
+      jobs: ctx.jobs.listReview(reviewId)
+    });
     await append(ctx, reviewId, "agent/retry", {
       round: round.no,
-      shardIds: targets.map((shard) => shard.id)
+      shardIds: targets
     });
     ctx.jobs.clearAggregated(reviewId, round.no);
     try {
@@ -8189,7 +8218,7 @@ async function retryWorkerAgent(ctx, reviewId) {
           coverage: aggregate.coverage
         });
       } else {
-        await enqueueShardJobs(ctx, view, round, plan, new Set(targets.map((shard) => shard.id)));
+        await enqueueShardJobs(ctx, view, round, plan, new Set(targets));
       }
     } catch (error) {
       ctx.jobs.cancelReview(reviewId);

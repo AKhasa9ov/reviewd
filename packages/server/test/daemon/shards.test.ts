@@ -318,7 +318,21 @@ describe('shard aggregation', () => {
           schemaVersion: 1,
           summary: 'retry done',
           riskLevel: 'low',
-          findings: [],
+          findings: [
+            {
+              id: 'added',
+              severity: 'minor',
+              category: 'correctness',
+              confidence: 'high',
+              kind: 'issue',
+              file: retryPath,
+              lineStart: 1,
+              lineEnd: 1,
+              title: 'added by retry',
+              rationale: 'retry adds this',
+              evidence: 'export const',
+            },
+          ],
           questions: [],
           tests: { ran: false, commands: [] },
           verification: [],
@@ -335,7 +349,10 @@ describe('shard aggregation', () => {
       pending: 0,
       failed: 0,
     });
-    expect(final.review.report?.findings[0]?.id).toBe(`${first.job.shardId}:keep`);
+    expect(final.review.report?.findings.map((finding) => finding.id)).toEqual([
+      `${first.job.shardId}:keep`,
+      `${retryJob.job.shardId}:added`,
+    ]);
     expect(final.review.report?.warnings).not.toContain(`shard-failed:${second.job.shardId}`);
     expect(await leaseNext(daemonUrl, worker.id)).toBeNull();
     const afterDone = await fetch(`${daemonUrl}/api/reviews/${reviewId}/agent/retry`, {

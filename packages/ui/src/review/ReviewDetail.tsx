@@ -997,7 +997,7 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
     try {
       const next = await client.retryAgent(id);
       setView(next);
-      toast('Reviewer retry queued');
+      toast('Retrying failed files; completed findings stay in the report');
       reloadReview();
     } catch (error) {
       setActionError(actionErrorFor(error));
