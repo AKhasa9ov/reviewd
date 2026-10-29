@@ -3107,6 +3107,7 @@ body.cr-selecting-lines {
 
 .cr-inline-question {
   display: block;
+  width: 100%;
   min-width: 0;
   margin: 0;
   padding: 5px 10px 6px;
