@@ -1149,6 +1149,87 @@ async function worktreeDigestState(repoRoot, baseSha, signal) {
   };
 }
 
+// packages/core/src/diff/manifest.ts
+var LINE_PREFIX = {
+  add: "+",
+  del: "-",
+  context: " "
+};
+function hunkHeaderLine(hunk) {
+  const section2 = hunk.header === "" ? "" : ` ${hunk.header}`;
+  return `@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@${section2}`;
+}
+function patchBytesFromHunks(hunks) {
+  let bytes = 0;
+  for (const hunk of hunks) {
+    bytes += Buffer.byteLength(`${hunkHeaderLine(hunk)}
+`, "utf8");
+    for (const line of hunk.lines) {
+      bytes += Buffer.byteLength(`${LINE_PREFIX[line.kind]}${line.text}
+`, "utf8");
+    }
+  }
+  return bytes;
+}
+function reasonForFile(file) {
+  if (file.reason !== void 0) return file.reason;
+  if (file.ignored === true) return "ignored";
+  if (file.binary) return "binary";
+  if (file.oversized) return "per-file-cap";
+  return void 0;
+}
+function manifestFileFromDiff(file) {
+  const reason = reasonForFile(file);
+  return {
+    path: file.path,
+    ...file.oldPath === void 0 ? {} : { oldPath: file.oldPath },
+    status: file.status,
+    binary: file.binary,
+    ignored: file.ignored === true,
+    oversized: file.oversized,
+    added: file.added,
+    deleted: file.deleted,
+    hunkCount: file.hunks.length,
+    patchBytes: patchBytesFromHunks(file.hunks),
+    ...reason === void 0 ? {} : { reason }
+  };
+}
+function reviewManifest(scope, files, warnings = []) {
+  const totals = files.reduce(
+    (accumulator, file) => ({
+      files: accumulator.files + 1,
+      added: accumulator.added + file.added,
+      deleted: accumulator.deleted + file.deleted,
+      patchBytes: accumulator.patchBytes + file.patchBytes
+    }),
+    { files: 0, added: 0, deleted: 0, patchBytes: 0 }
+  );
+  return {
+    schemaVersion: 1,
+    scope,
+    files: [...files],
+    totals,
+    warnings: [...warnings]
+  };
+}
+function buildReviewManifest(input) {
+  return reviewManifest(
+    input.scope,
+    input.files.map((file) => manifestFileFromDiff(file)),
+    input.warnings
+  );
+}
+function manifestFromSnapshot(snapshot) {
+  if (snapshot.manifest !== void 0) return snapshot.manifest;
+  const warnings = [...snapshot.warnings];
+  if (snapshot.schemaVersion === 2) {
+    if (!warnings.includes("manifest-missing")) warnings.push("manifest-missing");
+  } else if (snapshot.totals.truncated && !warnings.includes("legacy-truncated")) {
+    warnings.push("legacy-truncated");
+  }
+  return buildReviewManifest({ scope: snapshot.scope, files: snapshot.files, warnings });
+}
+
 // packages/core/src/diff/parse.ts
 var FILE_HEADER = /^diff --git a\/(.+) b\/(.+)$/;
 var HUNK_HEADER = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(?: ?(.*))?$/;
@@ -1379,6 +1460,7 @@ var DEFAULTS = {
   maxTotalContentBytes: 64 * 1024 * 1024,
   maxFiles: 500
 };
+var MAX_MANIFEST_LISTING_BYTES = 64 * 1024 * 1024;
 function fitsContent(budget, bytes) {
   if (!budget.includeContent) return false;
   if (budget.exhausted || budget.usedBytes + bytes > budget.maxTotalBytes) {
@@ -1399,13 +1481,17 @@ function warnUnreadable(warnings, path) {
   const warning = `unreadable:${path}`;
   if (!warnings.includes(warning)) warnings.push(warning);
 }
-function diffArgs(scope, raw = false) {
+function diffArgs(scope, format = "patch", paths) {
   const common = ["diff", "--no-color", "--no-ext-diff", "--no-textconv"];
-  if (raw) common.push("--raw", "-z");
+  if (format === "raw") common.push("--raw", "-z");
+  else if (format === "numstat") common.push("--numstat", "-z");
   else common.push("--unified=3");
   common.push("--find-renames=50%", "--src-prefix=a/", "--dst-prefix=b/");
-  if (scope.kind === "worktree") return [...common, scope.baseSha, "--"];
-  return [...common, `${scope.baseSha}..${scope.headSha}`, "--"];
+  if (scope.kind === "worktree") common.push(scope.baseSha);
+  else common.push(`${scope.baseSha}..${scope.headSha}`);
+  common.push("--");
+  if (paths !== void 0) common.push(...paths);
+  return common;
 }
 function truncateAtFileBoundary(text, maxBytes) {
   if (Buffer.byteLength(text, "utf8") <= maxBytes) {
@@ -1505,17 +1591,101 @@ function parseRawDiff(raw) {
       binary: false,
       hunks: [],
       added: 0,
-      deleted: 0,
-      backfill: true
+      deleted: 0
     };
     if (oldPath !== void 0) entry.oldPath = oldPath;
     entries.push(entry);
   }
   return entries;
 }
-async function listRawChanges(scope, signal) {
-  const result = await runGit(scope.repoRoot, diffArgs(scope, true), { signal });
-  return parseRawDiff(result.stdout);
+async function listRawChanges(scope, signal, paths) {
+  const result = await runGit(scope.repoRoot, diffArgs(scope, "raw", paths), {
+    signal,
+    maxBytes: MAX_MANIFEST_LISTING_BYTES,
+    truncateOnOverflow: true
+  });
+  return { entries: parseRawDiff(result.stdout), truncated: result.truncated === true };
+}
+function parseNumstat(raw) {
+  const entries = /* @__PURE__ */ new Map();
+  const tokens = raw.split("\0");
+  if (!raw.endsWith("\0")) tokens.pop();
+  for (let index = 0; index < tokens.length; ) {
+    const record = tokens[index++];
+    if (record === void 0 || record === "") continue;
+    const fields = record.split("	");
+    if (fields.length < 3) continue;
+    const addedField = fields[0] ?? "";
+    const deletedField = fields[1] ?? "";
+    let path = fields.slice(2).join("	");
+    if (path === "") {
+      index += 1;
+      path = tokens[index++] ?? "";
+      if (path === "") continue;
+    }
+    const binary = addedField === "-" || deletedField === "-";
+    const added = binary ? 0 : Number.parseInt(addedField, 10);
+    const deleted = binary ? 0 : Number.parseInt(deletedField, 10);
+    if (!Number.isFinite(added) || !Number.isFinite(deleted)) continue;
+    entries.set(path, { added, deleted, binary });
+  }
+  return entries;
+}
+async function listNumstatChanges(scope, signal, paths) {
+  const result = await runGit(scope.repoRoot, diffArgs(scope, "numstat", paths), {
+    signal,
+    maxBytes: MAX_MANIFEST_LISTING_BYTES,
+    truncateOnOverflow: true
+  });
+  return { entries: parseNumstat(result.stdout), truncated: result.truncated === true };
+}
+function rawSeeds(raw, numstat, ignore) {
+  const seeds = /* @__PURE__ */ new Map();
+  for (const entry of raw) {
+    const counts = numstat.get(entry.path);
+    const seed = {
+      path: entry.path,
+      status: entry.status,
+      binary: counts?.binary === true,
+      added: counts?.added ?? entry.added,
+      deleted: counts?.deleted ?? entry.deleted,
+      ignored: isIgnored(entry.path, ignore),
+      oversized: false,
+      fromNumstat: counts !== void 0
+    };
+    if (entry.oldPath !== void 0) seed.oldPath = entry.oldPath;
+    seeds.set(entry.path, seed);
+  }
+  return seeds;
+}
+function manifestEntry(input) {
+  const mapped = input.file === void 0 ? void 0 : manifestFileFromDiff(input.file);
+  const ignored = input.seed.ignored || mapped?.ignored === true;
+  const oversized = input.seed.oversized || mapped?.oversized === true;
+  const binary = input.seed.binary || mapped?.binary === true;
+  let reason = mapped?.reason ?? input.seed.reason;
+  if (reason === "diff-truncated" && binary && !ignored) reason = "binary";
+  if (reason === void 0) {
+    if (ignored) reason = "ignored";
+    else if (binary) reason = "binary";
+    else if (oversized) reason = "per-file-cap";
+    else if (input.renderExcluded) reason = "render-budget";
+  }
+  const entry = {
+    path: input.seed.path,
+    status: mapped?.status ?? input.seed.status,
+    binary,
+    ignored,
+    oversized,
+    added: input.seed.fromNumstat ? input.seed.added : mapped?.added ?? input.seed.added,
+    deleted: input.seed.fromNumstat ? input.seed.deleted : mapped?.deleted ?? input.seed.deleted,
+    hunkCount: mapped?.hunkCount ?? 0,
+    patchBytes: mapped?.patchBytes ?? 0
+  };
+  const oldPath = mapped?.oldPath ?? input.seed.oldPath;
+  if (oldPath !== void 0) entry.oldPath = oldPath;
+  if (reason !== void 0) entry.reason = reason;
+  return entry;
 }
 async function listUntracked(repoRoot, signal) {
   const result = await runGit(repoRoot, ["ls-files", "--others", "--exclude-standard", "-z"], {
@@ -1658,7 +1828,13 @@ async function buildSnapshot(options) {
   });
   const warnings = [];
   if (scope.worktreeDigestTruncated === true) warnings.push("worktree-digest-truncated");
-  const diff = await runGit(scope.repoRoot, diffArgs(scope), {
+  const paths = options.paths;
+  const rawListing = await listRawChanges(scope, options.signal, paths);
+  const numstatListing = await listNumstatChanges(scope, options.signal, paths);
+  const listingTruncated = rawListing.truncated || numstatListing.truncated;
+  if (listingTruncated) warnings.push("manifest-listing-truncated");
+  const seeds = rawSeeds(rawListing.entries, numstatListing.entries, ignore);
+  const diff = await runGit(scope.repoRoot, diffArgs(scope, "patch", paths), {
     signal: options.signal,
     maxBytes: Math.max(maxDiffBytes * 8, 16 * 1024 * 1024),
     truncateOnOverflow: true
@@ -1674,13 +1850,13 @@ async function buildSnapshot(options) {
     ...limited.synthetic === void 0 ? [] : [limited.synthetic],
     ...parseUnifiedDiff(limited.text)
   ].sort((left, right) => comparePaths(left.path, right.path));
-  let truncated = diffTruncated || limited.truncated;
+  let truncated = listingTruncated || diffTruncated || limited.truncated;
   if (truncated) {
     const seen = new Set(candidates.map((entry) => candidateKey(entry)));
     const byKey = new Map(candidates.map((entry) => [candidateKey(entry), entry]));
-    for (const entry of await listRawChanges(scope, options.signal)) {
-      const key = candidateKey(entry);
-      const warning = `diff-file-skipped:${entry.path}`;
+    for (const listed of rawListing.entries) {
+      const key = candidateKey(listed);
+      const warning = `diff-file-skipped:${listed.path}`;
       if (seen.has(key)) {
         const existing = byKey.get(key);
         if (existing?.synthetic === true) {
@@ -1689,6 +1865,7 @@ async function buildSnapshot(options) {
         }
         continue;
       }
+      const entry = { ...listed, backfill: true };
       seen.add(key);
       byKey.set(key, entry);
       candidates.push(entry);
@@ -1696,12 +1873,14 @@ async function buildSnapshot(options) {
     }
     candidates.sort((left, right) => comparePaths(left.path, right.path));
   }
+  let renderCapped = false;
   let selected = candidates;
   const reviewableCandidates = candidates.filter((entry) => !isIgnored(entry.path, ignore));
   if (reviewableCandidates.length > maxFiles) {
     const kept = new Set(reviewableCandidates.slice(0, maxFiles));
     selected = candidates.filter((entry) => isIgnored(entry.path, ignore) || kept.has(entry));
     truncated = true;
+    renderCapped = true;
     warnings.push("files-truncated");
   }
   const modeListing = await headModes(scope.repoRoot, scope.headSha, options.signal);
@@ -1717,10 +1896,11 @@ async function buildSnapshot(options) {
   const files = [];
   for (const entry of selected) {
     if (entry.backfill === true) {
+      const seed = seeds.get(entry.path);
       const skipped = {
         path: entry.path,
         status: entry.status,
-        binary: false,
+        binary: seed?.binary === true,
         oversized: false,
         added: 0,
         deleted: 0,
@@ -1735,25 +1915,22 @@ async function buildSnapshot(options) {
       continue;
     }
     if (entry.synthetic === true) {
+      const seed = seeds.get(entry.path);
       const synthetic = {
         path: entry.path,
         status: entry.status,
-        binary: false,
-        oversized: true,
+        binary: entry.binary || seed?.binary === true,
+        // Nothing measured this file's size; the global diff cap cut it.
+        oversized: false,
         added: 0,
         deleted: 0,
         hunks: [],
-        contentHash: null
+        contentHash: null,
+        truncated: true,
+        reason: "diff-truncated"
       };
       if (entry.oldPath !== void 0) synthetic.oldPath = entry.oldPath;
-      if (entry.skipped === true) {
-        synthetic.truncated = true;
-        synthetic.reason = "diff-truncated";
-      }
-      if (isIgnored(entry.path, ignore)) {
-        synthetic.ignored = true;
-        synthetic.oversized = false;
-      }
+      if (isIgnored(entry.path, ignore)) synthetic.ignored = true;
       files.push(synthetic);
       continue;
     }
@@ -1848,9 +2025,22 @@ async function buildSnapshot(options) {
       truncated = true;
     }
     for (const path of listing.paths) {
+      const ignored = isIgnored(path, ignore);
+      const seed = {
+        path,
+        status: "untracked",
+        binary: false,
+        added: 0,
+        deleted: 0,
+        ignored,
+        oversized: false,
+        fromNumstat: false
+      };
+      seeds.set(path, seed);
       const absolute = safeJoin(scope.repoRoot, path);
       const info = await lstat4(absolute).catch(() => null);
       if (info?.isSymbolicLink() === true || await hasSymlinkParent(scope.repoRoot, path)) {
+        seed.reason = "symlink";
         warnings.push(`symlink-not-followed:${path}`);
         continue;
       }
@@ -1860,7 +2050,7 @@ async function buildSnapshot(options) {
         maxFileLines,
         maxContentBytes,
         includeContent,
-        isIgnored(path, ignore),
+        ignored,
         budget,
         warnings
       );
@@ -1868,6 +2058,7 @@ async function buildSnapshot(options) {
     }
   }
   files.sort((left, right) => comparePaths(left.path, right.path));
+  const retainedFiles = files.slice();
   const reviewableFiles = files.filter((file) => file.ignored !== true);
   if (reviewableFiles.length > maxFiles) {
     const kept = new Set(reviewableFiles.slice(0, maxFiles));
@@ -1877,22 +2068,53 @@ async function buildSnapshot(options) {
       ...files.filter((file) => file.ignored === true || kept.has(file))
     );
     truncated = true;
+    renderCapped = true;
     if (!warnings.includes("files-truncated")) warnings.push("files-truncated");
   }
-  const totalsTruncated = truncated || budget.exhausted;
-  const totals = files.reduce(
-    (accumulator, file) => ({
-      files: accumulator.files + 1,
-      added: accumulator.added + file.added,
-      deleted: accumulator.deleted + file.deleted,
-      truncated: totalsTruncated
-    }),
-    { files: 0, added: 0, deleted: 0, truncated: totalsTruncated }
+  const retainedByPath = new Map(retainedFiles.map((file) => [file.path, file]));
+  for (const file of retainedFiles) {
+    if (seeds.has(file.path)) continue;
+    const seed = {
+      path: file.path,
+      status: file.status,
+      binary: file.binary,
+      added: file.added,
+      deleted: file.deleted,
+      ignored: file.ignored === true,
+      oversized: file.oversized,
+      fromNumstat: false
+    };
+    if (file.oldPath !== void 0) seed.oldPath = file.oldPath;
+    if (file.reason !== void 0) seed.reason = file.reason;
+    seeds.set(file.path, seed);
+  }
+  const renderPaths = new Set(files.map((file) => file.path));
+  const manifest = reviewManifest(
+    scope,
+    [...seeds.values()].map((seed) => {
+      const file = retainedByPath.get(seed.path);
+      return manifestEntry({
+        seed,
+        ...file === void 0 ? {} : { file },
+        renderExcluded: !renderPaths.has(seed.path)
+      });
+    }).sort((left, right) => comparePaths(left.path, right.path)),
+    warnings
   );
+  const manifestTruncated = truncated || budget.exhausted || renderCapped || manifest.files.some(
+    (file) => file.reason === "render-budget" || file.reason === "diff-truncated" || file.reason === "per-file-cap"
+  );
+  const totals = {
+    files: manifest.totals.files,
+    added: manifest.totals.added,
+    deleted: manifest.totals.deleted,
+    truncated: manifestTruncated
+  };
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     scope,
     files,
+    manifest,
     totals,
     warnings
   };
@@ -1984,9 +2206,12 @@ var REVIEW_EVENT_TYPES = [
   "review/closed",
   "review/submitted",
   "agent/started",
+  "agent/coverage",
+  "agent/shard",
   "agent/finding",
   "agent/report",
-  "agent/failed"
+  "agent/failed",
+  "agent/retry"
 ];
 var ReviewEventError = class extends Error {
   code;
@@ -2266,8 +2491,1050 @@ function reanchor(previous, next, options) {
   };
 }
 
+// packages/core/src/review/coverage.ts
+var COVERAGE_STATUSES = Object.freeze([
+  "pending",
+  "deep-reviewed",
+  "light-reviewed",
+  "manifest-only",
+  "skipped",
+  "no-hunks",
+  "deferred",
+  "failed"
+]);
+var UNRESOLVED_STATUSES = /* @__PURE__ */ new Set(["pending", "skipped", "deferred", "failed"]);
+var POLICY_REASONS = /* @__PURE__ */ new Set(["binary", "ignored", "generated"]);
+var SKIP_REASONS = /* @__PURE__ */ new Set([
+  "render-budget",
+  "per-file-cap",
+  "diff-truncated",
+  "unreadable",
+  "legacy-truncated",
+  "symlink"
+]);
+var INCOMPLETE_MANIFEST_WARNINGS = /* @__PURE__ */ new Set([
+  "manifest-listing-truncated",
+  "untracked-list-truncated",
+  "manifest-missing"
+]);
+function summarizeCoverage(files) {
+  const byStatus = Object.fromEntries(COVERAGE_STATUSES.map((status2) => [status2, 0]));
+  const known = new Set(COVERAGE_STATUSES);
+  for (const file of files) {
+    if (!known.has(file.status)) continue;
+    byStatus[file.status] += 1;
+  }
+  return { files: files.length, byStatus };
+}
+function policyReason(file) {
+  if (file.reason !== void 0 && POLICY_REASONS.has(file.reason)) return file.reason;
+  if (file.ignored) return "ignored";
+  if (file.binary) return "binary";
+  return void 0;
+}
+function skipReason(file) {
+  if (file.reason !== void 0 && SKIP_REASONS.has(file.reason)) return file.reason;
+  return "render-budget";
+}
+function coverageFromPrompt(manifest, includedPaths) {
+  const included = new Set(includedPaths);
+  const files = manifest.files.map((file) => {
+    const policy = policyReason(file);
+    if (policy !== void 0) {
+      return { path: file.path, status: "manifest-only", reason: policy };
+    }
+    if (file.reason === "symlink" && file.hunkCount === 0 && file.added === 0 && file.deleted === 0) {
+      return { path: file.path, status: "no-hunks" };
+    }
+    if (included.has(file.path)) {
+      if (file.hunkCount > 0) return { path: file.path, status: "pending" };
+      if (file.reason === void 0 && file.added === 0 && file.deleted === 0) {
+        return { path: file.path, status: "no-hunks" };
+      }
+    }
+    return { path: file.path, status: "skipped", reason: skipReason(file) };
+  });
+  const incomplete = manifest.warnings.some((warning) => INCOMPLETE_MANIFEST_WARNINGS.has(warning));
+  return {
+    files,
+    totals: summarizeCoverage(files),
+    ...incomplete ? { incomplete: true } : {}
+  };
+}
+function isCoverageComplete(coverage) {
+  if (coverage.incomplete === true) return false;
+  const computed = summarizeCoverage(coverage.files);
+  const knownCount = COVERAGE_STATUSES.reduce((sum, status2) => sum + computed.byStatus[status2], 0);
+  if (knownCount !== coverage.files.length) return false;
+  if (coverage.totals.files !== coverage.files.length) return false;
+  for (const status2 of COVERAGE_STATUSES) {
+    if ((coverage.totals.byStatus[status2] ?? 0) !== computed.byStatus[status2]) return false;
+  }
+  const persistedCount = COVERAGE_STATUSES.reduce(
+    (sum, status2) => sum + (coverage.totals.byStatus[status2] ?? 0),
+    0
+  );
+  if (persistedCount !== coverage.files.length) return false;
+  return coverage.files.every((file) => {
+    if (UNRESOLVED_STATUSES.has(file.status)) return false;
+    if (file.status !== "manifest-only") return true;
+    return file.reason !== void 0 && POLICY_REASONS.has(file.reason);
+  });
+}
+function promotePendingToLight(coverage) {
+  const files = coverage.files.map(
+    (file) => file.status === "pending" ? { ...file, status: "light-reviewed" } : { ...file }
+  );
+  return {
+    files,
+    totals: summarizeCoverage(files),
+    ...coverage.incomplete === true ? { incomplete: true } : {}
+  };
+}
+
+// packages/core/src/review/plan.ts
+var WORKSPACE_CONTAINERS = /* @__PURE__ */ new Set([
+  "packages",
+  "apps",
+  "services",
+  "libs",
+  "modules",
+  "plugins"
+]);
+var CONVENTION_ROOTS = /* @__PURE__ */ new Set([
+  "src",
+  "app",
+  "backend",
+  "frontend",
+  "server",
+  "client",
+  "ui",
+  "web",
+  "api",
+  "docs",
+  "tests",
+  "test",
+  "e2e",
+  "ui-tests",
+  "migrations",
+  "config",
+  "scripts",
+  "tools"
+]);
+var INSTRUCTION_FILES = /* @__PURE__ */ new Set([
+  "AGENTS.md",
+  "CLAUDE.md",
+  "GEMINI.md",
+  ".cursorrules",
+  ".github/copilot-instructions.md"
+]);
+var DOC_FILES = /* @__PURE__ */ new Set([
+  "README.md",
+  "CHANGELOG.md",
+  "ARCHITECTURE.md",
+  "BACKEND_SPEC.md",
+  "CONTRIBUTING.md",
+  "SECURITY.md",
+  "LICENSE.md"
+]);
+var CONFIG_FILES = /* @__PURE__ */ new Set([
+  "package.json",
+  "pnpm-workspace.yaml",
+  "pnpm-lock.yaml",
+  "package-lock.json",
+  "yarn.lock",
+  "uv.lock",
+  "poetry.lock",
+  "Cargo.lock",
+  "go.sum",
+  "tsconfig.json",
+  "pyproject.toml",
+  "requirements.txt",
+  "go.mod",
+  "Cargo.toml",
+  "pom.xml",
+  "Makefile",
+  "Dockerfile",
+  "docker-compose.yml",
+  "docker-compose.yaml"
+]);
+var SOURCE_EXTENSIONS = /* @__PURE__ */ new Set([
+  ".ts",
+  ".tsx",
+  ".js",
+  ".jsx",
+  ".mjs",
+  ".cjs",
+  ".py",
+  ".go",
+  ".rs",
+  ".java",
+  ".kt",
+  ".kts",
+  ".swift",
+  ".c",
+  ".cc",
+  ".cpp",
+  ".h",
+  ".hpp",
+  ".rb",
+  ".php",
+  ".cs",
+  ".sh",
+  ".bash",
+  ".zsh",
+  ".sql"
+]);
+var DOC_EXTENSIONS = /* @__PURE__ */ new Set([".md", ".mdx", ".rst", ".adoc"]);
+var GENERATED_DIRS = /* @__PURE__ */ new Set([
+  "dist",
+  "build",
+  "coverage",
+  "node_modules",
+  ".next",
+  "out",
+  "target",
+  ".turbo",
+  ".cache"
+]);
+function basename(path) {
+  const parts = path.split("/");
+  return parts.at(-1) ?? path;
+}
+function extension(path) {
+  const name2 = basename(path);
+  const dot = name2.lastIndexOf(".");
+  return dot <= 0 ? "" : name2.slice(dot).toLowerCase();
+}
+function normalizeRoot(root) {
+  const normalized = root.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+  return normalized === "" ? "." : normalized;
+}
+function isUnder(path, root) {
+  if (root === ".") return true;
+  return path === root || path.startsWith(`${root}/`);
+}
+function conventionRoot(path) {
+  const parts = path.split("/");
+  if (parts.length === 1) return ".";
+  const first = parts[0];
+  if (first === void 0) return ".";
+  if (WORKSPACE_CONTAINERS.has(first) && parts.length > 2) {
+    return `${first}/${parts[1] ?? ""}`;
+  }
+  if (CONVENTION_ROOTS.has(first)) return first;
+  return first;
+}
+function buildModuleMap(files, roots = []) {
+  const byRoot = /* @__PURE__ */ new Map();
+  const add = (root, source, info) => {
+    const normalized = normalizeRoot(root);
+    if (normalized === "." && source !== "root") return;
+    const existing = byRoot.get(normalized);
+    if (existing !== void 0 && !(source === "workspace" && existing.source === "convention")) {
+      return;
+    }
+    if (existing !== void 0 && source === "workspace") {
+      byRoot.set(normalized, {
+        id: info?.id ?? existing.id,
+        root: normalized,
+        ...info?.name === void 0 && existing.name === void 0 ? {} : { name: info?.name ?? existing.name },
+        source
+      });
+      return;
+    }
+    byRoot.set(normalized, {
+      id: info?.id ?? normalized,
+      root: normalized,
+      ...info?.name === void 0 ? {} : { name: info.name },
+      source
+    });
+  };
+  for (const root of roots) {
+    add(root.root, "workspace", root);
+  }
+  for (const path of files.map((file) => file.path)) {
+    add(conventionRoot(path), "convention");
+  }
+  add(".", "root");
+  const modules = [...byRoot.values()].sort((left, right) => {
+    if (left.id < right.id) return -1;
+    if (left.id > right.id) return 1;
+    return 0;
+  });
+  const orderedByRoot = [...modules].sort((left, right) => right.root.length - left.root.length);
+  return {
+    modules,
+    moduleFor(path) {
+      for (const module of orderedByRoot) {
+        if (isUnder(path, module.root)) return module.id;
+      }
+      return ".";
+    }
+  };
+}
+function isGenerated(file) {
+  if (file.reason === "generated") return true;
+  const name2 = basename(file.path);
+  if (name2 === "pnpm-lock.yaml" || name2 === "package-lock.json" || name2 === "yarn.lock" || name2 === "uv.lock" || name2 === "poetry.lock" || name2 === "Cargo.lock" || name2 === "go.sum") {
+    return true;
+  }
+  if (/(\.min\.|\.generated\.)/.test(name2)) return true;
+  return file.path.split("/").some((part) => GENERATED_DIRS.has(part));
+}
+function isInstructions(path) {
+  return INSTRUCTION_FILES.has(path) || path.startsWith(".dsh/");
+}
+function isMigration(path) {
+  if (extension(path) === ".sql") return true;
+  return /(^|\/)(migrations?|alembic|migrate)\//.test(path);
+}
+function isTest(path) {
+  if (/(^|\/)(test|tests|__tests__|e2e|ui-tests|spec|specs)\//.test(path)) return true;
+  return /\.(test|spec)\.[^/]+$/.test(path);
+}
+function isDocs(path) {
+  if (path.startsWith("docs/")) return true;
+  if (DOC_FILES.has(basename(path))) return true;
+  return DOC_EXTENSIONS.has(extension(path));
+}
+function isConfig(path) {
+  const name2 = basename(path);
+  if (CONFIG_FILES.has(name2)) return true;
+  if (path.startsWith(".github/")) return true;
+  if (/^(tsconfig|vite|vitest|eslint|prettier|playwright|jest|rollup|webpack).*\.(json|js|mjs|cjs|ts)$/.test(
+    name2
+  )) {
+    return true;
+  }
+  if (/^\.env(\..*)?$/.test(name2)) return true;
+  return extension(path) === ".yml" || extension(path) === ".yaml" || extension(path) === ".toml";
+}
+function isSource(path) {
+  return SOURCE_EXTENSIONS.has(extension(path));
+}
+function classifyFile(file) {
+  if (isInstructions(file.path)) return "instructions";
+  if (file.binary) return "binary";
+  if (isGenerated(file)) return "generated";
+  if (isMigration(file.path)) return "migration";
+  if (isTest(file.path)) return "test";
+  if (isDocs(file.path)) return "docs";
+  if (isConfig(file.path)) return "config";
+  if (isSource(file.path)) return "source";
+  return "other";
+}
+function isUserFacingDoc(path) {
+  if (path.startsWith("docs/internal/")) return false;
+  if (path.startsWith("docs/")) return true;
+  const name2 = basename(path);
+  return DOC_FILES.has(name2) || /^README\./i.test(name2);
+}
+var DEFAULT_SHARD_LIMITS = Object.freeze({
+  maxFiles: 12,
+  maxPatchBytes: 12e4
+});
+var INCOMPLETE_MANIFEST_WARNINGS2 = /* @__PURE__ */ new Set([
+  "manifest-listing-truncated",
+  "untracked-list-truncated",
+  "manifest-missing"
+]);
+function byteCompare(left, right) {
+  return Buffer.compare(Buffer.from(left, "utf8"), Buffer.from(right, "utf8"));
+}
+function isNoHunks(file) {
+  return file.reason === void 0 && !file.binary && !file.ignored && file.hunkCount === 0 && file.added === 0 && file.deleted === 0;
+}
+function policyReason2(file, kind) {
+  if (file.reason !== void 0 && ["generated", "binary", "ignored"].includes(file.reason)) {
+    return file.reason;
+  }
+  if (file.ignored) return "ignored";
+  if (file.binary) return "binary";
+  if (kind === "generated") return "generated";
+  return void 0;
+}
+function tierFor(file, kind, moduleHasSource) {
+  if (kind === "binary" || kind === "generated" || file.ignored) return "manifest-only";
+  switch (kind) {
+    case "source":
+    case "config":
+    case "migration":
+    case "instructions":
+      return "deep";
+    case "test":
+      return moduleHasSource ? "deep" : "light";
+    case "docs":
+      return isUserFacingDoc(file.path) ? "deep" : "light";
+    case "other":
+      return "light";
+  }
+}
+function riskFlags(input) {
+  const flags = [];
+  const generated = input.files.filter((file) => file.tier === "manifest-only").length;
+  if (input.manifest.totals.files >= 100 || input.manifest.totals.patchBytes >= 1e6) {
+    flags.push("large-diff");
+  }
+  if (input.files.length >= 10 && generated * 10 >= input.files.length) {
+    flags.push("generated-heavy");
+  }
+  if (input.manifest.warnings.some((warning) => INCOMPLETE_MANIFEST_WARNINGS2.has(warning))) {
+    flags.push("manifest-incomplete");
+  }
+  if (input.files.some((file) => /(^|\/)(auth|security|crypto|migrations?|config)\//.test(file.path))) {
+    flags.push("security-sensitive");
+  }
+  if (!input.files.some((file) => file.tier === "deep" && file.kind === "source")) {
+    flags.push("no-source");
+  }
+  if (input.modules > 8) flags.push("many-modules");
+  return flags;
+}
+function buildReviewPlan(input) {
+  const limits = {
+    maxFiles: Math.max(1, Math.trunc(input.limits?.maxFiles ?? DEFAULT_SHARD_LIMITS.maxFiles)),
+    maxPatchBytes: Math.max(
+      1,
+      Math.trunc(input.limits?.maxPatchBytes ?? DEFAULT_SHARD_LIMITS.maxPatchBytes)
+    )
+  };
+  const modules = buildModuleMap(input.manifest.files, input.moduleRoots);
+  const kinds = /* @__PURE__ */ new Map();
+  for (const file of input.manifest.files) {
+    kinds.set(file.path, classifyFile(file));
+  }
+  const sourceModules = /* @__PURE__ */ new Set();
+  for (const file of input.manifest.files) {
+    if (kinds.get(file.path) === "source") sourceModules.add(modules.moduleFor(file.path));
+  }
+  const files = input.manifest.files.map((file) => {
+    const kind = kinds.get(file.path) ?? "other";
+    const moduleId = modules.moduleFor(file.path);
+    const tier = tierFor(file, kind, sourceModules.has(moduleId));
+    const reason = tier === "manifest-only" ? policyReason2(file, kind) : void 0;
+    return {
+      path: file.path,
+      moduleId,
+      kind,
+      tier,
+      ...reason === void 0 ? {} : { reason }
+    };
+  });
+  const byPath = new Map(files.map((file) => [file.path, file]));
+  const groups = /* @__PURE__ */ new Map();
+  for (const file of files) {
+    if (file.tier === "manifest-only") continue;
+    const manifestFile = input.manifest.files.find((item) => item.path === file.path);
+    if (manifestFile === void 0 || isNoHunks(manifestFile)) continue;
+    const key = `${file.moduleId}\0${file.tier}`;
+    const group = groups.get(key) ?? [];
+    group.push(file);
+    groups.set(key, group);
+  }
+  const shards = [];
+  const keys = [...groups.keys()].sort(byteCompare);
+  for (const key of keys) {
+    const group = groups.get(key) ?? [];
+    group.sort((left, right) => byteCompare(left.path, right.path));
+    let current = [];
+    let currentBytes = 0;
+    const flush = () => {
+      if (current.length === 0) return;
+      const id = `shard_${String(shards.length + 1).padStart(3, "0")}`;
+      const first = current[0];
+      if (first === void 0) return;
+      const shard = {
+        id,
+        moduleId: first.moduleId,
+        tier: first.tier === "deep" ? "deep" : "light",
+        effort: first.tier === "deep" ? "deep" : "light",
+        paths: current.map((file) => file.path),
+        fileCount: current.length,
+        patchBytes: currentBytes
+      };
+      shards.push(shard);
+      for (const file of current) file.shardId = id;
+      current = [];
+      currentBytes = 0;
+    };
+    for (const file of group) {
+      const manifestFile = input.manifest.files.find((item) => item.path === file.path);
+      const bytes = manifestFile?.patchBytes ?? 0;
+      if (current.length > 0 && (current.length >= limits.maxFiles || currentBytes + bytes > limits.maxPatchBytes)) {
+        flush();
+      }
+      current.push(file);
+      currentBytes += bytes;
+    }
+    flush();
+  }
+  const coverageFiles = input.manifest.files.map((manifestFile) => {
+    const planFile = byPath.get(manifestFile.path);
+    if (planFile === void 0) {
+      return { path: manifestFile.path, status: "skipped", reason: "render-budget" };
+    }
+    if (planFile.tier === "manifest-only") {
+      return {
+        path: planFile.path,
+        status: "manifest-only",
+        ...planFile.reason === void 0 ? {} : { reason: planFile.reason }
+      };
+    }
+    if (isNoHunks(manifestFile)) {
+      return { path: planFile.path, status: "no-hunks" };
+    }
+    if (planFile.shardId !== void 0) {
+      return { path: planFile.path, status: "pending", shardId: planFile.shardId };
+    }
+    return { path: planFile.path, status: "skipped", reason: "render-budget" };
+  });
+  const coverage = {
+    files: coverageFiles,
+    totals: summarizeCoverage(coverageFiles),
+    ...input.manifest.warnings.some((warning) => INCOMPLETE_MANIFEST_WARNINGS2.has(warning)) ? { incomplete: true } : {}
+  };
+  const byTier = {
+    deep: files.filter((file) => file.tier === "deep").length,
+    light: files.filter((file) => file.tier === "light").length,
+    "manifest-only": files.filter((file) => file.tier === "manifest-only").length
+  };
+  return {
+    schemaVersion: 1,
+    files,
+    shards,
+    coverage,
+    coveragePlan: { total: files.length, byTier },
+    riskFlags: riskFlags({
+      manifest: input.manifest,
+      files,
+      modules: modules.modules.length
+    }),
+    limits
+  };
+}
+function coverageFromPlan(plan) {
+  return {
+    files: plan.coverage.files.map((file) => ({ ...file })),
+    totals: summarizeCoverage(plan.coverage.files),
+    ...plan.coverage.incomplete === true ? { incomplete: true } : {}
+  };
+}
+
+// packages/core/src/reviewer/validate.ts
+var MAX_FINDINGS = 200;
+var MAX_QUESTIONS = 50;
+var MAX_TEXT_BYTES = 32 * 1024;
+var CATEGORIES = /* @__PURE__ */ new Set([
+  "security",
+  "correctness",
+  "tests",
+  "performance",
+  "maintainability",
+  "api",
+  "concurrency",
+  "docs",
+  "other"
+]);
+var CONFIDENCES = /* @__PURE__ */ new Set(["high", "medium", "low"]);
+var KINDS = /* @__PURE__ */ new Set(["issue", "question", "praise"]);
+var RISKS = /* @__PURE__ */ new Set(["low", "medium", "high", "critical"]);
+var TEST_RESULTS = /* @__PURE__ */ new Set(["pass", "fail", "unknown"]);
+var VERIFICATION_STATUSES = /* @__PURE__ */ new Set(["fixed", "not-fixed", "unclear"]);
+var REPORT_FIELDS = /* @__PURE__ */ new Set([
+  "schemaVersion",
+  "summary",
+  "riskLevel",
+  "findings",
+  "questions",
+  "tests",
+  "verification"
+]);
+var FINDING_FIELDS = /* @__PURE__ */ new Set([
+  "id",
+  "severity",
+  "category",
+  "confidence",
+  "kind",
+  "file",
+  "lineStart",
+  "lineEnd",
+  "title",
+  "rationale",
+  "evidence",
+  "suggestion"
+]);
+var QUESTION_FIELDS = /* @__PURE__ */ new Set(["id", "file", "line", "question", "why"]);
+var SEVERITY_ALIASES = {
+  blocker: "blocker",
+  critical: "blocker",
+  high: "blocker",
+  major: "major",
+  medium: "major",
+  minor: "minor",
+  low: "minor",
+  nit: "nit",
+  info: "nit"
+};
+function autoFindingId(value) {
+  const basis = [value.file, value.lineStart, value.lineEnd, value.title, value.evidence].join(
+    "\0"
+  );
+  let hash = 2166136261;
+  for (let index = 0; index < basis.length; index += 1) {
+    hash ^= basis.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `f_auto_${(hash >>> 0).toString(36)}`;
+}
+function autoQuestionId(value) {
+  const basis = [value.file, value.line, value.question].join("\0");
+  let hash = 2166136261;
+  for (let index = 0; index < basis.length; index += 1) {
+    hash ^= basis.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `q_auto_${(hash >>> 0).toString(36)}`;
+}
+var ReportValidationError = class extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "ReportValidationError";
+  }
+};
+function isRecord2(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function isNonEmpty(value) {
+  return typeof value === "string" && value.trim() !== "";
+}
+function isPositiveInt(value) {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1;
+}
+function textWithin(ctx, value) {
+  return typeof value === "string" && Buffer.byteLength(value, "utf8") <= ctx.maxTextBytes;
+}
+function reject(ctx, kind, reason, id, index) {
+  ctx.rejected.push({
+    kind,
+    ...id === void 0 ? {} : { id },
+    ...index === void 0 ? {} : { index },
+    reason
+  });
+}
+function warnUnknown(ctx, value, allowed, label) {
+  for (const key of Object.keys(value)) {
+    if (!allowed.has(key)) ctx.warnings.push(`unknown-${label}-field:${key}`);
+  }
+}
+function fileLines(file) {
+  return file?.newLines ?? file?.oldLines;
+}
+function findFile(snapshot, path) {
+  return snapshot?.files.find((file) => file.path === path);
+}
+function normalizeCode(value) {
+  return value.split("\n").map((line) => line.trim().replace(/[ \t]+/g, " ")).join("\n");
+}
+function validateSuggestion(ctx, file, lineStart, lineEnd, value) {
+  if (!isRecord2(value)) return { unanchored: true };
+  const { original, replacement } = value;
+  if (!textWithin(ctx, original) || !textWithin(ctx, replacement)) return { unanchored: true };
+  const lines = fileLines(file);
+  if (lines === void 0) return { unanchored: true };
+  const current = lines.slice(lineStart - 1, lineEnd).join("\n");
+  if (normalizeCode(current) !== normalizeCode(original)) return { unanchored: true };
+  return { suggestion: { original, replacement } };
+}
+function validateFinding(ctx, value, index, ids) {
+  if (!isRecord2(value)) {
+    reject(ctx, "finding", "finding must be an object", void 0, index);
+    return null;
+  }
+  warnUnknown(ctx, value, FINDING_FIELDS, "finding");
+  const id = isNonEmpty(value.id) ? value.id : autoFindingId(value);
+  const rejected = (reason) => {
+    reject(ctx, "finding", reason, id, index);
+    return null;
+  };
+  if (ids.has(id)) return rejected(`duplicate finding id: ${id}`);
+  const severityKey = typeof value.severity === "string" ? value.severity.toLowerCase() : "";
+  const severity = Object.prototype.hasOwnProperty.call(SEVERITY_ALIASES, severityKey) ? SEVERITY_ALIASES[severityKey] : void 0;
+  if (severity === void 0) return rejected("severity must be blocker|major|minor|nit");
+  let category = "other";
+  if (value.category !== void 0) {
+    if (!CATEGORIES.has(value.category)) {
+      return rejected("category is not a known category");
+    }
+    category = value.category;
+  }
+  let confidence = "medium";
+  if (value.confidence !== void 0) {
+    if (!CONFIDENCES.has(value.confidence)) {
+      return rejected("confidence must be high|medium|low");
+    }
+    confidence = value.confidence;
+  }
+  let kind = "issue";
+  if (value.kind !== void 0) {
+    if (!KINDS.has(value.kind))
+      return rejected("kind must be issue|question|praise");
+    kind = value.kind;
+  }
+  if (!isNonEmpty(value.file)) return rejected("file must be a non-empty string");
+  const lineStart = value.lineStart;
+  const lineEnd = value.lineEnd === void 0 ? lineStart : value.lineEnd;
+  if (!isPositiveInt(lineStart) || !isPositiveInt(lineEnd)) {
+    return rejected("lineStart and lineEnd must be positive integers");
+  }
+  if (lineEnd < lineStart) return rejected("lineEnd must not precede lineStart");
+  const title = value.title;
+  if (!textWithin(ctx, title)) {
+    return rejected(`title must be a string no larger than ${ctx.maxTextBytes} bytes`);
+  }
+  let rationale = value.rationale;
+  if (rationale === void 0) {
+    rationale = textWithin(ctx, value.recommendation) ? value.recommendation : title;
+  }
+  if (!textWithin(ctx, rationale)) {
+    return rejected(`rationale must be a string no larger than ${ctx.maxTextBytes} bytes`);
+  }
+  const evidence = value.evidence;
+  if (!textWithin(ctx, evidence)) {
+    return rejected(`evidence must be a string no larger than ${ctx.maxTextBytes} bytes`);
+  }
+  const file = findFile(ctx.snapshot, value.file);
+  if (ctx.snapshot !== void 0 && file === void 0) {
+    return rejected(`file is not present in the snapshot: ${value.file}`);
+  }
+  const lines = fileLines(file);
+  if (lines !== void 0 && lineEnd > lines.length) {
+    return rejected(`line range ${lineStart}..${lineEnd} exceeds ${lines.length} lines`);
+  }
+  const finding = {
+    id,
+    severity,
+    category,
+    confidence,
+    kind,
+    file: value.file,
+    lineStart,
+    lineEnd,
+    title,
+    rationale,
+    evidence
+  };
+  if (value.suggestion !== void 0 && file !== void 0) {
+    const suggestion = validateSuggestion(ctx, file, lineStart, lineEnd, value.suggestion);
+    if (suggestion.suggestion !== void 0) finding.suggestion = suggestion.suggestion;
+    if (suggestion.unanchored === true) finding.unanchored = true;
+  } else if (value.suggestion !== void 0) {
+    finding.unanchored = true;
+  }
+  ids.add(id);
+  return finding;
+}
+function validateFindingItem(value, options = {}) {
+  const ctx = {
+    rejected: [],
+    warnings: [],
+    maxTextBytes: options.maxTextBytes ?? MAX_TEXT_BYTES,
+    ...options.snapshot === void 0 ? {} : { snapshot: options.snapshot }
+  };
+  const finding = validateFinding(ctx, value, 0, /* @__PURE__ */ new Set());
+  return { finding, rejected: ctx.rejected, warnings: ctx.warnings };
+}
+function validateQuestion(ctx, value, index, ids) {
+  if (!isRecord2(value)) {
+    reject(ctx, "question", "question must be an object", void 0, index);
+    return null;
+  }
+  warnUnknown(ctx, value, QUESTION_FIELDS, "question");
+  const id = isNonEmpty(value.id) ? value.id : autoQuestionId(value);
+  const rejected = (reason) => {
+    reject(ctx, "question", reason, id, index);
+    return null;
+  };
+  if (ids.has(id)) return rejected(`duplicate question id: ${id}`);
+  if (!isNonEmpty(value.file)) return rejected("file must be a non-empty string");
+  if (!isPositiveInt(value.line)) return rejected("line must be a positive integer");
+  if (!textWithin(ctx, value.question) || !textWithin(ctx, value.why)) {
+    return rejected(`question text must be no larger than ${ctx.maxTextBytes} bytes`);
+  }
+  const file = findFile(ctx.snapshot, value.file);
+  if (ctx.snapshot !== void 0 && file === void 0) {
+    return rejected(`file is not present in the snapshot: ${value.file}`);
+  }
+  const lines = fileLines(file);
+  if (lines !== void 0 && value.line > lines.length) {
+    return rejected(`line ${value.line} exceeds ${lines.length} lines`);
+  }
+  ids.add(id);
+  return {
+    id,
+    file: value.file,
+    line: value.line,
+    question: value.question,
+    why: value.why
+  };
+}
+function validateTests(ctx, value) {
+  if (value === void 0) return { ran: false, commands: [] };
+  if (!isRecord2(value)) {
+    reject(ctx, "test", "tests must be an object");
+    return { ran: false, commands: [] };
+  }
+  const ran = value.ran === true;
+  const commands = [];
+  if (Array.isArray(value.commands)) {
+    value.commands.forEach((entry, index) => {
+      if (!isRecord2(entry)) {
+        reject(ctx, "test", "test command must be an object", void 0, index);
+        return;
+      }
+      if (typeof entry.command !== "string" || typeof entry.summary !== "string" || typeof entry.result !== "string" || !TEST_RESULTS.has(entry.result)) {
+        reject(ctx, "test", "invalid test command", void 0, index);
+        return;
+      }
+      if (Buffer.byteLength(entry.command, "utf8") > ctx.maxTextBytes || Buffer.byteLength(entry.summary, "utf8") > ctx.maxTextBytes) {
+        reject(ctx, "test", "test command text exceeds the text limit", void 0, index);
+        return;
+      }
+      commands.push({
+        command: entry.command,
+        result: entry.result,
+        summary: entry.summary
+      });
+    });
+  }
+  return { ran, commands };
+}
+function validateVerification(ctx, value, index) {
+  if (!isRecord2(value)) {
+    reject(ctx, "verification", "verification must be an object", void 0, index);
+    return null;
+  }
+  if (!isNonEmpty(value.commentId) || typeof value.status !== "string" || !VERIFICATION_STATUSES.has(value.status) || !textWithin(ctx, value.evidence)) {
+    reject(ctx, "verification", "invalid verification entry", void 0, index);
+    return null;
+  }
+  return {
+    commentId: value.commentId,
+    status: value.status,
+    evidence: value.evidence
+  };
+}
+function validateReport(raw, options = {}) {
+  if (!isRecord2(raw)) throw new ReportValidationError("reviewer report must be an object");
+  if (raw.schemaVersion !== 1) {
+    throw new ReportValidationError("reviewer report schemaVersion must be 1");
+  }
+  const ctx = {
+    rejected: [],
+    warnings: [],
+    maxTextBytes: options.maxTextBytes ?? MAX_TEXT_BYTES,
+    ...options.snapshot === void 0 ? {} : { snapshot: options.snapshot }
+  };
+  warnUnknown(ctx, raw, REPORT_FIELDS, "report");
+  const riskLevel = typeof raw.riskLevel === "string" && RISKS.has(raw.riskLevel) ? raw.riskLevel : "medium";
+  if (typeof raw.riskLevel !== "string" || !RISKS.has(raw.riskLevel)) {
+    ctx.warnings.push("invalid-risk-level");
+  }
+  let summary2 = typeof raw.summary === "string" ? raw.summary : "";
+  if (typeof raw.summary !== "string") ctx.warnings.push("invalid-summary");
+  if (Buffer.byteLength(summary2, "utf8") > ctx.maxTextBytes) {
+    summary2 = Buffer.from(summary2, "utf8").subarray(0, ctx.maxTextBytes).toString("utf8");
+    ctx.warnings.push("summary-truncated");
+  }
+  const findings = [];
+  const findingIds = /* @__PURE__ */ new Set();
+  if (Array.isArray(raw.findings)) {
+    const max = options.maxFindings ?? MAX_FINDINGS;
+    raw.findings.forEach((entry, index) => {
+      if (index >= max) {
+        reject(ctx, "finding", `more than ${max} findings`, void 0, index);
+        return;
+      }
+      const finding = validateFinding(ctx, entry, index, findingIds);
+      if (finding !== null) findings.push(finding);
+    });
+  } else if (raw.findings !== void 0) {
+    reject(ctx, "report", "findings must be an array");
+  }
+  const questions = [];
+  const questionIds = /* @__PURE__ */ new Set();
+  if (Array.isArray(raw.questions)) {
+    const max = options.maxQuestions ?? MAX_QUESTIONS;
+    raw.questions.forEach((entry, index) => {
+      if (index >= max) {
+        reject(ctx, "question", `more than ${max} questions`, void 0, index);
+        return;
+      }
+      const question = validateQuestion(ctx, entry, index, questionIds);
+      if (question !== null) questions.push(question);
+    });
+  } else if (raw.questions !== void 0) {
+    reject(ctx, "report", "questions must be an array");
+  }
+  const verification = [];
+  if (Array.isArray(raw.verification)) {
+    raw.verification.forEach((entry, index) => {
+      const item = validateVerification(ctx, entry, index);
+      if (item !== null) verification.push(item);
+    });
+  } else if (raw.verification !== void 0) {
+    reject(ctx, "report", "verification must be an array");
+  }
+  return {
+    report: {
+      schemaVersion: 1,
+      summary: summary2,
+      riskLevel,
+      findings,
+      questions,
+      tests: validateTests(ctx, raw.tests),
+      verification
+    },
+    rejected: ctx.rejected,
+    warnings: ctx.warnings
+  };
+}
+
+// packages/core/src/review/aggregate.ts
+var RISK_ORDER = {
+  low: 0,
+  medium: 1,
+  high: 2,
+  critical: 3
+};
+function findingKey(finding) {
+  return `${finding.file}\0${finding.lineStart}\0${finding.lineEnd}\0${finding.title}`;
+}
+function questionKey(question) {
+  return `${question.file}\0${question.line}\0${question.question}`;
+}
+function mergeFindings(reports) {
+  const findings = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const report of reports) {
+    for (const finding of report.report.findings) {
+      const key = findingKey(finding);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      findings.push({ ...finding });
+      if (findings.length >= MAX_FINDINGS) return findings;
+    }
+  }
+  return findings;
+}
+function mergeQuestions(reports) {
+  const questions = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const report of reports) {
+    for (const question of report.report.questions) {
+      const key = questionKey(question);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      questions.push({ ...question });
+      if (questions.length >= MAX_QUESTIONS) return questions;
+    }
+  }
+  return questions;
+}
+function mergeTests(reports) {
+  const commands = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const report of reports) {
+    for (const command of report.report.tests.commands) {
+      const key = `${command.command}\0${command.result}\0${command.summary}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      commands.push({ ...command });
+    }
+  }
+  return { ran: reports.some((report) => report.report.tests.ran), commands };
+}
+function mergeVerification(reports) {
+  const entries = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const report of reports) {
+    for (const item of report.report.verification) {
+      const key = `${item.commentId}\0${item.status}\0${item.evidence}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      entries.push({ ...item });
+    }
+  }
+  return entries;
+}
+function highestRisk(reports) {
+  let result = "low";
+  for (const report of reports) {
+    if (RISK_ORDER[report.report.riskLevel] > RISK_ORDER[result]) {
+      result = report.report.riskLevel;
+    }
+  }
+  return result;
+}
+function updateCoverage(plan, reports, failed) {
+  const base = coverageFromPlan(plan);
+  const byShard = new Map(reports.map((report) => [report.shardId, report]));
+  const files = base.files.map((file) => {
+    const planFile = plan.files.find((item) => item.path === file.path);
+    const shardId = planFile?.shardId;
+    if (shardId === void 0) return { ...file };
+    if (failed.has(shardId)) {
+      return { ...file, status: "failed", reason: "shard-failed" };
+    }
+    const shard = plan.shards.find((item) => item.id === shardId);
+    if (shard === void 0 || !byShard.has(shardId)) {
+      return { ...file, status: "failed", reason: "shard-failed" };
+    }
+    const status2 = shard.tier === "deep" ? "deep-reviewed" : "light-reviewed";
+    const next = { ...file, status: status2 };
+    delete next.reason;
+    return next;
+  });
+  return {
+    files,
+    totals: summarizeCoverage(files),
+    ...base.incomplete === true ? { incomplete: true } : {}
+  };
+}
+function aggregateShardReports(input) {
+  const failed = new Set(input.failedShards ?? []);
+  for (const shard of input.plan.shards) {
+    if (!input.reports.some((report2) => report2.shardId === shard.id)) failed.add(shard.id);
+  }
+  const reports = [...input.reports];
+  const findings = mergeFindings(reports);
+  const warnings = [...new Set(reports.flatMap((report2) => report2.report.warnings))];
+  for (const shardId of [...failed].sort()) {
+    warnings.push(`shard-failed:${shardId}`);
+  }
+  const summaryParts = reports.map((report2) => report2.report.summary.trim()).filter((summary3) => summary3 !== "");
+  const summary2 = summaryParts.length === 0 ? "The review did not produce a shard report." : summaryParts.join("\n\n").slice(0, 2e4);
+  const report = {
+    schemaVersion: 1,
+    summary: summary2,
+    riskLevel: highestRisk(reports),
+    findings,
+    questions: mergeQuestions(reports),
+    tests: mergeTests(reports),
+    verification: mergeVerification(reports),
+    reviewId: input.reviewId,
+    round: input.round,
+    backend: input.backend,
+    rejected: reports.flatMap((item) => item.report.rejected),
+    warnings,
+    ...reports.some((item) => item.report.dirtyWorktree === true) ? { dirtyWorktree: true } : {},
+    skipped: false
+  };
+  return { report, coverage: updateCoverage(input.plan, reports, failed) };
+}
+
 // packages/core/src/review/outcomes.ts
-function findFile(anchor, snapshot) {
+function findFile2(anchor, snapshot) {
   return snapshot.files.find((file) => file.path === anchor.path) ?? snapshot.files.find((file) => file.oldPath === anchor.path);
 }
 function contentAt(anchor, file) {
@@ -2296,7 +3563,7 @@ function containsBlock(lines, block) {
   return false;
 }
 function deriveOutcome(previous, next, nextSnapshot, suggestion) {
-  const file = findFile(next, nextSnapshot);
+  const file = findFile2(next, nextSnapshot);
   const content = file === void 0 ? null : contentAt(next, file);
   if (next.state === "outdated" || file === void 0 || content === null) {
     return { round: next.round, status: "outdated", confidence: "high" };
@@ -2465,14 +3732,59 @@ function fold(state, event) {
       }
       break;
     }
+    case "agent/coverage": {
+      next.agent = {
+        status: "queued",
+        round: event.data.round,
+        coverage: structuredClone(event.data.coverage),
+        findings: [],
+        shards: []
+      };
+      break;
+    }
     case "agent/started": {
       next.agent = {
+        ...next.agent?.coverage === void 0 ? {} : { coverage: next.agent.coverage },
+        ...next.agent?.shards === void 0 ? {} : { shards: next.agent.shards },
         status: "running",
         jobId: event.data.jobId,
         round: event.data.round,
         startedAt: event.at,
         findings: []
       };
+      break;
+    }
+    case "agent/shard": {
+      next.agent ??= { status: "running", findings: [] };
+      next.agent.shards ??= [];
+      const index = next.agent.shards.findIndex((shard2) => shard2.shardId === event.data.shardId);
+      const shard = {
+        shardId: event.data.shardId,
+        shardIndex: event.data.shardIndex,
+        shardCount: event.data.shardCount,
+        round: event.data.round,
+        report: structuredClone(event.data.report)
+      };
+      if (index < 0) next.agent.shards.push(shard);
+      else next.agent.shards[index] = shard;
+      if (next.agent.coverage !== void 0 && event.data.paths !== void 0) {
+        const covered = new Set(event.data.paths);
+        const tier = event.data.tier ?? "deep";
+        const files = next.agent.coverage.files.map((file) => {
+          if (!covered.has(file.path) || file.status !== "pending") return file;
+          const nextFile = {
+            ...file,
+            status: tier === "deep" ? "deep-reviewed" : "light-reviewed"
+          };
+          delete nextFile.reason;
+          return nextFile;
+        });
+        next.agent.coverage = {
+          ...next.agent.coverage,
+          files,
+          totals: summarizeCoverage(files)
+        };
+      }
       break;
     }
     case "agent/finding": {
@@ -2482,12 +3794,19 @@ function fold(state, event) {
       break;
     }
     case "agent/report": {
+      const reportSkipped = event.data.report.skipped === true;
+      const coverage = event.data.coverage !== void 0 ? structuredClone(event.data.coverage) : reportSkipped || next.agent?.coverage === void 0 ? next.agent?.coverage : promotePendingToLight(next.agent.coverage);
+      let status2;
+      if (reportSkipped) status2 = "skipped";
+      else if (coverage === void 0) status2 = "done";
+      else status2 = isCoverageComplete(coverage) ? "done" : "partial";
       next.report = structuredClone(event.data.report);
       next.agent = {
         ...next.agent ?? {},
-        status: event.data.report.skipped === true ? "skipped" : "done",
+        status: status2,
         round: event.data.report.round,
-        findings: structuredClone(event.data.report.findings)
+        findings: structuredClone(event.data.report.findings),
+        ...coverage === void 0 ? {} : { coverage }
       };
       break;
     }
@@ -2497,6 +3816,32 @@ function fold(state, event) {
         status: "failed",
         error: event.data.message
       };
+      break;
+    }
+    case "agent/retry": {
+      const agent = next.agent ?? { status: "queued", findings: [] };
+      const retryShards = new Set(event.data.shardIds);
+      let coverage = agent.coverage;
+      if (coverage !== void 0) {
+        const files = coverage.files.map((file) => {
+          if (file.shardId === void 0 || !retryShards.has(file.shardId) || file.status !== "failed" && file.status !== "pending") {
+            return file;
+          }
+          const retried = { ...file, status: "pending" };
+          delete retried.reason;
+          return retried;
+        });
+        coverage = { ...coverage, files, totals: summarizeCoverage(files) };
+      }
+      next.agent = {
+        ...agent,
+        status: "queued",
+        round: event.data.round,
+        ...coverage === void 0 ? {} : { coverage }
+      };
+      delete next.agent.jobId;
+      delete next.agent.startedAt;
+      delete next.agent.error;
       break;
     }
   }
@@ -2548,7 +3893,7 @@ var ReviewNotFoundError = class extends Error {
     this.reviewId = reviewId;
   }
 };
-function isRecord2(value) {
+function isRecord3(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function isTimestamp(value) {
@@ -2558,19 +3903,19 @@ function isTimestamp(value) {
 }
 var REVIEW_STATUSES = /* @__PURE__ */ new Set(["open", "closed"]);
 function isActor2(value) {
-  if (!isRecord2(value)) return false;
+  if (!isRecord3(value)) return false;
   return typeof value.name === "string" && (value.kind === "human" || value.kind === "agent" || value.kind === "system");
 }
 function isComment(value) {
-  if (!isRecord2(value)) return false;
+  if (!isRecord3(value)) return false;
   return typeof value.id === "string" && typeof value.reviewId === "string" && isTimestamp(value.createdAt) && typeof value.body === "string" && (value.state === "open" || value.state === "resolved" || value.state === "dismissed") && Array.isArray(value.replies) && Array.isArray(value.anchors) && Array.isArray(value.outcomes) && (value.editedAt === void 0 || isTimestamp(value.editedAt)) && (value.editedBy === void 0 || isActor2(value.editedBy)) && (value.deletedAt === void 0 || isTimestamp(value.deletedAt)) && (value.deletedBy === void 0 || isActor2(value.deletedBy));
 }
 function isFindingDecision(value) {
-  if (!isRecord2(value)) return false;
-  return typeof value.findingId === "string" && typeof value.round === "number" && Number.isInteger(value.round) && value.round > 0 && (value.state === "accepted" || value.state === "dismissed") && (value.note === void 0 || typeof value.note === "string") && isRecord2(value.by) && typeof value.by.name === "string" && (value.by.kind === "human" || value.by.kind === "agent" || value.by.kind === "system") && isTimestamp(value.at);
+  if (!isRecord3(value)) return false;
+  return typeof value.findingId === "string" && typeof value.round === "number" && Number.isInteger(value.round) && value.round > 0 && (value.state === "accepted" || value.state === "dismissed") && (value.note === void 0 || typeof value.note === "string") && isRecord3(value.by) && typeof value.by.name === "string" && (value.by.kind === "human" || value.by.kind === "agent" || value.by.kind === "system") && isTimestamp(value.at);
 }
 function isReviewState(value) {
-  if (!isRecord2(value)) return false;
+  if (!isRecord3(value)) return false;
   return typeof value.id === "string" && typeof value.title === "string" && typeof value.repoRoot === "string" && typeof value.status === "string" && REVIEW_STATUSES.has(value.status) && isTimestamp(value.createdAt) && (value.closedAt === void 0 || isTimestamp(value.closedAt)) && (value.updatedAt === void 0 || isTimestamp(value.updatedAt)) && (value.updatedBy === void 0 || isActor2(value.updatedBy)) && (value.deletedAt === void 0 || isTimestamp(value.deletedAt)) && (value.deletedBy === void 0 || isActor2(value.deletedBy)) && Array.isArray(value.rounds) && Array.isArray(value.comments) && value.comments.every(isComment) && (value.findingDecisions === void 0 || Array.isArray(value.findingDecisions) && value.findingDecisions.every(isFindingDecision)) && typeof value.version === "number" && Number.isInteger(value.version) && value.version >= 0 && (value.warnings === void 0 || Array.isArray(value.warnings) && value.warnings.every((item) => typeof item === "string"));
 }
 function safeReviewId(reviewId) {
@@ -2585,15 +3930,82 @@ function safeSnapshotId(snapshotId) {
   }
   return snapshotId;
 }
-function isSnapshot(value) {
-  if (!isRecord2(value)) return false;
+var FILE_STATUSES = /* @__PURE__ */ new Set([
+  "added",
+  "modified",
+  "deleted",
+  "renamed",
+  "submodule",
+  "untracked"
+]);
+var MANIFEST_REASONS = /* @__PURE__ */ new Set([
+  "per-file-cap",
+  "binary",
+  "ignored",
+  "generated",
+  "legacy-truncated",
+  "diff-truncated",
+  "render-budget",
+  "unreadable",
+  "symlink"
+]);
+function isManifestFile(value) {
+  if (!isRecord3(value)) return false;
+  if (typeof value.path !== "string") return false;
+  if (value.oldPath !== void 0 && typeof value.oldPath !== "string") return false;
+  if (typeof value.status !== "string" || !FILE_STATUSES.has(value.status)) {
+    return false;
+  }
+  if (typeof value.binary !== "boolean" || typeof value.ignored !== "boolean" || typeof value.oversized !== "boolean") {
+    return false;
+  }
+  for (const field of ["added", "deleted", "hunkCount", "patchBytes"]) {
+    if (typeof value[field] !== "number" || !Number.isFinite(value[field])) return false;
+  }
+  if (value.contentBytes !== void 0 && (typeof value.contentBytes !== "number" || !Number.isFinite(value.contentBytes))) {
+    return false;
+  }
+  if (value.reason !== void 0 && (typeof value.reason !== "string" || !MANIFEST_REASONS.has(value.reason))) {
+    return false;
+  }
+  return true;
+}
+function isManifest(value) {
+  if (!isRecord3(value)) return false;
   if (value.schemaVersion !== 1) return false;
-  if (!isRecord2(value.scope) || typeof value.scope.baseSha !== "string") return false;
+  if (!isRecord3(value.scope) || typeof value.scope.baseSha !== "string") return false;
+  if (!Array.isArray(value.files) || !value.files.every(isManifestFile)) return false;
+  if (!isRecord3(value.totals)) return false;
+  for (const field of ["files", "added", "deleted", "patchBytes"]) {
+    if (typeof value.totals[field] !== "number" || !Number.isFinite(value.totals[field])) {
+      return false;
+    }
+  }
+  return Array.isArray(value.warnings) && value.warnings.every((item) => typeof item === "string");
+}
+function isSnapshot(value) {
+  if (!isRecord3(value)) return false;
+  if (value.schemaVersion !== 1 && value.schemaVersion !== 2) return false;
+  if (!isRecord3(value.scope) || typeof value.scope.baseSha !== "string") return false;
   if (!Array.isArray(value.files)) return false;
-  if (!isRecord2(value.totals) || !Array.isArray(value.warnings)) return false;
+  if (!isRecord3(value.totals)) return false;
+  if (value.schemaVersion === 2 && typeof value.totals.truncated !== "boolean") return false;
+  if (value.schemaVersion === 1 && value.totals.truncated !== void 0 && typeof value.totals.truncated !== "boolean") {
+    return false;
+  }
+  if (!Array.isArray(value.warnings)) return false;
+  if (value.manifest !== void 0 && !isManifest(value.manifest)) return false;
   return value.files.every(
-    (file) => isRecord2(file) && typeof file.path === "string" && Array.isArray(file.hunks)
+    (file) => isRecord3(file) && typeof file.path === "string" && Array.isArray(file.hunks)
   );
+}
+function normalizeSnapshot(snapshot) {
+  const normalized = {
+    ...snapshot,
+    totals: { ...snapshot.totals, truncated: snapshot.totals.truncated === true }
+  };
+  if (normalized.manifest !== void 0) return normalized;
+  return { ...normalized, manifest: manifestFromSnapshot(normalized) };
 }
 function isPidAlive(pid) {
   if (!Number.isInteger(pid) || pid <= 0) return false;
@@ -2607,7 +4019,7 @@ function isPidAlive(pid) {
 function parseLock(raw) {
   try {
     const value = JSON.parse(raw);
-    if (!isRecord2(value)) return {};
+    if (!isRecord3(value)) return {};
     return {
       ...typeof value.pid === "number" ? { pid: value.pid } : {},
       ...typeof value.createdAt === "string" ? { createdAt: value.createdAt } : {}
@@ -2905,7 +4317,7 @@ var ReviewStore = class _ReviewStore {
       throw new ReviewNotFoundError(id);
     }
     if (!isSnapshot(value)) throw new ReviewNotFoundError(id);
-    return structuredClone(value);
+    return structuredClone(normalizeSnapshot(value));
   }
   /**
    * Removes closed reviews older than `olderThanDays` and snapshots that no
@@ -3050,7 +4462,7 @@ var ReviewStore = class _ReviewStore {
     }
     try {
       const value = JSON.parse(raw);
-      if (!isRecord2(value)) return null;
+      if (!isRecord3(value)) return null;
       if (value.reviewId !== reviewId) return null;
       if (typeof value.eventCount !== "number" || !Number.isInteger(value.eventCount)) return null;
       if (value.eventBytes !== void 0 && typeof value.eventBytes !== "number") return null;
@@ -3835,385 +5247,6 @@ var CommandReviewer = class {
   }
 };
 
-// packages/core/src/reviewer/validate.ts
-var MAX_FINDINGS = 200;
-var MAX_QUESTIONS = 50;
-var MAX_TEXT_BYTES = 32 * 1024;
-var CATEGORIES = /* @__PURE__ */ new Set([
-  "security",
-  "correctness",
-  "tests",
-  "performance",
-  "maintainability",
-  "api",
-  "concurrency",
-  "docs",
-  "other"
-]);
-var CONFIDENCES = /* @__PURE__ */ new Set(["high", "medium", "low"]);
-var KINDS = /* @__PURE__ */ new Set(["issue", "question", "praise"]);
-var RISKS = /* @__PURE__ */ new Set(["low", "medium", "high", "critical"]);
-var TEST_RESULTS = /* @__PURE__ */ new Set(["pass", "fail", "unknown"]);
-var VERIFICATION_STATUSES = /* @__PURE__ */ new Set(["fixed", "not-fixed", "unclear"]);
-var REPORT_FIELDS = /* @__PURE__ */ new Set([
-  "schemaVersion",
-  "summary",
-  "riskLevel",
-  "findings",
-  "questions",
-  "tests",
-  "verification"
-]);
-var FINDING_FIELDS = /* @__PURE__ */ new Set([
-  "id",
-  "severity",
-  "category",
-  "confidence",
-  "kind",
-  "file",
-  "lineStart",
-  "lineEnd",
-  "title",
-  "rationale",
-  "evidence",
-  "suggestion"
-]);
-var QUESTION_FIELDS = /* @__PURE__ */ new Set(["id", "file", "line", "question", "why"]);
-var SEVERITY_ALIASES = {
-  blocker: "blocker",
-  critical: "blocker",
-  high: "blocker",
-  major: "major",
-  medium: "major",
-  minor: "minor",
-  low: "minor",
-  nit: "nit",
-  info: "nit"
-};
-function autoFindingId(value) {
-  const basis = [value.file, value.lineStart, value.lineEnd, value.title, value.evidence].join(
-    "\0"
-  );
-  let hash = 2166136261;
-  for (let index = 0; index < basis.length; index += 1) {
-    hash ^= basis.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return `f_auto_${(hash >>> 0).toString(36)}`;
-}
-function autoQuestionId(value) {
-  const basis = [value.file, value.line, value.question].join("\0");
-  let hash = 2166136261;
-  for (let index = 0; index < basis.length; index += 1) {
-    hash ^= basis.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return `q_auto_${(hash >>> 0).toString(36)}`;
-}
-var ReportValidationError = class extends Error {
-  constructor(message) {
-    super(message);
-    this.name = "ReportValidationError";
-  }
-};
-function isRecord3(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-function isNonEmpty(value) {
-  return typeof value === "string" && value.trim() !== "";
-}
-function isPositiveInt(value) {
-  return typeof value === "number" && Number.isInteger(value) && value >= 1;
-}
-function textWithin(ctx, value) {
-  return typeof value === "string" && Buffer.byteLength(value, "utf8") <= ctx.maxTextBytes;
-}
-function reject(ctx, kind, reason, id, index) {
-  ctx.rejected.push({
-    kind,
-    ...id === void 0 ? {} : { id },
-    ...index === void 0 ? {} : { index },
-    reason
-  });
-}
-function warnUnknown(ctx, value, allowed, label) {
-  for (const key of Object.keys(value)) {
-    if (!allowed.has(key)) ctx.warnings.push(`unknown-${label}-field:${key}`);
-  }
-}
-function fileLines(file) {
-  return file?.newLines ?? file?.oldLines;
-}
-function findFile2(snapshot, path) {
-  return snapshot?.files.find((file) => file.path === path);
-}
-function normalizeCode(value) {
-  return value.split("\n").map((line) => line.trim().replace(/[ \t]+/g, " ")).join("\n");
-}
-function validateSuggestion(ctx, file, lineStart, lineEnd, value) {
-  if (!isRecord3(value)) return { unanchored: true };
-  const { original, replacement } = value;
-  if (!textWithin(ctx, original) || !textWithin(ctx, replacement)) return { unanchored: true };
-  const lines = fileLines(file);
-  if (lines === void 0) return { unanchored: true };
-  const current = lines.slice(lineStart - 1, lineEnd).join("\n");
-  if (normalizeCode(current) !== normalizeCode(original)) return { unanchored: true };
-  return { suggestion: { original, replacement } };
-}
-function validateFinding(ctx, value, index, ids) {
-  if (!isRecord3(value)) {
-    reject(ctx, "finding", "finding must be an object", void 0, index);
-    return null;
-  }
-  warnUnknown(ctx, value, FINDING_FIELDS, "finding");
-  const id = isNonEmpty(value.id) ? value.id : autoFindingId(value);
-  const rejected = (reason) => {
-    reject(ctx, "finding", reason, id, index);
-    return null;
-  };
-  if (ids.has(id)) return rejected(`duplicate finding id: ${id}`);
-  const severityKey = typeof value.severity === "string" ? value.severity.toLowerCase() : "";
-  const severity = Object.prototype.hasOwnProperty.call(SEVERITY_ALIASES, severityKey) ? SEVERITY_ALIASES[severityKey] : void 0;
-  if (severity === void 0) return rejected("severity must be blocker|major|minor|nit");
-  let category = "other";
-  if (value.category !== void 0) {
-    if (!CATEGORIES.has(value.category)) {
-      return rejected("category is not a known category");
-    }
-    category = value.category;
-  }
-  let confidence = "medium";
-  if (value.confidence !== void 0) {
-    if (!CONFIDENCES.has(value.confidence)) {
-      return rejected("confidence must be high|medium|low");
-    }
-    confidence = value.confidence;
-  }
-  let kind = "issue";
-  if (value.kind !== void 0) {
-    if (!KINDS.has(value.kind))
-      return rejected("kind must be issue|question|praise");
-    kind = value.kind;
-  }
-  if (!isNonEmpty(value.file)) return rejected("file must be a non-empty string");
-  const lineStart = value.lineStart;
-  const lineEnd = value.lineEnd === void 0 ? lineStart : value.lineEnd;
-  if (!isPositiveInt(lineStart) || !isPositiveInt(lineEnd)) {
-    return rejected("lineStart and lineEnd must be positive integers");
-  }
-  if (lineEnd < lineStart) return rejected("lineEnd must not precede lineStart");
-  const title = value.title;
-  if (!textWithin(ctx, title)) {
-    return rejected(`title must be a string no larger than ${ctx.maxTextBytes} bytes`);
-  }
-  let rationale = value.rationale;
-  if (rationale === void 0) {
-    rationale = textWithin(ctx, value.recommendation) ? value.recommendation : title;
-  }
-  if (!textWithin(ctx, rationale)) {
-    return rejected(`rationale must be a string no larger than ${ctx.maxTextBytes} bytes`);
-  }
-  const evidence = value.evidence;
-  if (!textWithin(ctx, evidence)) {
-    return rejected(`evidence must be a string no larger than ${ctx.maxTextBytes} bytes`);
-  }
-  const file = findFile2(ctx.snapshot, value.file);
-  if (ctx.snapshot !== void 0 && file === void 0) {
-    return rejected(`file is not present in the snapshot: ${value.file}`);
-  }
-  const lines = fileLines(file);
-  if (lines !== void 0 && lineEnd > lines.length) {
-    return rejected(`line range ${lineStart}..${lineEnd} exceeds ${lines.length} lines`);
-  }
-  const finding = {
-    id,
-    severity,
-    category,
-    confidence,
-    kind,
-    file: value.file,
-    lineStart,
-    lineEnd,
-    title,
-    rationale,
-    evidence
-  };
-  if (value.suggestion !== void 0 && file !== void 0) {
-    const suggestion = validateSuggestion(ctx, file, lineStart, lineEnd, value.suggestion);
-    if (suggestion.suggestion !== void 0) finding.suggestion = suggestion.suggestion;
-    if (suggestion.unanchored === true) finding.unanchored = true;
-  } else if (value.suggestion !== void 0) {
-    finding.unanchored = true;
-  }
-  ids.add(id);
-  return finding;
-}
-function validateFindingItem(value, options = {}) {
-  const ctx = {
-    rejected: [],
-    warnings: [],
-    maxTextBytes: options.maxTextBytes ?? MAX_TEXT_BYTES,
-    ...options.snapshot === void 0 ? {} : { snapshot: options.snapshot }
-  };
-  const finding = validateFinding(ctx, value, 0, /* @__PURE__ */ new Set());
-  return { finding, rejected: ctx.rejected, warnings: ctx.warnings };
-}
-function validateQuestion(ctx, value, index, ids) {
-  if (!isRecord3(value)) {
-    reject(ctx, "question", "question must be an object", void 0, index);
-    return null;
-  }
-  warnUnknown(ctx, value, QUESTION_FIELDS, "question");
-  const id = isNonEmpty(value.id) ? value.id : autoQuestionId(value);
-  const rejected = (reason) => {
-    reject(ctx, "question", reason, id, index);
-    return null;
-  };
-  if (ids.has(id)) return rejected(`duplicate question id: ${id}`);
-  if (!isNonEmpty(value.file)) return rejected("file must be a non-empty string");
-  if (!isPositiveInt(value.line)) return rejected("line must be a positive integer");
-  if (!textWithin(ctx, value.question) || !textWithin(ctx, value.why)) {
-    return rejected(`question text must be no larger than ${ctx.maxTextBytes} bytes`);
-  }
-  const file = findFile2(ctx.snapshot, value.file);
-  if (ctx.snapshot !== void 0 && file === void 0) {
-    return rejected(`file is not present in the snapshot: ${value.file}`);
-  }
-  const lines = fileLines(file);
-  if (lines !== void 0 && value.line > lines.length) {
-    return rejected(`line ${value.line} exceeds ${lines.length} lines`);
-  }
-  ids.add(id);
-  return {
-    id,
-    file: value.file,
-    line: value.line,
-    question: value.question,
-    why: value.why
-  };
-}
-function validateTests(ctx, value) {
-  if (value === void 0) return { ran: false, commands: [] };
-  if (!isRecord3(value)) {
-    reject(ctx, "test", "tests must be an object");
-    return { ran: false, commands: [] };
-  }
-  const ran = value.ran === true;
-  const commands = [];
-  if (Array.isArray(value.commands)) {
-    value.commands.forEach((entry, index) => {
-      if (!isRecord3(entry)) {
-        reject(ctx, "test", "test command must be an object", void 0, index);
-        return;
-      }
-      if (typeof entry.command !== "string" || typeof entry.summary !== "string" || typeof entry.result !== "string" || !TEST_RESULTS.has(entry.result)) {
-        reject(ctx, "test", "invalid test command", void 0, index);
-        return;
-      }
-      if (Buffer.byteLength(entry.command, "utf8") > ctx.maxTextBytes || Buffer.byteLength(entry.summary, "utf8") > ctx.maxTextBytes) {
-        reject(ctx, "test", "test command text exceeds the text limit", void 0, index);
-        return;
-      }
-      commands.push({
-        command: entry.command,
-        result: entry.result,
-        summary: entry.summary
-      });
-    });
-  }
-  return { ran, commands };
-}
-function validateVerification(ctx, value, index) {
-  if (!isRecord3(value)) {
-    reject(ctx, "verification", "verification must be an object", void 0, index);
-    return null;
-  }
-  if (!isNonEmpty(value.commentId) || typeof value.status !== "string" || !VERIFICATION_STATUSES.has(value.status) || !textWithin(ctx, value.evidence)) {
-    reject(ctx, "verification", "invalid verification entry", void 0, index);
-    return null;
-  }
-  return {
-    commentId: value.commentId,
-    status: value.status,
-    evidence: value.evidence
-  };
-}
-function validateReport(raw, options = {}) {
-  if (!isRecord3(raw)) throw new ReportValidationError("reviewer report must be an object");
-  if (raw.schemaVersion !== 1) {
-    throw new ReportValidationError("reviewer report schemaVersion must be 1");
-  }
-  const ctx = {
-    rejected: [],
-    warnings: [],
-    maxTextBytes: options.maxTextBytes ?? MAX_TEXT_BYTES,
-    ...options.snapshot === void 0 ? {} : { snapshot: options.snapshot }
-  };
-  warnUnknown(ctx, raw, REPORT_FIELDS, "report");
-  const riskLevel = typeof raw.riskLevel === "string" && RISKS.has(raw.riskLevel) ? raw.riskLevel : "medium";
-  if (typeof raw.riskLevel !== "string" || !RISKS.has(raw.riskLevel)) {
-    ctx.warnings.push("invalid-risk-level");
-  }
-  let summary2 = typeof raw.summary === "string" ? raw.summary : "";
-  if (typeof raw.summary !== "string") ctx.warnings.push("invalid-summary");
-  if (Buffer.byteLength(summary2, "utf8") > ctx.maxTextBytes) {
-    summary2 = Buffer.from(summary2, "utf8").subarray(0, ctx.maxTextBytes).toString("utf8");
-    ctx.warnings.push("summary-truncated");
-  }
-  const findings = [];
-  const findingIds = /* @__PURE__ */ new Set();
-  if (Array.isArray(raw.findings)) {
-    const max = options.maxFindings ?? MAX_FINDINGS;
-    raw.findings.forEach((entry, index) => {
-      if (index >= max) {
-        reject(ctx, "finding", `more than ${max} findings`, void 0, index);
-        return;
-      }
-      const finding = validateFinding(ctx, entry, index, findingIds);
-      if (finding !== null) findings.push(finding);
-    });
-  } else if (raw.findings !== void 0) {
-    reject(ctx, "report", "findings must be an array");
-  }
-  const questions = [];
-  const questionIds = /* @__PURE__ */ new Set();
-  if (Array.isArray(raw.questions)) {
-    const max = options.maxQuestions ?? MAX_QUESTIONS;
-    raw.questions.forEach((entry, index) => {
-      if (index >= max) {
-        reject(ctx, "question", `more than ${max} questions`, void 0, index);
-        return;
-      }
-      const question = validateQuestion(ctx, entry, index, questionIds);
-      if (question !== null) questions.push(question);
-    });
-  } else if (raw.questions !== void 0) {
-    reject(ctx, "report", "questions must be an array");
-  }
-  const verification = [];
-  if (Array.isArray(raw.verification)) {
-    raw.verification.forEach((entry, index) => {
-      const item = validateVerification(ctx, entry, index);
-      if (item !== null) verification.push(item);
-    });
-  } else if (raw.verification !== void 0) {
-    reject(ctx, "report", "verification must be an array");
-  }
-  return {
-    report: {
-      schemaVersion: 1,
-      summary: summary2,
-      riskLevel,
-      findings,
-      questions,
-      tests: validateTests(ctx, raw.tests),
-      verification
-    },
-    rejected: ctx.rejected,
-    warnings: ctx.warnings
-  };
-}
-
 // packages/core/src/service/types.ts
 var ReviewError = class extends Error {
   code;
@@ -4793,11 +5826,7 @@ var ReviewServiceImpl = class {
           file
         });
       }
-      snapshot = {
-        ...snapshot,
-        files: [clone(selected)],
-        totals: { ...snapshot.totals, files: 1 }
-      };
+      snapshot = { ...snapshot, files: [clone(selected)] };
     }
     return { snapshot, round, ...file === void 0 ? {} : { file } };
   }
@@ -5231,7 +6260,8 @@ var ReviewServiceImpl = class {
       kind: review.report === void 0 ? "initial" : "verify",
       repoRoot: review.repoRoot,
       prompt: this.buildPrompt(review, round, snapshot),
-      snapshot
+      snapshot,
+      manifest: manifestFromSnapshot(snapshot)
     };
     const controller = new AbortController();
     this.active.set(id, { controller });
@@ -5864,6 +6894,12 @@ async function openSse(req, res, hub, options) {
 
 // packages/server/src/daemon/jobs.ts
 import { randomBytes as randomBytes5 } from "node:crypto";
+
+// packages/server/src/daemon/types.ts
+var PROTOCOL_VERSION = 1;
+var PROMPT_VERSION = 1;
+
+// packages/server/src/daemon/jobs.ts
 function randomId2(prefix) {
   return `${prefix}_${randomBytes5(12).toString("base64url")}`;
 }
@@ -5878,6 +6914,7 @@ var JobQueue = class {
   attempts = /* @__PURE__ */ new Map();
   /** Finding ids accepted for a job across retries, bounded by MAX_FINDINGS. */
   findingsSeen = /* @__PURE__ */ new Map();
+  aggregated = /* @__PURE__ */ new Set();
   listeners = /* @__PURE__ */ new Set();
   sweepTimer;
   constructor(options = {}) {
@@ -5928,6 +6965,15 @@ var JobQueue = class {
       meta: input.meta ?? {},
       status: "queued",
       attempt: 0,
+      protocolVersion: input.protocolVersion ?? PROTOCOL_VERSION,
+      promptVersion: input.promptVersion ?? PROMPT_VERSION,
+      ...input.manifest === void 0 ? {} : { manifest: input.manifest },
+      ...input.plan === void 0 ? {} : { plan: input.plan },
+      ...input.shardId === void 0 ? {} : { shardId: input.shardId },
+      ...input.shardIndex === void 0 ? {} : { shardIndex: input.shardIndex },
+      ...input.shardCount === void 0 ? {} : { shardCount: input.shardCount },
+      ...input.effort === void 0 ? {} : { effort: input.effort },
+      ...input.moduleId === void 0 ? {} : { moduleId: input.moduleId },
       createdAt: this.now().toISOString()
     };
     this.jobs.set(job.id, job);
@@ -6037,6 +7083,17 @@ var JobQueue = class {
   listReview(reviewId) {
     return [...this.jobs.values()].filter((job) => job.reviewId === reviewId).map((job) => ({ ...job }));
   }
+  /** Prevents two concurrent report handlers from appending a final aggregate twice. */
+  isAggregated(reviewId, round) {
+    return this.aggregated.has(`${reviewId}:${round}`);
+  }
+  markAggregated(reviewId, round) {
+    this.aggregated.add(`${reviewId}:${round}`);
+  }
+  /** A retry makes the previous aggregate stale; the next terminal job may aggregate again. */
+  clearAggregated(reviewId, round) {
+    this.aggregated.delete(`${reviewId}:${round}`);
+  }
   sweep() {
     const now = this.now().getTime();
     for (const job of this.jobs.values()) {
@@ -6089,11 +7146,32 @@ var JobQueue = class {
       attempt: job.attempt,
       attemptId: job.attemptId,
       leaseUntil: job.leaseUntil,
+      protocolVersion: job.protocolVersion,
+      promptVersion: job.promptVersion,
+      ...job.shardId === void 0 ? {} : { shardId: job.shardId },
+      ...job.shardIndex === void 0 ? {} : { shardIndex: job.shardIndex },
+      ...job.shardCount === void 0 ? {} : { shardCount: job.shardCount },
+      ...job.effort === void 0 ? {} : { effort: job.effort },
+      ...job.moduleId === void 0 ? {} : { moduleId: job.moduleId },
+      ...job.plan === void 0 ? {} : { plan: job.plan },
       bundle: {
+        protocolVersion: job.protocolVersion,
+        promptVersion: job.promptVersion,
         prompt: job.prompt,
         diff: job.diff,
+        ...job.manifest === void 0 ? {} : { manifest: job.manifest },
         schema: { schemaVersion: 1 },
-        meta: { ...job.meta, reviewId: job.reviewId, round: job.round, kind: job.kind }
+        meta: {
+          ...job.meta,
+          reviewId: job.reviewId,
+          round: job.round,
+          kind: job.kind,
+          ...job.shardId === void 0 ? {} : { shardId: job.shardId },
+          ...job.shardIndex === void 0 ? {} : { shardIndex: job.shardIndex },
+          ...job.shardCount === void 0 ? {} : { shardCount: job.shardCount },
+          ...job.effort === void 0 ? {} : { effort: job.effort },
+          ...job.moduleId === void 0 ? {} : { moduleId: job.moduleId }
+        }
       }
     };
   }
@@ -6335,6 +7413,7 @@ function hunkLines(file) {
 }
 function renderBoundedDiff(files, limit = DIFF_PROMPT_LIMIT) {
   const rendered = [];
+  const includedFiles = [];
   let size = 0;
   let truncated = false;
   const append2 = (line) => {
@@ -6350,12 +7429,15 @@ function renderBoundedDiff(files, limit = DIFF_PROMPT_LIMIT) {
   for (const file of files) {
     if (file.ignored === true) continue;
     let stopped = false;
+    let headerComplete = true;
     for (const line of fileHeader(file)) {
       if (!append2(line)) {
+        headerComplete = false;
         stopped = true;
         break;
       }
     }
+    if (headerComplete) includedFiles.push(file.path);
     if (stopped) break;
     if (file.binary) continue;
     for (const line of hunkLines(file)) {
@@ -6367,9 +7449,13 @@ function renderBoundedDiff(files, limit = DIFF_PROMPT_LIMIT) {
     if (stopped) break;
   }
   const text = rendered.join("\n");
-  if (!truncated) return { text, truncated };
-  return { text: text === "" ? TRUNCATION_MARKER : `${text}
-${TRUNCATION_MARKER}`, truncated };
+  if (!truncated) return { text, truncated, includedFiles };
+  return {
+    text: text === "" ? TRUNCATION_MARKER : `${text}
+${TRUNCATION_MARKER}`,
+    truncated,
+    includedFiles
+  };
 }
 function buildReviewPrompt(input) {
   const rendered = renderBoundedDiff(
@@ -6382,15 +7468,20 @@ function buildReviewPrompt(input) {
     `Review: ${input.reviewId}`,
     `Round: ${input.round}`,
     `Kind: ${input.kind}`,
+    ...input.shard === void 0 ? [] : [
+      `Shard: ${input.shard.index + 1}/${input.shard.count} (${input.shard.tier}, module ${input.shard.moduleId})`,
+      "Review only the files in this shard. Do not report findings outside these paths."
+    ],
     "",
     "Read-only review: inspect the repository as needed, but do not modify files,",
     "spawn agents, or start or refresh reviews.",
     "Work in at most 15 tool calls. Start from the diff, then only open files that",
     "validate a suspected issue; do not tour the repository or read tests and docs",
     "unless a finding depends on them.",
-    "Your final assistant message must contain ONLY one fenced ```json report.",
-    "Never end the turn with an empty message or with prose only: a review without",
-    "the JSON report is a failed review.",
+    "Submit the final report by calling the `review_report` tool exactly once.",
+    "If the tool is unavailable, your final assistant message must contain ONLY one fenced",
+    "```json report. Never end the turn with an empty message or with prose only: a",
+    "review without the report is a failed review.",
     "Return one JSON object in a ```json fence with exactly this shape:",
     "{",
     '  "schemaVersion": 1,',
@@ -6449,7 +7540,11 @@ function buildReviewPrompt(input) {
   }
   if (input.files.length === 0) lines.push("The review contains no file changes.");
   else lines.push(rendered.text);
-  return { prompt: lines.join("\n"), truncated: rendered.truncated };
+  return {
+    prompt: lines.join("\n"),
+    truncated: rendered.truncated,
+    includedFiles: rendered.includedFiles
+  };
 }
 
 // packages/server/src/daemon/settings.ts
@@ -6794,12 +7889,99 @@ async function append(ctx, reviewId, type, data, actor = systemActor) {
   await ctx.store.append(reviewId, event);
   await ctx.hub.sync(reviewId);
 }
-async function enqueueWorkerJob(ctx, reviewId) {
+function namespaceShardReport(report, shardId) {
+  return {
+    ...report,
+    findings: report.findings.map((finding) => ({
+      ...finding,
+      id: `${shardId}:${finding.id}`
+    })),
+    questions: report.questions.map((question) => ({
+      ...question,
+      id: `${shardId}:${question.id}`
+    }))
+  };
+}
+var finalizing = /* @__PURE__ */ new Map();
+async function maybeFinalizeShards(ctx, reviewId, round) {
+  if (ctx.jobs.isAggregated(reviewId, round)) return;
+  const jobs = ctx.jobs.listReview(reviewId).filter((job) => job.round === round);
+  if (jobs.length === 0) return;
+  if (jobs.some((job) => job.status === "queued" || job.status === "leased")) return;
+  const key = `${reviewId}:${round}`;
+  const existing = finalizing.get(key);
+  if (existing !== void 0) return existing;
+  const task = (async () => {
+    const plan = jobs.find((job) => job.plan !== void 0)?.plan;
+    if (plan === void 0) return;
+    const view = await ctx.service.get(reviewId);
+    const reports = (view.review.agent?.shards ?? []).filter((shard) => shard.round === round).map((shard) => ({ shardId: shard.shardId, report: shard.report }));
+    const reportedShards = new Set(reports.map((report) => report.shardId));
+    const failedShards = [
+      ...new Set(
+        jobs.filter((job) => job.status === "failed" || job.status === "canceled").flatMap(
+          (job) => job.shardId === void 0 || reportedShards.has(job.shardId) ? [] : [job.shardId]
+        )
+      )
+    ];
+    const aggregate = aggregateShardReports({
+      reviewId,
+      round,
+      backend: "worker",
+      plan,
+      reports,
+      failedShards
+    });
+    await append(ctx, reviewId, "agent/report", {
+      report: aggregate.report,
+      coverage: aggregate.coverage
+    });
+    ctx.jobs.markAggregated(reviewId, round);
+  })();
+  finalizing.set(key, task);
+  try {
+    await task;
+  } finally {
+    if (finalizing.get(key) === task) finalizing.delete(key);
+  }
+}
+function coverageForSnapshot(snapshot, includedPaths) {
+  if (snapshot?.schemaVersion !== 2 || snapshot.manifest === void 0) return void 0;
+  return coverageFromPrompt(snapshot.manifest, includedPaths);
+}
+function hasActiveWorkerJob(ctx, reviewId) {
+  return ctx.jobs.listReview(reviewId).some((job) => job.status === "queued" || job.status === "leased");
+}
+async function failOrphanedWorkerAgent(ctx, reviewId) {
   const view = await ctx.service.get(reviewId);
-  const round = view.review.rounds.at(-1);
-  if (round === void 0 || view.review.reviewer?.backend !== "worker") return;
-  const kind = view.report === null ? "initial" : "verify";
-  const previousRound = round.no > 1 ? round.no - 1 : void 0;
+  const status2 = view.review.agent?.status;
+  if (view.review.status === "closed" || view.review.deletedAt !== void 0) return;
+  if (view.review.reviewer?.backend !== "worker") return;
+  if (status2 !== "queued" && status2 !== "running") return;
+  if (hasActiveWorkerJob(ctx, reviewId)) return;
+  await append(ctx, reviewId, "agent/failed", {
+    code: "worker-lost",
+    message: "worker job is no longer available to this daemon"
+  });
+}
+async function reconcileOrphanedWorkerAgents(ctx) {
+  const first = await ctx.service.list({ limit: 100, offset: 0 });
+  for (let offset = 0; offset < first.total; offset += 100) {
+    const page = offset === 0 ? first : await ctx.service.list({ limit: 100, offset });
+    for (const summary2 of page.items) {
+      await failOrphanedWorkerAgent(ctx, summary2.id).catch(() => {
+      });
+    }
+  }
+}
+function reviewKind(view, round) {
+  if (round !== void 0) return round.no <= 1 ? "initial" : "verify";
+  return view.report === null ? "initial" : "verify";
+}
+function promptContextFor(view, round) {
+  const targetRound = round ?? view.review.rounds.at(-1);
+  if (reviewKind(view, targetRound) !== "verify") return void 0;
+  const previousRound = targetRound === void 0 || targetRound.no <= 1 ? void 0 : targetRound.no - 1;
   const unresolved = view.review.comments.filter((comment) => comment.state === "open").flatMap((comment) => {
     const anchor = comment.anchors.at(-1);
     return anchor === void 0 ? [] : [
@@ -6811,37 +7993,240 @@ async function enqueueWorkerJob(ctx, reviewId) {
       }
     ];
   });
-  const { prompt } = buildReviewPrompt({
-    title: view.review.title,
-    reviewId,
-    round: round.no,
-    kind,
-    files: view.latestSnapshot?.files ?? [],
-    ...kind === "verify" ? {
-      context: {
-        ...previousRound === void 0 ? {} : { previousRound },
-        ...view.report === null ? {} : { previousReport: view.report },
-        unresolved
+  return {
+    ...previousRound === void 0 ? {} : { previousRound },
+    ...view.report === null ? {} : { previousReport: view.report },
+    unresolved
+  };
+}
+async function enqueueShardJobs(ctx, view, round, plan, shardIds) {
+  const snapshot = view.latestSnapshot;
+  if (snapshot === null) return;
+  if (shardIds !== void 0 && shardIds.size === 0) return;
+  const kind = reviewKind(view, round);
+  const promptContext = promptContextFor(view, round);
+  const initiator = view.review.initiator;
+  const shardScope = scopeForSnapshot(snapshot);
+  const bundles = [];
+  for (const [index, shard] of plan.shards.entries()) {
+    if (shardIds !== void 0 && !shardIds.has(shard.id)) continue;
+    const shardSnapshot = await buildSnapshot({
+      repoRoot: snapshot.scope.repoRoot,
+      scope: shardScope,
+      paths: shard.paths,
+      includeContent: false,
+      includeUntracked: snapshot.scope.kind === "worktree",
+      maxDiffBytes: Math.max(256 * 1024, shard.patchBytes * 2 + 64 * 1024),
+      maxFiles: shard.fileCount + 8
+    });
+    const prompt = buildReviewPrompt({
+      title: view.review.title,
+      reviewId: view.review.id,
+      round: round.no,
+      kind,
+      files: shardSnapshot.files,
+      ...promptContext === void 0 ? {} : { context: promptContext },
+      shard: {
+        id: shard.id,
+        index,
+        count: plan.shards.length,
+        tier: shard.tier,
+        moduleId: shard.moduleId
+      },
+      diffLimit: 22e4
+    });
+    bundles.push({ shard, index, snapshot: shardSnapshot, prompt });
+  }
+  for (const bundle of bundles) {
+    const { shard, index, snapshot: shardSnapshot, prompt } = bundle;
+    ctx.jobs.enqueue({
+      reviewId: view.review.id,
+      round: round.no,
+      kind,
+      backend: "worker",
+      prompt: prompt.prompt,
+      diff: shardSnapshot,
+      protocolVersion: PROTOCOL_VERSION,
+      promptVersion: PROMPT_VERSION,
+      plan,
+      shardId: shard.id,
+      shardIndex: index,
+      shardCount: plan.shards.length,
+      effort: shard.effort,
+      moduleId: shard.moduleId,
+      ...shardSnapshot.manifest === void 0 ? {} : { manifest: shardSnapshot.manifest },
+      meta: {
+        reviewId: view.review.id,
+        round: round.no,
+        cwd: initiator?.cwd ?? view.review.repoRoot,
+        shardId: shard.id,
+        shardIndex: index,
+        shardCount: plan.shards.length,
+        effort: shard.effort,
+        moduleId: shard.moduleId,
+        paths: shard.paths,
+        ...initiator === void 0 ? {} : { initiator }
       }
-    } : {}
+    });
+  }
+}
+async function enqueueLegacyJob(ctx, view, round) {
+  const snapshot = view.latestSnapshot;
+  const { prompt, includedFiles } = buildReviewPrompt({
+    title: view.review.title,
+    reviewId: view.review.id,
+    round: round.no,
+    kind: reviewKind(view, round),
+    files: snapshot?.files ?? [],
+    ...promptContextFor(view, round) === void 0 ? {} : { context: promptContextFor(view, round) }
   });
+  const manifest = snapshot?.manifest;
+  const coverage = coverageForSnapshot(snapshot, includedFiles);
+  if (coverage !== void 0) {
+    await append(ctx, view.review.id, "agent/coverage", {
+      coverage,
+      round: round.no
+    });
+  }
   const initiator = view.review.initiator;
   ctx.jobs.enqueue({
-    reviewId,
+    reviewId: view.review.id,
     round: round.no,
-    kind,
+    kind: reviewKind(view, round),
     backend: "worker",
     prompt,
-    diff: view.latestSnapshot,
+    diff: snapshot,
+    protocolVersion: PROTOCOL_VERSION,
+    promptVersion: PROMPT_VERSION,
+    ...manifest === void 0 ? {} : { manifest },
     meta: {
-      reviewId,
+      reviewId: view.review.id,
       round: round.no,
-      // The worker runs the reviewer in the initiator's visible worktree; the
-      // daemon's checkout is only a fallback for reviews without an initiator.
       cwd: initiator?.cwd ?? view.review.repoRoot,
       ...initiator === void 0 ? {} : { initiator }
     }
   });
+}
+async function enqueueWorkerJob(ctx, reviewId) {
+  const view = await ctx.service.get(reviewId);
+  const round = view.review.rounds.at(-1);
+  if (round === void 0 || view.review.reviewer?.backend !== "worker") return;
+  if (ctx.jobs.listReview(reviewId).some((job) => job.round === round.no)) return;
+  const snapshot = view.latestSnapshot;
+  const fullManifest = snapshot?.manifest;
+  if (snapshot?.schemaVersion === 2 && fullManifest !== void 0) {
+    const plan = buildReviewPlan({ manifest: fullManifest });
+    await append(ctx, reviewId, "agent/coverage", {
+      coverage: coverageFromPlan(plan),
+      round: round.no
+    });
+    if (plan.shards.length === 0) {
+      const aggregate = aggregateShardReports({
+        reviewId,
+        round: round.no,
+        backend: "worker",
+        plan,
+        reports: []
+      });
+      await append(ctx, reviewId, "agent/report", {
+        report: aggregate.report,
+        coverage: aggregate.coverage
+      });
+      return;
+    }
+    await enqueueShardJobs(ctx, view, round, plan);
+    return;
+  }
+  await enqueueLegacyJob(ctx, view, round);
+}
+async function retryWorkerAgent(ctx, reviewId) {
+  const view = await ctx.service.get(reviewId);
+  const round = view.review.rounds.at(-1);
+  const agent = view.review.agent;
+  if (view.review.status === "closed" || view.review.deletedAt !== void 0) {
+    throw new ApiError("conflict", "cannot retry a closed review");
+  }
+  if (view.review.reviewer?.backend !== "worker") {
+    throw new ApiError("conflict", "only worker reviewers can be retried in place");
+  }
+  if (round === void 0) throw new ApiError("conflict", "review has no round to retry");
+  if (agent === void 0 || agent.status !== "failed" && agent.status !== "partial") {
+    throw new ApiError("conflict", "reviewer is not failed or partial");
+  }
+  if (agent.round !== void 0 && agent.round !== round.no) {
+    throw new ApiError("conflict", "reviewer belongs to a different round");
+  }
+  const active = ctx.jobs.listReview(reviewId).some((job) => job.round === round.no && (job.status === "queued" || job.status === "leased"));
+  if (active) throw new ApiError("conflict", "reviewer still has active jobs");
+  const snapshot = view.latestSnapshot;
+  if (snapshot === null) throw new ApiError("conflict", "review has no snapshot to retry");
+  const manifest = snapshot.manifest;
+  if (snapshot.schemaVersion === 2 && manifest !== void 0) {
+    const plan = buildReviewPlan({ manifest });
+    const completed = new Set(
+      (agent.shards ?? []).filter((shard) => shard.round === round.no).map((shard) => shard.shardId)
+    );
+    const targets = plan.shards.filter((shard) => !completed.has(shard.id));
+    await append(ctx, reviewId, "agent/retry", {
+      round: round.no,
+      shardIds: targets.map((shard) => shard.id)
+    });
+    ctx.jobs.clearAggregated(reviewId, round.no);
+    try {
+      if (targets.length === 0) {
+        const aggregate = aggregateShardReports({
+          reviewId,
+          round: round.no,
+          backend: "worker",
+          plan,
+          reports: (agent.shards ?? []).filter((shard) => shard.round === round.no).map((shard) => ({ shardId: shard.shardId, report: shard.report }))
+        });
+        await append(ctx, reviewId, "agent/report", {
+          report: aggregate.report,
+          coverage: aggregate.coverage
+        });
+      } else {
+        await enqueueShardJobs(ctx, view, round, plan, new Set(targets.map((shard) => shard.id)));
+      }
+    } catch (error) {
+      ctx.jobs.cancelReview(reviewId);
+      await append(ctx, reviewId, "agent/failed", {
+        code: "retry-enqueue-failed",
+        message: error instanceof Error ? error.message : "cannot enqueue retry shards"
+      }).catch(() => void 0);
+      throw error;
+    }
+    return ctx.service.get(reviewId);
+  }
+  await append(ctx, reviewId, "agent/retry", { round: round.no, shardIds: [] });
+  ctx.jobs.clearAggregated(reviewId, round.no);
+  try {
+    await enqueueLegacyJob(ctx, view, round);
+  } catch (error) {
+    ctx.jobs.cancelReview(reviewId);
+    await append(ctx, reviewId, "agent/failed", {
+      code: "retry-enqueue-failed",
+      message: error instanceof Error ? error.message : "cannot enqueue retry job"
+    }).catch(() => void 0);
+    throw error;
+  }
+  return ctx.service.get(reviewId);
+}
+function scopeForSnapshot(snapshot) {
+  const scope = snapshot.scope;
+  if (scope.kind === "worktree") return { kind: "worktree", baseRef: scope.baseSha };
+  if (scope.kind === "commit") return { kind: "commit", sha: scope.headSha ?? scope.baseSha };
+  if (scope.kind === "commits") {
+    return {
+      kind: "commits",
+      shas: scope.shas ?? [scope.baseSha, ...scope.headSha ? [scope.headSha] : []]
+    };
+  }
+  return {
+    kind: "range",
+    baseRef: scope.baseSha,
+    headRef: scope.headSha ?? scope.headRef ?? "HEAD"
+  };
 }
 function parseInitiator(value) {
   if (value === void 0) return void 0;
@@ -6962,6 +8347,7 @@ async function handle(req, res, ctx, options) {
         ...body.scope === void 0 ? {} : { scope: object(body.scope, "scope") }
       };
       const before = body.scope === void 0 ? null : await ctx.service.get(reviewId);
+      if (body.scope !== void 0) await failOrphanedWorkerAgent(ctx, reviewId);
       const view = await ctx.service.updateReview(reviewId, input, ctxFor(req, options.auth));
       if (before !== null && view.review.rounds.length > before.review.rounds.length) {
         await enqueueWorkerJob(ctx, reviewId);
@@ -6977,6 +8363,86 @@ async function handle(req, res, ctx, options) {
       ctx.jobs.cancelReview(reviewId);
       await ctx.hub.sync(reviewId);
       sendJson(res, 200, { ok: true });
+      return;
+    }
+    if (rest[0] === "snapshot" && rest[1] !== void 0 && rest[2] === "diff" && method === "GET") {
+      const round = Number(rest[1]);
+      if (!Number.isInteger(round) || round <= 0)
+        throw new ApiError("validation", "round is required");
+      const rawPath = url.searchParams.get("path");
+      if (rawPath === null || rawPath.trim() === "") {
+        throw new ApiError("validation", "path is required");
+      }
+      const filePath = rawPath.trim();
+      if (filePath.includes("\0") || filePath.length > 4096 || isAbsolute3(filePath) || filePath.split("/").some((part) => part === ".." || part === "")) {
+        throw new ApiError("validation", "path must be a relative file path");
+      }
+      const view = await ctx.service.get(reviewId);
+      const roundView = view.review.rounds.find((item) => item.no === round);
+      if (roundView === void 0) throw new ApiError("not-found", `round ${round} not found`);
+      const snapshotView = await ctx.service.snapshot(reviewId, round);
+      if (!snapshotView.snapshot.manifest?.files.some((item) => item.path === filePath)) {
+        throw new ApiError("not-found", `file not found in round ${round}: ${filePath}`);
+      }
+      const filtered = await buildSnapshot({
+        repoRoot: view.review.repoRoot,
+        scope: scopeForSnapshot(snapshotView.snapshot),
+        paths: [filePath],
+        includeContent: true,
+        includeUntracked: snapshotView.snapshot.scope.kind === "worktree",
+        maxDiffBytes: 2 * 1024 * 1024,
+        maxFiles: 4,
+        maxFileLines: 2e4,
+        maxContentBytes: 1048576,
+        maxTotalContentBytes: 2097152
+      });
+      const file = filtered.files.find((item) => item.path === filePath);
+      if (file === void 0) {
+        throw new ApiError("not-found", `diff not available for ${filePath}`);
+      }
+      sendJson(res, 200, { file, round, path: filePath });
+      return;
+    }
+    if (rest[0] === "snapshot" && rest[1] !== void 0 && rest[2] === "file" && method === "GET") {
+      const round = Number(rest[1]);
+      if (!Number.isInteger(round) || round <= 0)
+        throw new ApiError("validation", "round is required");
+      const rawPath = url.searchParams.get("path");
+      if (rawPath === null || rawPath.trim() === "") {
+        throw new ApiError("validation", "path is required");
+      }
+      const filePath = rawPath.trim();
+      if (filePath.includes("\0") || filePath.length > 4096 || isAbsolute3(filePath) || filePath.split("/").some((part) => part === ".." || part === "")) {
+        throw new ApiError("validation", "path must be a relative file path");
+      }
+      const side = url.searchParams.get("side") === "old" ? "old" : "new";
+      const view = await ctx.service.get(reviewId);
+      const target = view.review.rounds.find((item) => item.no === round);
+      if (target === void 0) throw new ApiError("not-found", `round ${round} not found`);
+      const snapshotView = await ctx.service.snapshot(reviewId, round);
+      const manifestFile = snapshotView.snapshot.manifest?.files.find(
+        (item) => item.path === filePath
+      );
+      if (manifestFile === void 0) {
+        throw new ApiError("not-found", `file not found in round ${round}: ${filePath}`);
+      }
+      const revision = side === "old" ? target.baseSha : target.headSha === "" ? null : target.headSha;
+      const content = await readBlob(view.review.repoRoot, revision, filePath, 5e3, 1048576);
+      if (content.lines === null && content.reason === "unreadable") {
+        throw new ApiError("not-found", `file is not present on the ${side} side: ${filePath}`);
+      }
+      sendJson(res, 200, {
+        file: filePath,
+        round,
+        side,
+        revision,
+        lines: content.lines,
+        lineCount: content.lines?.length ?? 0,
+        binary: content.binary,
+        oversized: content.oversized,
+        symlink: content.symlink,
+        ...content.reason === void 0 ? {} : { reason: content.reason }
+      });
       return;
     }
     if (rest[0] === "snapshot" && method === "GET") {
@@ -7122,6 +8588,7 @@ async function handle(req, res, ctx, options) {
     if (rest[0] === "refresh" && method === "POST") {
       const body = await readJson(req, ctx.config.maxBodyBytes);
       const scope = body.scope === void 0 ? void 0 : object(body.scope, "scope");
+      await failOrphanedWorkerAgent(ctx, reviewId);
       const view = await ctx.service.refresh(
         reviewId,
         scope === void 0 ? {} : { scope },
@@ -7191,11 +8658,25 @@ async function handle(req, res, ctx, options) {
       sendJson(res, 200, feedback);
       return;
     }
+    if (rest[0] === "agent" && rest[1] === "retry" && method === "POST") {
+      const view = await retryWorkerAgent(ctx, reviewId);
+      await ctx.hub.sync(reviewId);
+      sendJson(res, 200, view);
+      return;
+    }
     if (rest[0] === "agent" && rest[1] === "cancel" && method === "POST") {
-      ctx.jobs.cancelReview(reviewId);
+      const canceled = ctx.jobs.cancelReview(reviewId);
+      let serviceOwned = true;
       await ctx.service.cancelAgent(reviewId, ctxFor(req, options.auth)).catch((error) => {
         if (!(error instanceof ReviewError) || error.code !== "conflict") throw error;
+        serviceOwned = false;
       });
+      if (!serviceOwned || canceled.length > 0) {
+        await append(ctx, reviewId, "agent/failed", {
+          code: "canceled",
+          message: "reviewer canceled by request"
+        });
+      }
       await ctx.hub.sync(reviewId);
       sendJson(res, 200, { ok: true });
       return;
@@ -7261,6 +8742,10 @@ async function handle(req, res, ctx, options) {
     const attemptId = str(body.attemptId, "attemptId");
     const job = ctx.jobs.attempt(jobId, attemptId);
     if (job === null) throw new ApiError("conflict", "stale or unknown job attempt");
+    if (action !== "ack" && job.status === "canceled") {
+      sendJson(res, 200, { accepted: false, canceled: true });
+      return;
+    }
     if (action === "ack") {
       sendJson(res, 200, { ok: true, status: job.status });
       return;
@@ -7284,8 +8769,9 @@ async function handle(req, res, ctx, options) {
           rejected += 1;
           continue;
         }
+        const persistedFinding = job.shardId === void 0 ? finding : { ...finding, id: `${job.shardId}:${finding.id}` };
         await append(ctx, job.reviewId, "agent/finding", {
-          finding,
+          finding: persistedFinding,
           round: job.round
         });
         if (ctx.jobs.acceptFinding(jobId, attemptId, finding.id) !== null) {
@@ -7308,10 +8794,11 @@ async function handle(req, res, ctx, options) {
         throw new ApiError("validation", error instanceof Error ? error.message : "invalid report");
       }
       if (ctx.jobs.job(jobId)?.status === "done") {
+        await maybeFinalizeShards(ctx, job.reviewId, job.round);
         sendJson(res, 200, { accepted: true, duplicate: true });
         return;
       }
-      const agentReport = {
+      const baseReport = {
         ...validation.report,
         reviewId: job.reviewId,
         round: job.round,
@@ -7319,14 +8806,34 @@ async function handle(req, res, ctx, options) {
         rejected: validation.rejected,
         warnings: validation.warnings
       };
-      await append(ctx, job.reviewId, "agent/report", { report: agentReport });
+      const agentReport = job.shardId === void 0 ? baseReport : namespaceShardReport(baseReport, job.shardId);
+      await append(
+        ctx,
+        job.reviewId,
+        job.shardId === void 0 ? "agent/report" : "agent/shard",
+        job.shardId === void 0 ? { report: agentReport } : {
+          shardId: job.shardId,
+          shardIndex: job.shardIndex ?? 0,
+          shardCount: job.shardCount ?? 1,
+          round: job.round,
+          report: agentReport,
+          ...job.plan === void 0 ? {} : {
+            paths: job.plan.shards.find((shard) => shard.id === job.shardId)?.paths ?? [],
+            tier: job.effort ?? "deep"
+          }
+        }
+      );
       const accepted = ctx.jobs.acceptReport(jobId, attemptId);
       if (accepted === null) {
         if (ctx.jobs.job(jobId)?.status === "done") {
+          await maybeFinalizeShards(ctx, job.reviewId, job.round);
           sendJson(res, 200, { accepted: true, duplicate: true });
           return;
         }
         throw new ApiError("conflict", "stale or unknown job attempt");
+      }
+      if (job.shardId !== void 0) {
+        await maybeFinalizeShards(ctx, job.reviewId, job.round);
       }
       sendJson(res, 200, { accepted: true, warnings: validation.warnings });
       return;
@@ -7341,6 +8848,9 @@ async function handle(req, res, ctx, options) {
         code: typeof body.code === "string" ? body.code : "failed",
         message: typeof body.message === "string" ? body.message : "job failed"
       });
+      if (job.shardId !== void 0) {
+        await maybeFinalizeShards(ctx, job.reviewId, job.round);
+      }
       sendJson(res, 200, { ok: true, retried: result.retried, status: result.job.status });
       return;
     }
@@ -7692,6 +9202,7 @@ async function startDaemon(config, deps = {}) {
     deliveries,
     now
   };
+  await reconcileOrphanedWorkerAgents(ctx).catch(() => void 0);
   const handler = async (req, res) => {
     const id = requestId(req);
     const peer = clientPeer(req, ctx.config.trustProxy);
@@ -8081,12 +9592,137 @@ async function runDeliveryLoop(deps, signal) {
 
 // packages/dsh/src/worker.ts
 import { randomUUID } from "node:crypto";
+
+// packages/dsh/src/report-tool.ts
+var REVIEW_REPORT_TOOL_NAME = "review_report";
+var FINDING_PARAMETERS = {
+  type: "object",
+  properties: {
+    id: { type: "string", description: "Unique finding id, for example f1." },
+    severity: { type: "string", enum: ["blocker", "major", "minor", "nit"] },
+    category: {
+      type: "string",
+      enum: [
+        "security",
+        "correctness",
+        "tests",
+        "performance",
+        "maintainability",
+        "api",
+        "concurrency",
+        "docs",
+        "other"
+      ]
+    },
+    confidence: { type: "string", enum: ["high", "medium", "low"] },
+    kind: { type: "string", enum: ["issue", "question", "praise"] },
+    file: { type: "string", description: "Changed path exactly as it appears in the diff." },
+    lineStart: { type: "integer" },
+    lineEnd: { type: "integer" },
+    title: { type: "string" },
+    rationale: { type: "string" },
+    evidence: { type: "string", description: "Exact code quote from the diff." },
+    suggestion: {
+      type: "object",
+      properties: {
+        original: { type: "string" },
+        replacement: { type: "string" }
+      },
+      additionalProperties: true
+    }
+  },
+  required: ["severity", "file", "lineStart", "title", "evidence"],
+  additionalProperties: true
+};
+var QUESTION_PARAMETERS = {
+  type: "object",
+  properties: {
+    id: { type: "string" },
+    file: { type: "string" },
+    line: { type: "integer" },
+    question: { type: "string" },
+    why: { type: "string" }
+  },
+  required: ["file", "line", "question"],
+  additionalProperties: true
+};
+var REPORT_PARAMETERS = {
+  type: "object",
+  properties: {
+    schemaVersion: { type: "integer", enum: [1], default: 1 },
+    summary: { type: "string", description: "What changed and the main risks." },
+    riskLevel: { type: "string", enum: ["low", "medium", "high", "critical"] },
+    findings: { type: "array", items: FINDING_PARAMETERS },
+    questions: { type: "array", items: QUESTION_PARAMETERS },
+    tests: {
+      type: "object",
+      properties: {
+        ran: { type: "boolean" },
+        commands: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              command: { type: "string" },
+              result: { type: "string", enum: ["pass", "fail", "unknown"] },
+              summary: { type: "string" }
+            },
+            required: ["command", "result", "summary"],
+            additionalProperties: true
+          }
+        }
+      },
+      required: ["ran", "commands"],
+      additionalProperties: true
+    },
+    verification: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          commentId: { type: "string" },
+          status: { type: "string", enum: ["fixed", "not-fixed", "unclear"] },
+          evidence: { type: "string" }
+        },
+        required: ["commentId", "status", "evidence"],
+        additionalProperties: true
+      }
+    }
+  },
+  required: ["summary", "riskLevel", "findings"],
+  additionalProperties: true
+};
+var RECEIPT = { ok: true, received: true };
+function createReviewReportTool(capture) {
+  return {
+    name: REVIEW_REPORT_TOOL_NAME,
+    description: "Submit the final structured code-review report. Call this exactly once when the review is complete. The report must match the provided schema.",
+    parameters: REPORT_PARAMETERS,
+    output: {
+      schema: { type: "object", additionalProperties: true },
+      render: () => [{ type: "text", text: JSON.stringify(RECEIPT) }]
+    },
+    async execute(args) {
+      if (typeof args !== "object" || args === null || Array.isArray(args)) {
+        return {
+          ok: false,
+          error: { code: "validation", message: "review_report requires a JSON object" }
+        };
+      }
+      capture({ ...args, schemaVersion: 1 });
+      return { ok: true, received: true };
+    }
+  };
+}
+
+// packages/dsh/src/worker.ts
 var READ_ONLY_REVIEWER_TOOLS = /* @__PURE__ */ new Set([
   "read",
   "grep",
   "glob",
   "review_status",
-  "review_feedback"
+  "review_feedback",
+  "review_report"
 ]);
 function wait2(ms, signal) {
   return new Promise((resolve5) => {
@@ -8227,12 +9863,27 @@ async function runJob(deps, lease, signal) {
     }
   }
   let release;
+  let releaseReportTool;
+  let capturedReport;
   try {
     const tools = agent.ctx?.tools;
     if (tools?.guard === void 0) throw new Error("reviewer tool service is unavailable");
     release = tools.guard(
       (execution) => READ_ONLY_REVIEWER_TOOLS.has(execution.name) ? void 0 : `reviewer is read-only: ${execution.name} is not allowed`
     );
+    if (tools.register !== void 0) {
+      try {
+        releaseReportTool = tools.register(
+          createReviewReportTool((report) => {
+            capturedReport = report;
+          })
+        );
+      } catch (error) {
+        deps.logger?.warn?.(
+          `code-review: cannot register review_report tool: ${error instanceof Error ? error.message : "unknown error"}`
+        );
+      }
+    }
   } catch (error) {
     await deps.api.post(
       `/api/jobs/${encodeURIComponent(job.id)}/fail`,
@@ -8270,7 +9921,7 @@ async function runJob(deps, lease, signal) {
       })
     ]);
     const events = agent.session?.snapshotEvents?.() ?? agent.snapshotEvents?.() ?? [];
-    const report = extractReviewerReport(events);
+    const report = capturedReport ?? extractReviewerReport(events);
     if (report === void 0) {
       await deps.api.post(
         `/api/jobs/${encodeURIComponent(job.id)}/fail`,
@@ -8339,6 +9990,7 @@ async function runJob(deps, lease, signal) {
     if (timeout !== void 0) clearTimeout(timeout);
     signal.removeEventListener("abort", onAbort);
     release?.();
+    releaseReportTool?.();
     const disposal = handle2.dispose?.();
     if (disposal !== void 0) await disposal.catch(() => void 0);
   }
