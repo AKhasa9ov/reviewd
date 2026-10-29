@@ -3257,12 +3257,61 @@ body.cr-selecting-lines {
   list-style: none;
 }
 
+.cr-report-browser {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--cr-border);
+  border-radius: var(--cr-radius-card);
+  background: var(--cr-surface);
+}
+
+.cr-report-tabs > .cr-tabs {
+  padding: 0 var(--cr-space-4);
+  background: var(--cr-surface-raised);
+}
+
+.cr-report-tabs > [role='tabpanel'] {
+  min-width: 0;
+}
+
+.cr-report-issues {
+  display: grid;
+  gap: var(--cr-space-3);
+  padding: var(--cr-space-4);
+}
+
+.cr-report-questions {
+  max-height: clamp(20rem, 58vh, 46rem);
+  padding: var(--cr-space-4);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.cr-report-scroll {
+  height: clamp(20rem, 58vh, 46rem);
+  padding: var(--cr-space-4);
+  overflow-x: hidden;
+  overflow-y: auto;
+  border-block: 1px solid var(--cr-border);
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.cr-report-scroll .cr-findings {
+  padding: 0;
+}
+
 .cr-report-pagination {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--cr-space-2);
+  padding-block: var(--cr-space-1);
 }
 
 .cr-report-pagination-actions {
@@ -3273,7 +3322,10 @@ body.cr-selecting-lines {
 }
 
 .cr-finding {
+  min-width: 0;
+  max-width: 100%;
   padding: var(--cr-space-4);
+  overflow-wrap: anywhere;
   border: 1px solid var(--cr-border);
   border-radius: var(--cr-radius-card);
   background: var(--cr-surface);
@@ -3289,11 +3341,14 @@ body.cr-selecting-lines {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--cr-space-2);
+  min-width: 0;
   margin-bottom: var(--cr-space-2);
 }
 
 .cr-finding-location {
+  min-width: 0;
   padding: 0;
+  overflow-wrap: anywhere;
   border: 0;
   background: transparent;
   color: var(--cr-primary);
@@ -3319,7 +3374,9 @@ body.cr-selecting-lines {
 }
 
 .cr-evidence {
+  max-width: 100%;
   overflow: auto;
+  overflow-wrap: anywhere;
   max-height: 280px;
   margin: var(--cr-space-3) 0 0;
   padding: var(--cr-space-2) var(--cr-space-3);
@@ -3354,6 +3411,7 @@ body.cr-selecting-lines {
 .cr-verification-list li,
 .cr-test-list li {
   display: flex;
+  min-width: 0;
   flex-wrap: wrap;
   align-items: baseline;
   gap: var(--cr-space-2);

@@ -3,7 +3,7 @@ import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
 
 export interface TabItem {
   id: string;
-  label: string;
+  label: ReactNode;
   content?: ReactNode;
   disabled?: boolean;
 }

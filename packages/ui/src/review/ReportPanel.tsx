@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { AgentReport, Finding, FindingDecision } from '@dsh-code-review/core';
 import { Badge, EmptyState } from '../primitives/Feedback.js';
 import { Select } from '../primitives/Field.js';
+import { Tabs } from '../primitives/Tabs.js';
 import { Button } from '../primitives/Button.js';
 import { FindingDecisionControls } from './FindingDecisionControls.js';
 import type {
@@ -60,6 +61,59 @@ export interface ReportPanelProps {
 const EMPTY_DECISIONS = new Map<string, FindingDecision>();
 const PAGE_SIZE = 50;
 
+type ReportSection = 'issues' | 'questions';
+
+interface ReportPaginationProps {
+  placement: 'top' | 'bottom';
+  page: number;
+  pageCount: number;
+  pageStart: number;
+  pageEnd: number;
+  total: number;
+  onPageChange: (page: number) => void;
+}
+
+function ReportPagination({
+  placement,
+  page,
+  pageCount,
+  pageStart,
+  pageEnd,
+  total,
+  onPageChange,
+}: ReportPaginationProps): JSX.Element {
+  return (
+    <nav className="cr-report-pagination" aria-label={`Report pages (${placement})`}>
+      <span className="cr-meta">
+        {pageStart + 1}–{pageEnd} of {total}
+      </span>
+      <div className="cr-report-pagination-actions">
+        <Button
+          size="small"
+          variant="secondary"
+          aria-label={`Previous report page (${placement})`}
+          disabled={page === 0}
+          onClick={() => onPageChange(page - 1)}
+        >
+          Previous
+        </Button>
+        <span className="cr-meta">
+          Page {page + 1} of {pageCount}
+        </span>
+        <Button
+          size="small"
+          variant="secondary"
+          aria-label={`Next report page (${placement})`}
+          disabled={page >= pageCount - 1}
+          onClick={() => onPageChange(page + 1)}
+        >
+          Next
+        </Button>
+      </div>
+    </nav>
+  );
+}
+
 export function ReportPanel({
   report,
   onJump,
@@ -77,6 +131,8 @@ export function ReportPanel({
   const [severity, setSeverity] = useState<Finding['severity'] | 'all'>('all');
   const [category, setCategory] = useState<Finding['category'] | 'all'>('all');
   const [page, setPage] = useState(0);
+  const [section, setSection] = useState<ReportSection>('issues');
+  const listRef = useRef<HTMLDivElement>(null);
   const findings =
     report === null || report === undefined
       ? []
@@ -89,11 +145,19 @@ export function ReportPanel({
 
   useEffect(() => {
     setPage(0);
+    if (listRef.current !== null) listRef.current.scrollTop = 0;
   }, [severity, category, report?.reviewId, report?.round, partial]);
 
   useEffect(() => {
     setPage((value) => Math.min(value, pageCount - 1));
   }, [pageCount]);
+
+  const previousPage = useRef(currentPage);
+  useEffect(() => {
+    if (previousPage.current === currentPage) return;
+    previousPage.current = currentPage;
+    if (listRef.current !== null) listRef.current.scrollTop = 0;
+  }, [currentPage]);
 
   if (report === null || report === undefined) {
     return pending ? (
@@ -160,166 +224,213 @@ export function ReportPanel({
         ) : null}
       </section>
 
-      <div className="cr-report-toolbar">
-        <Select
-          label="Severity"
-          options={SEVERITIES.map((value) => ({
-            value,
-            label: value === 'all' ? 'All severities' : value,
-          }))}
-          value={severity}
-          onChange={(event) => setSeverity(event.target.value as Finding['severity'] | 'all')}
-        />
-        <Select
-          label="Category"
-          options={CATEGORIES.map((value) => ({
-            value,
-            label: value === 'all' ? 'All categories' : value,
-          }))}
-          value={category}
-          onChange={(event) => setCategory(event.target.value as Finding['category'] | 'all')}
-        />
-        <span className="cr-meta" aria-live="polite">
-          {findings.length} of {report.findings.length} findings
-        </span>
-        {filtered ? (
-          <button
-            type="button"
-            className="cr-link-button"
-            onClick={() => {
-              setSeverity('all');
-              setCategory('all');
-            }}
-          >
-            Clear filters
-          </button>
-        ) : null}
-      </div>
+      <section className="cr-report-browser" aria-label="Report findings and questions">
+        <Tabs
+          items={[
+            {
+              id: 'issues',
+              label: (
+                <>
+                  Issues
+                  <span className="cr-tab-count">{report.findings.length}</span>
+                </>
+              ),
+              content: (
+                <div className="cr-report-issues">
+                  <div className="cr-report-toolbar">
+                    <Select
+                      label="Severity"
+                      options={SEVERITIES.map((value) => ({
+                        value,
+                        label: value === 'all' ? 'All severities' : value,
+                      }))}
+                      value={severity}
+                      onChange={(event) =>
+                        setSeverity(event.target.value as Finding['severity'] | 'all')
+                      }
+                    />
+                    <Select
+                      label="Category"
+                      options={CATEGORIES.map((value) => ({
+                        value,
+                        label: value === 'all' ? 'All categories' : value,
+                      }))}
+                      value={category}
+                      onChange={(event) =>
+                        setCategory(event.target.value as Finding['category'] | 'all')
+                      }
+                    />
+                    <span className="cr-meta" aria-live="polite">
+                      {findings.length} of {report.findings.length} findings
+                    </span>
+                    {filtered ? (
+                      <button
+                        type="button"
+                        className="cr-link-button"
+                        onClick={() => {
+                          setSeverity('all');
+                          setCategory('all');
+                        }}
+                      >
+                        Clear filters
+                      </button>
+                    ) : null}
+                  </div>
 
-      {findings.length === 0 ? (
-        <EmptyState
-          title={filtered ? 'No findings match these filters' : 'No findings'}
-          description={
-            filtered
-              ? 'Clear the severity or category filter to see the reviewer report.'
-              : 'The reviewer did not report any issues for this round.'
-          }
-        />
-      ) : (
-        <ol className="cr-findings" aria-label="Reviewer findings">
-          {visibleFindings.map((finding) => (
-            <li className="cr-finding" key={finding.id} id={`finding-${finding.id}`} tabIndex={-1}>
-              <div className="cr-finding-head">
-                <Badge tone={severityTone(finding.severity)}>{finding.severity}</Badge>
-                <Badge tone="neutral">{finding.category}</Badge>
-                {finding.kind !== 'issue' ? <Badge tone="info">{finding.kind}</Badge> : null}
-                <button
-                  type="button"
-                  className="cr-finding-location"
-                  onClick={() => onJump(finding)}
-                  aria-label={`Jump to ${finding.file} line ${finding.lineStart}`}
-                >
-                  {finding.file}:{finding.lineStart}
-                </button>
-                <span className="cr-meta">{finding.confidence} confidence</span>
-              </div>
-              <h3 className="cr-finding-title">{finding.title}</h3>
-              <p className="cr-finding-copy">{finding.rationale}</p>
-              {finding.evidence !== '' ? (
-                <pre className="cr-evidence" aria-label="Evidence">
-                  {finding.evidence}
-                </pre>
-              ) : null}
-              {finding.suggestion !== undefined ? (
-                <div className="cr-suggestion" aria-label="Finding suggestion">
-                  <div className="cr-suggestion-head">
-                    <span className="cr-suggestion-label">Suggested change</span>
-                    {finding.unanchored === true ? <Badge tone="warning">unanchored</Badge> : null}
-                  </div>
-                  <div className="cr-suggestion-block cr-suggestion-old">
-                    <span className="cr-suggestion-caption">Before</span>
-                    <pre>{finding.suggestion.original}</pre>
-                  </div>
-                  <div className="cr-suggestion-block cr-suggestion-new">
-                    <span className="cr-suggestion-caption">After</span>
-                    <pre>{finding.suggestion.replacement}</pre>
-                  </div>
+                  {findings.length === 0 ? (
+                    <EmptyState
+                      title={filtered ? 'No findings match these filters' : 'No findings'}
+                      description={
+                        filtered
+                          ? 'Clear the severity or category filter to see the reviewer report.'
+                          : 'The reviewer did not report any issues for this round.'
+                      }
+                    />
+                  ) : (
+                    <>
+                      {findings.length > PAGE_SIZE ? (
+                        <ReportPagination
+                          placement="top"
+                          page={currentPage}
+                          pageCount={pageCount}
+                          pageStart={pageStart}
+                          pageEnd={pageEnd}
+                          total={findings.length}
+                          onPageChange={setPage}
+                        />
+                      ) : null}
+                      <div className="cr-report-scroll" ref={listRef}>
+                        <ol className="cr-findings" aria-label="Reviewer findings">
+                          {visibleFindings.map((finding) => (
+                            <li
+                              className="cr-finding"
+                              key={finding.id}
+                              id={`finding-${finding.id}`}
+                              tabIndex={-1}
+                            >
+                              <div className="cr-finding-head">
+                                <Badge tone={severityTone(finding.severity)}>
+                                  {finding.severity}
+                                </Badge>
+                                <Badge tone="neutral">{finding.category}</Badge>
+                                {finding.kind !== 'issue' ? (
+                                  <Badge tone="info">{finding.kind}</Badge>
+                                ) : null}
+                                <button
+                                  type="button"
+                                  className="cr-finding-location"
+                                  onClick={() => onJump(finding)}
+                                  aria-label={`Jump to ${finding.file} line ${finding.lineStart}`}
+                                >
+                                  {finding.file}:{finding.lineStart}
+                                </button>
+                                <span className="cr-meta">{finding.confidence} confidence</span>
+                              </div>
+                              <h3 className="cr-finding-title">{finding.title}</h3>
+                              <p className="cr-finding-copy">{finding.rationale}</p>
+                              {finding.evidence !== '' ? (
+                                <pre className="cr-evidence" aria-label="Evidence">
+                                  {finding.evidence}
+                                </pre>
+                              ) : null}
+                              {finding.suggestion !== undefined ? (
+                                <div className="cr-suggestion" aria-label="Finding suggestion">
+                                  <div className="cr-suggestion-head">
+                                    <span className="cr-suggestion-label">Suggested change</span>
+                                    {finding.unanchored === true ? (
+                                      <Badge tone="warning">unanchored</Badge>
+                                    ) : null}
+                                  </div>
+                                  <div className="cr-suggestion-block cr-suggestion-old">
+                                    <span className="cr-suggestion-caption">Before</span>
+                                    <pre>{finding.suggestion.original}</pre>
+                                  </div>
+                                  <div className="cr-suggestion-block cr-suggestion-new">
+                                    <span className="cr-suggestion-caption">After</span>
+                                    <pre>{finding.suggestion.replacement}</pre>
+                                  </div>
+                                </div>
+                              ) : null}
+                              <FindingDecisionControls
+                                finding={finding}
+                                decision={decisions.get(finding.id)}
+                                readOnly={!canDecide || onDecide === undefined}
+                                pending={decidingFindingId === finding.id}
+                                error={
+                                  findingDecisionError?.findingId === finding.id
+                                    ? findingDecisionError.message
+                                    : null
+                                }
+                                onDecide={onDecide ?? (async () => false)}
+                              />
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                      {findings.length > PAGE_SIZE ? (
+                        <ReportPagination
+                          placement="bottom"
+                          page={currentPage}
+                          pageCount={pageCount}
+                          pageStart={pageStart}
+                          pageEnd={pageEnd}
+                          total={findings.length}
+                          onPageChange={setPage}
+                        />
+                      ) : null}
+                    </>
+                  )}
                 </div>
-              ) : null}
-              <FindingDecisionControls
-                finding={finding}
-                decision={decisions.get(finding.id)}
-                readOnly={!canDecide || onDecide === undefined}
-                pending={decidingFindingId === finding.id}
-                error={
-                  findingDecisionError?.findingId === finding.id
-                    ? findingDecisionError.message
-                    : null
-                }
-                onDecide={onDecide ?? (async () => false)}
-              />
-            </li>
-          ))}
-        </ol>
-      )}
-
-      {findings.length > PAGE_SIZE ? (
-        <nav className="cr-report-pagination" aria-label="Report pages">
-          <span className="cr-meta">
-            {pageStart + 1}–{pageEnd} of {findings.length}
-          </span>
-          <div className="cr-report-pagination-actions">
-            <Button
-              size="small"
-              variant="secondary"
-              aria-label="Previous report page"
-              disabled={currentPage === 0}
-              onClick={() => setPage(Math.max(0, currentPage - 1))}
-            >
-              Previous
-            </Button>
-            <span className="cr-meta">
-              Page {currentPage + 1} of {pageCount}
-            </span>
-            <Button
-              size="small"
-              variant="secondary"
-              aria-label="Next report page"
-              disabled={currentPage >= pageCount - 1}
-              onClick={() => setPage(Math.min(pageCount - 1, currentPage + 1))}
-            >
-              Next
-            </Button>
-          </div>
-        </nav>
-      ) : null}
-
-      {report.questions.length > 0 ? (
-        <section className="cr-report-section" aria-label="Open questions">
-          <h2 className="cr-card-title">Questions</h2>
-          <ul className="cr-question-list">
-            {report.questions.map((question) => (
-              <li key={question.id}>
-                <button
-                  type="button"
-                  className="cr-link-button"
-                  onClick={() =>
-                    onJump({
-                      file: question.file,
-                      lineStart: question.line,
-                      lineEnd: question.line,
-                    })
-                  }
-                >
-                  {question.file}:{question.line}
-                </button>
-                <strong>{question.question}</strong>
-                <p className="cr-meta">{question.why}</p>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
+              ),
+            },
+            {
+              id: 'questions',
+              label: (
+                <>
+                  Questions
+                  <span className="cr-tab-count">{report.questions.length}</span>
+                </>
+              ),
+              content: (
+                <div className="cr-report-questions">
+                  {report.questions.length === 0 ? (
+                    <EmptyState
+                      title="No open questions"
+                      description="The reviewer did not ask any questions for this round."
+                    />
+                  ) : (
+                    <ul className="cr-question-list" aria-label="Open questions">
+                      {report.questions.map((question) => (
+                        <li key={question.id}>
+                          <button
+                            type="button"
+                            className="cr-link-button"
+                            onClick={() =>
+                              onJump({
+                                file: question.file,
+                                lineStart: question.line,
+                                lineEnd: question.line,
+                              })
+                            }
+                          >
+                            {question.file}:{question.line}
+                          </button>
+                          <strong>{question.question}</strong>
+                          <p className="cr-meta">{question.why}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ),
+            },
+          ]}
+          value={section}
+          onChange={(id) => setSection(id as ReportSection)}
+          label="Report sections"
+          className="cr-report-tabs"
+        />
+      </section>
 
       {report.verification.length > 0 ? (
         <section className="cr-report-section" aria-label="Reviewer verification">
