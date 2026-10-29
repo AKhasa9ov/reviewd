@@ -2389,6 +2389,15 @@ body.cr-selecting-lines {
   overflow-wrap: anywhere;
 }
 
+.cr-full-file-question {
+  display: block;
+  font-family: var(--cr-font-ui);
+}
+
+.cr-full-file-question .cr-inline-question {
+  margin: var(--cr-space-1) var(--cr-space-3) var(--cr-space-2);
+}
+
 .cr-full-file-line-add {
   background: var(--cr-added-bg);
 }
@@ -2884,6 +2893,10 @@ body.cr-selecting-lines {
   display: block;
 }
 
+.cr-inline-question-row {
+  display: block;
+}
+
 .cr-inline-thread-cell {
   display: grid;
   gap: var(--cr-space-2);
@@ -3010,6 +3023,62 @@ body.cr-selecting-lines {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--cr-space-2);
+}
+
+.cr-inline-question {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: var(--cr-space-2);
+  min-width: 0;
+  margin: var(--cr-space-1) var(--cr-space-3) var(--cr-space-2) 140px;
+  padding: var(--cr-space-3);
+  border: 1px solid color-mix(in srgb, var(--cr-info) 35%, var(--cr-border));
+  border-left: 3px solid var(--cr-info);
+  border-radius: var(--cr-radius-control);
+  background: color-mix(in srgb, var(--cr-info) 6%, var(--cr-surface));
+}
+
+.cr-inline-question-mark {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--cr-info);
+  color: var(--cr-bg);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.cr-inline-question-main {
+  display: grid;
+  gap: var(--cr-space-1);
+  min-width: 0;
+}
+
+.cr-inline-question-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--cr-space-2);
+}
+
+.cr-inline-question-text {
+  margin: 0;
+  color: var(--cr-text);
+  font-size: var(--cr-text-control);
+  font-weight: 600;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.cr-inline-question-why {
+  margin: 0;
+  color: var(--cr-text-muted);
+  font-size: var(--cr-text-meta);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .cr-finding-decision {
@@ -3808,6 +3877,11 @@ body.cr-selecting-lines {
   }
 
   .cr-inline-finding {
+    margin-left: var(--cr-space-3);
+    margin-right: var(--cr-space-3);
+  }
+
+  .cr-inline-question {
     margin-left: var(--cr-space-3);
     margin-right: var(--cr-space-3);
   }

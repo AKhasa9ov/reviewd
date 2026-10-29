@@ -10,6 +10,7 @@ import type {
   FileDiff,
   Finding,
   FindingDecision,
+  ReviewQuestion,
   Side,
 } from '@dsh-code-review/core';
 import { Button } from '../primitives/Button.js';
@@ -20,6 +21,7 @@ import type {
   FindingDecisionError,
 } from './FindingDecisionControls.js';
 import { InlineFinding } from './InlineFinding.js';
+import { InlineQuestion } from './InlineQuestion.js';
 import { commentsAtLine } from './model.js';
 
 const MAX_FULL_FILE_LINES = 2000;
@@ -48,6 +50,7 @@ interface FullFileDialogProps {
   readOnly?: boolean;
   controllerRef?: MutableRefObject<FullFileController | null> | undefined;
   findings?: readonly Finding[];
+  questions?: readonly ReviewQuestion[];
   findingDecisions?: ReadonlyMap<string, FindingDecision>;
   onDecideFinding?: FindingDecisionControlsProps['onDecide'];
   decidingFindingId?: string | undefined;
@@ -117,6 +120,7 @@ export function FullFileDialog({
   readOnly = false,
   controllerRef,
   findings = [],
+  questions = [],
   findingDecisions = EMPTY_FINDING_DECISIONS,
   onDecideFinding,
   decidingFindingId,
@@ -387,6 +391,17 @@ export function FullFileDialog({
       ));
   }
 
+  function questionRows(no: number): JSX.Element[] {
+    if (activeSide !== 'new') return [];
+    return questions
+      .filter((question) => question.file === file.path && question.line === no)
+      .map((question) => (
+        <div className="cr-full-file-question" role="row" key={question.id}>
+          <InlineQuestion question={question} />
+        </div>
+      ));
+  }
+
   return (
     <Dialog open title={file.path} description={description} onClose={handleDialogClose}>
       <div className="cr-file-view">
@@ -510,6 +525,7 @@ export function FullFileDialog({
                       </span>
                     </div>
                     {findingRows(no)}
+                    {questionRows(no)}
                     {threadFor(no)}
                     {composer !== null &&
                     composer.side === activeSide &&

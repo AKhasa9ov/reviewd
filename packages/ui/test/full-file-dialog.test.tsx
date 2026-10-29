@@ -2,7 +2,13 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import type { Comment, FileDiff, Finding, FindingDecision } from '@dsh-code-review/core';
+import type {
+  Comment,
+  FileDiff,
+  Finding,
+  FindingDecision,
+  ReviewQuestion,
+} from '@dsh-code-review/core';
 import { FullFileDialog } from '../src/review/FullFileDialog.js';
 
 function file(overrides: Partial<FileDiff> = {}): FileDiff {
@@ -59,6 +65,17 @@ function finding(overrides: Partial<Finding> = {}): Finding {
     title: 'Retry budget is hard-coded',
     rationale: 'The retry count cannot be configured per environment.',
     evidence: 'const retry = attempt < 3;',
+    ...overrides,
+  };
+}
+
+function question(overrides: Partial<ReviewQuestion> = {}): ReviewQuestion {
+  return {
+    id: 'q1',
+    file: 'src/app.ts',
+    line: 2,
+    question: 'Why is this value 2?',
+    why: 'The new constant changes the retry budget.',
     ...overrides,
   };
 }
@@ -474,6 +491,34 @@ describe('FullFileDialog', () => {
     expect(row).toHaveClass('cr-full-file-finding');
     expect(row).toHaveAttribute('role', 'row');
     expect(row).toContainElement(card);
+  });
+
+  it('renders an agent question under its line on the current version', () => {
+    render(<FullFileDialog file={file()} round={1} questions={[question()]} onClose={vi.fn()} />);
+    const dialog = screen.getByRole('dialog', { name: 'src/app.ts' });
+    const line = within(dialog).getByRole('row', { name: /Line 2, added:/ });
+    const card = within(dialog).getByLabelText('question: Why is this value 2?');
+    const row = line.nextElementSibling;
+
+    expect(card).toHaveTextContent('The new constant changes the retry budget.');
+    expect(row).toHaveClass('cr-full-file-question');
+    expect(row).toHaveAttribute('role', 'row');
+    expect(row).toContainElement(card);
+  });
+
+  it('shows questions only on the current version', async () => {
+    const user = userEvent.setup();
+    render(<FullFileDialog file={file()} round={1} questions={[question()]} onClose={vi.fn()} />);
+    const dialog = screen.getByRole('dialog', { name: 'src/app.ts' });
+    expect(within(dialog).getByLabelText('question: Why is this value 2?')).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole('button', { name: 'Base' }));
+    expect(
+      within(dialog).queryByLabelText('question: Why is this value 2?'),
+    ).not.toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole('button', { name: 'Current' }));
+    expect(within(dialog).getByLabelText('question: Why is this value 2?')).toBeInTheDocument();
   });
 
   it('renders every finding anchored to the same start line', () => {

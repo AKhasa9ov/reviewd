@@ -1165,6 +1165,7 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
       onRequestNextRound={() => setRefreshOpen(true)}
       changedPaths={changed}
       findings={report !== null ? report.findings : []}
+      questions={report !== null ? report.questions : []}
       findingDecisions={finalReportForRound !== null ? findingDecisions : undefined}
       onDecideFinding={canDecideFinding ? submitFindingDecision : undefined}
       decidingFindingId={decidingFindingId}

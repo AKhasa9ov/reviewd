@@ -6,6 +6,7 @@ import type {
   FileDiff,
   Finding,
   FindingDecision,
+  ReviewQuestion,
   Side,
   Snapshot,
 } from '@dsh-code-review/core';
@@ -20,6 +21,7 @@ import type {
 } from './FindingDecisionControls.js';
 import { FullFileDialog, type FullFileController } from './FullFileDialog.js';
 import { InlineFinding, severityLetter } from './InlineFinding.js';
+import { InlineQuestion } from './InlineQuestion.js';
 import {
   buildDiffRows,
   commentsAtLine,
@@ -42,6 +44,7 @@ export interface DiffViewerProps {
   onRequestNextRound?: (() => void) | undefined;
   changedPaths: ReadonlySet<string>;
   findings?: readonly Finding[];
+  questions?: readonly ReviewQuestion[];
   findingDecisions?: ReadonlyMap<string, FindingDecision>;
   onDecideFinding?: FindingDecisionControlsProps['onDecide'];
   decidingFindingId?: string | undefined;
@@ -132,6 +135,16 @@ function highestFinding(findings: readonly Finding[]): Finding | null {
   );
 }
 
+function questionsOnLine(
+  questions: readonly ReviewQuestion[],
+  path: string,
+  side: Side,
+  line: number,
+): ReviewQuestion[] {
+  if (side !== 'new') return [];
+  return questions.filter((question) => question.file === path && question.line === line);
+}
+
 function statusTone(
   status: FileDiff['status'],
 ): 'success' | 'danger' | 'warning' | 'info' | 'neutral' {
@@ -199,6 +212,7 @@ function DiffFileSection({
   composer,
   dragRange,
   findings,
+  questions,
   findingDecisions,
   onDecideFinding,
   decidingFindingId,
@@ -228,6 +242,7 @@ function DiffFileSection({
   composer: DiffViewerProps['composer'];
   dragRange: DragRange | null;
   findings: readonly Finding[];
+  questions: readonly ReviewQuestion[];
   findingDecisions: ReadonlyMap<string, FindingDecision>;
   onDecideFinding?: DiffViewerProps['onDecideFinding'];
   decidingFindingId?: string | undefined;
@@ -456,6 +471,7 @@ function DiffFileSection({
                       composer={composer}
                       dragRange={dragRange}
                       findings={findings}
+                      questions={questions}
                       findingDecisions={findingDecisions}
                       onDecideFinding={onDecideFinding}
                       decidingFindingId={decidingFindingId}
@@ -511,6 +527,7 @@ function DiffLineRow({
   composer,
   dragRange,
   findings,
+  questions,
   findingDecisions,
   onDecideFinding,
   decidingFindingId,
@@ -537,6 +554,7 @@ function DiffLineRow({
   composer: DiffViewerProps['composer'];
   dragRange: DragRange | null;
   findings: readonly Finding[];
+  questions: readonly ReviewQuestion[];
   findingDecisions: ReadonlyMap<string, FindingDecision>;
   onDecideFinding?: DiffViewerProps['onDecideFinding'];
   decidingFindingId?: string | undefined;
@@ -561,6 +579,7 @@ function DiffLineRow({
   if (no === null) return <></>;
   const lineComments = commentsAtLine(comments, round, file.path, no, side);
   const lineFindings = findingsOnLine(findings, file.path, side, no);
+  const lineQuestions = questionsOnLine(questions, file.path, side, no);
   const highestRisk = highestFinding(lineFindings);
   const selected = activeLine === no;
   const inDragRange =
@@ -687,6 +706,11 @@ function DiffLineRow({
             />
           </div>
         ))}
+      {lineQuestions.map((question) => (
+        <div className="cr-inline-question-row" role="row" key={question.id}>
+          <InlineQuestion question={question} />
+        </div>
+      ))}
       {lineComments.length > 0 ? (
         <div className="cr-inline-thread" role="row">
           <div className="cr-inline-thread-cell" role="cell">
@@ -731,6 +755,7 @@ export function DiffViewer({
   onRequestNextRound,
   changedPaths,
   findings = [],
+  questions = [],
   findingDecisions = EMPTY_FINDING_DECISIONS,
   onDecideFinding,
   decidingFindingId,
@@ -1140,6 +1165,7 @@ export function DiffViewer({
                 composer={composer}
                 dragRange={dragRange}
                 findings={findings}
+                questions={questions}
                 findingDecisions={findingDecisions}
                 onDecideFinding={onDecideFinding}
                 decidingFindingId={decidingFindingId}
@@ -1187,6 +1213,7 @@ export function DiffViewer({
           readOnly={readOnly}
           controllerRef={fullFileControllerRef}
           findings={findings}
+          questions={questions}
           findingDecisions={findingDecisions}
           onDecideFinding={onDecideFinding}
           decidingFindingId={decidingFindingId}
