@@ -538,9 +538,14 @@ describe('ReviewServiceImpl', () => {
   });
 
   it('cancels an active reviewer and persists a failed agent event', async () => {
+    let markStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
     const backend: ReviewerBackend = {
       kind: 'fake',
       async run(_job, _sink, signal) {
+        markStarted();
         await new Promise((_resolve, reject) => {
           signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
         });
@@ -553,7 +558,9 @@ describe('ReviewServiceImpl', () => {
       { actor },
     );
     const run = h.service.runReviewer(view.review.id, { actor });
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    // Wait for the fake backend to start; a fixed sleep races under the full
+    // parallel suite and can cancel before the active job is registered.
+    await started;
     await h.service.cancelAgent(view.review.id, { actor });
     await expectError(run, 'conflict');
     const events = await h.service.events(view.review.id);
