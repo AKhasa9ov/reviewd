@@ -6,5 +6,6 @@
  * are imported, so the SPA uses this deliberately narrow entry instead.
  */
 export { fold, ReviewFoldError } from './review/fold.js';
+export { isFinalReviewReport } from './review/final.js';
 export { mergeShardReports } from './review/aggregate.js';
 export type { MergeShardReportsInput } from './review/aggregate.js';

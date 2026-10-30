@@ -143,6 +143,7 @@ export type {
   ShardReportInput,
 } from './review/aggregate.js';
 export { deriveOutcome } from './review/outcomes.js';
+export { isFinalReviewReport } from './review/final.js';
 export { fold, ReviewFoldError } from './review/fold.js';
 export { ReviewLifecycle, ReviewLifecycleError } from './review/lifecycle.js';
 export type { RefreshResult, ReviewLifecycleErrorCode } from './review/lifecycle.js';
@@ -204,6 +205,8 @@ export type {
   FeedbackJson,
   FeedbackPackage,
   FeedbackSuggestion,
+  BulkFindingDecisionInput,
+  BulkFindingDecisionView,
   FindingDecisionInput,
   FindingDecisionView,
   Page,

@@ -503,6 +503,29 @@ export class ReviewStore {
   }
 
   async append(reviewId: ReviewId, event: ReviewEvent): Promise<ReviewEvent> {
+    const appended = await this.appendInternal(reviewId, event);
+    if (appended === null) throw new Error('unconditional append was skipped');
+    return appended;
+  }
+
+  /**
+   * Appends an event only when `accept` returns true for the review state
+   * observed inside the per-review critical section. Returning null means the
+   * event was not written. This makes existence checks atomic with the append.
+   */
+  async appendIf(
+    reviewId: ReviewId,
+    event: ReviewEvent,
+    accept: (state: ReviewState) => boolean,
+  ): Promise<ReviewEvent | null> {
+    return await this.appendInternal(reviewId, event, accept);
+  }
+
+  private async appendInternal(
+    reviewId: ReviewId,
+    event: ReviewEvent,
+    accept?: (state: ReviewState) => boolean,
+  ): Promise<ReviewEvent | null> {
     if (this.closed) throw new Error('review store is closed');
     const id = safeReviewId(reviewId);
     if (!isReviewEvent(event)) {
@@ -536,6 +559,8 @@ export class ReviewStore {
         if (event.type !== 'review/created') throw new ReviewNotFoundError(id);
         entry = { state: event.data.review, eventCount: 0 };
       }
+
+      if (accept !== undefined && !accept(entry.state)) return null;
 
       // Validate against the aggregate before touching the log: a rejected event
       // must not leave a line that makes every later replay fail.

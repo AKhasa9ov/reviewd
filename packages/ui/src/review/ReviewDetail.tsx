@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { fold } from '@dsh-code-review/core/browser';
+import { fold, isFinalReviewReport } from '@dsh-code-review/core/browser';
 import type {
   Comment,
   CommentState,
@@ -229,6 +229,8 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
   const [findingDecisionError, setFindingDecisionError] = useState<FindingDecisionError | null>(
     null,
   );
+  const [bulkDecisionPending, setBulkDecisionPending] = useState(false);
+  const [bulkDecisionError, setBulkDecisionError] = useState<string | null>(null);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -535,7 +537,10 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
     [view?.review.agent, view?.review.id, selectedRound],
   );
   const report = finalReportForRound ?? liveReport?.report ?? null;
-  const reportIsPartial = finalReportForRound === null && liveReport !== null;
+  const reportAgentPartial = view?.review.agent?.status === 'partial';
+  const reportIsPartial =
+    (finalReportForRound === null && liveReport !== null) ||
+    (finalReportForRound !== null && reportAgentPartial);
   const readOnly = view?.review.status === 'closed';
   const findingDecisions = useMemo(() => {
     const decisions = new Map<string, FindingDecision>();
@@ -547,7 +552,11 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
     }
     return decisions;
   }, [view, finalReportForRound]);
-  const canDecideFinding = !readOnly && finalReportForRound !== null;
+  const canDecideFinding =
+    !readOnly &&
+    finalReportForRound !== null &&
+    view !== null &&
+    isFinalReviewReport(view.review, finalReportForRound);
   const agentActive =
     view?.review.agent?.status === 'running' || view?.review.agent?.status === 'queued';
   const canRetryReviewer = view?.review.reviewer?.backend === 'worker';
@@ -902,6 +911,39 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
       return false;
     } finally {
       setDecidingFindingId(undefined);
+    }
+  }
+
+  async function submitAllFindingDecisions(state: FindingDecisionState): Promise<boolean> {
+    if (view === null || finalReportForRound === null) {
+      setBulkDecisionError('The report is no longer available.');
+      return false;
+    }
+    setBulkDecisionPending(true);
+    setBulkDecisionError(null);
+    try {
+      const result = await client.decideFindings(id, state);
+      const count = result.decisions.length;
+      if (count === 0) {
+        toast('No findings left to decide');
+      } else {
+        toast(
+          `${state === 'accepted' ? 'Accepted' : 'Dismissed'} ${count} ${
+            count === 1 ? 'finding' : 'findings'
+          }`,
+        );
+      }
+      reloadReview();
+      return true;
+    } catch (error) {
+      setBulkDecisionError(
+        error instanceof Error ? error.message : 'Could not save the finding decisions.',
+      );
+      // Some decisions may have committed before a later append failed.
+      reloadReview();
+      return false;
+    } finally {
+      setBulkDecisionPending(false);
     }
   }
 
@@ -1537,6 +1579,9 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
                 onDecide={canDecideFinding ? submitFindingDecision : undefined}
                 decidingFindingId={decidingFindingId}
                 findingDecisionError={findingDecisionError}
+                onDecideAll={canDecideFinding ? submitAllFindingDecisions : undefined}
+                bulkPending={bulkDecisionPending}
+                bulkError={bulkDecisionError}
                 onJump={jumpToLocation}
                 comments={reportComments}
                 round={selectedRound ?? 1}

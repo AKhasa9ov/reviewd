@@ -7,6 +7,7 @@ import type { ReviewEvent } from '../review/events.js';
 import type {
   AddCommentInput,
   CommentState,
+  FindingDecision,
   ReviewId,
   ReviewState,
   ReviewSummary,
@@ -28,9 +29,12 @@ import type {
   ReviewerReport,
 } from '../reviewer/types.js';
 import { validateReport, ReportValidationError } from '../reviewer/validate.js';
+import { isFinalReviewReport } from '../review/final.js';
 import { buildFeedback } from './feedback.js';
 import { ReviewError } from './types.js';
 import type {
+  BulkFindingDecisionInput,
+  BulkFindingDecisionView,
   CallContext,
   CommentEditInput,
   CommentView,
@@ -511,6 +515,82 @@ export class ReviewServiceImpl implements ReviewService {
         }
       },
       `finding.decision:${id}:${findingId}`,
+      ctx.requestId,
+    );
+  }
+
+  async decideFindings(
+    id: ReviewId,
+    input: BulkFindingDecisionInput,
+    ctx: CallContext,
+  ): Promise<BulkFindingDecisionView> {
+    assertContext(ctx);
+    return await this.idempotent(
+      async () => {
+        if (input.state !== 'accepted' && input.state !== 'dismissed') {
+          throw new ReviewError('validation', `unknown finding decision: ${String(input.state)}`, {
+            id,
+          });
+        }
+
+        let review: ReviewState;
+        try {
+          review = await this.lifecycle.get(id);
+        } catch (error) {
+          throw this.translate(error);
+        }
+        if (review.deletedAt !== undefined) {
+          throw new ReviewError('not-found', `review not found: ${id}`, { id });
+        }
+        if (review.status === 'closed') {
+          throw new ReviewError('conflict', `review is closed: ${id}`, { id });
+        }
+
+        const latestRound = review.rounds.at(-1);
+        const report = review.report;
+        if (report === undefined || latestRound === undefined) {
+          throw new ReviewError('validation', `review has no reviewer report: ${id}`, { id });
+        }
+        if (report.round !== latestRound.no) {
+          throw new ReviewError(
+            'validation',
+            `reviewer report is from round ${report.round}, latest is ${latestRound.no}`,
+            { id },
+          );
+        }
+        if (!isFinalReviewReport(review)) {
+          throw new ReviewError('validation', `reviewer report is not final: ${id}`, { id });
+        }
+
+        const decided = new Set(
+          (review.findingDecisions ?? [])
+            .filter((decision) => decision.round === report.round)
+            .map((decision) => decision.findingId),
+        );
+        const targets = report.findings.filter(
+          (finding) => finding.kind !== 'praise' && !decided.has(finding.id),
+        );
+        const decisions: FindingDecision[] = [];
+        try {
+          for (const finding of targets) {
+            const decision = await this.lifecycle.decideFindingIfUndecided(
+              id,
+              finding.id,
+              { state: input.state },
+              ctx.actor,
+            );
+            if (decision !== null) decisions.push(decision);
+          }
+        } catch (error) {
+          throw this.translate(error);
+        }
+
+        return {
+          decisions,
+          skipped: report.findings.length - decisions.length,
+        };
+      },
+      `finding.decisions:${id}`,
       ctx.requestId,
     );
   }

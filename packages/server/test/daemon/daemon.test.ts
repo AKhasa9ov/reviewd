@@ -1664,3 +1664,73 @@ describe('review finding decisions', () => {
     expect(called).toBe(false);
   });
 });
+
+describe('bulk review finding decisions', () => {
+  it('routes a bulk decision to the service', async () => {
+    const calls: unknown[] = [];
+    const service = {
+      async decideFindings(id: string, input: { state: string }) {
+        calls.push({ id, input });
+        return {
+          decisions: [
+            {
+              findingId: 'f1',
+              round: 1,
+              state: input.state,
+              by: { name: 'reviewd', kind: 'human' },
+              at: '2026-10-30T12:00:00.000Z',
+            },
+          ],
+          skipped: 2,
+        };
+      },
+      async events() {
+        return [];
+      },
+      async list() {
+        return { items: [], total: 0, limit: 50, offset: 0 };
+      },
+    } as unknown as ReviewService;
+    const { daemonUrl } = await running({}, { service });
+
+    const response = await fetch(`${daemonUrl}/api/reviews/rev_1/findings/decisions`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ state: 'dismissed' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(await read(response)).toMatchObject({
+      decisions: [{ findingId: 'f1', state: 'dismissed' }],
+      skipped: 2,
+    });
+    expect(calls).toEqual([{ id: 'rev_1', input: { state: 'dismissed' } }]);
+  });
+
+  it('rejects an unknown bulk decision state before calling the service', async () => {
+    let called = false;
+    const service = {
+      async decideFindings() {
+        called = true;
+        return { decisions: [], skipped: 0 };
+      },
+      async events() {
+        return [];
+      },
+      async list() {
+        return { items: [], total: 0, limit: 50, offset: 0 };
+      },
+    } as unknown as ReviewService;
+    const { daemonUrl } = await running({}, { service });
+
+    const response = await fetch(`${daemonUrl}/api/reviews/rev_1/findings/decisions`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ state: 'maybe' }),
+    });
+
+    expect(response.status).toBe(400);
+    expect((await read(response)).error.code).toBe('validation');
+    expect(called).toBe(false);
+  });
+});

@@ -174,6 +174,38 @@ describe('finding decisions', () => {
     expect(dismissed).not.toHaveProperty('note');
   });
 
+  it('leaves an existing decision and note untouched when the finding is already decided', async () => {
+    const { lifecycle, reviewId } = await seeded();
+    const existing = await lifecycle.decideFinding(
+      reviewId,
+      'f1',
+      { state: 'accepted', note: 'Keep this note' },
+      actor,
+    );
+
+    const skipped = await lifecycle.decideFindingIfUndecided(
+      reviewId,
+      'f1',
+      { state: 'dismissed' },
+      actor,
+    );
+
+    expect(skipped).toBeNull();
+    expect((await lifecycle.get(reviewId)).findingDecisions).toEqual([existing]);
+  });
+
+  it('lets only one concurrent conditional decision win', async () => {
+    const { lifecycle, reviewId } = await seeded();
+
+    const decisions = await Promise.all([
+      lifecycle.decideFindingIfUndecided(reviewId, 'f1', { state: 'accepted' }, actor),
+      lifecycle.decideFindingIfUndecided(reviewId, 'f1', { state: 'dismissed' }, actor),
+    ]);
+
+    expect(decisions.filter((decision) => decision !== null)).toHaveLength(1);
+    expect((await lifecycle.get(reviewId)).findingDecisions).toHaveLength(1);
+  });
+
   it('rejects unknown findings, stale reports, closed reviews and invalid notes', async () => {
     const { lifecycle, reviewId, store } = await seeded();
 

@@ -3530,6 +3530,20 @@ body.cr-selecting-lines {
   width: 170px;
 }
 
+.cr-report-bulk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cr-space-2);
+  margin-left: auto;
+}
+
+@media (max-width: 720px) {
+  .cr-report-bulk-actions {
+    width: 100%;
+    margin-left: 0;
+  }
+}
+
 .cr-findings {
   display: grid;
   gap: var(--cr-space-3);

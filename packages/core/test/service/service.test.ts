@@ -8,6 +8,7 @@ import {
   ReviewServiceImpl,
   ReviewStore,
   createEvent,
+  summarizeCoverage,
 } from '../../src/index.js';
 import type {
   Actor,
@@ -742,6 +743,201 @@ describe('ReviewServiceImpl', () => {
 
     const loaded = await h.service.get(view.review.id);
     expect(loaded.review.findingDecisions).toEqual([first.decision]);
+  });
+
+  it('accepts every remaining non-praise finding without overwriting a human decision', async () => {
+    const h = await harness({
+      report: report([
+        finding({ id: 'f1' }),
+        finding({ id: 'f2' }),
+        finding({ id: 'f3', kind: 'praise' }),
+      ]),
+    });
+    const view = await h.service.create(
+      {
+        repoRoot: '/tmp/repo',
+        title: 'Bulk decisions',
+        scope: h.scope,
+        reviewer: { backend: 'fake' },
+      },
+      { actor },
+    );
+    await h.service.runReviewer(view.review.id, { actor });
+    const existing = await h.service.decideFinding(
+      view.review.id,
+      'f1',
+      { state: 'dismissed', note: 'Already handled' },
+      { actor },
+    );
+
+    const bulk = await h.service.decideFindings(
+      view.review.id,
+      { state: 'accepted' },
+      { actor, requestId: 'bulk-decisions-1' },
+    );
+
+    expect(bulk).toMatchObject({
+      decisions: [
+        {
+          findingId: 'f2',
+          round: 1,
+          state: 'accepted',
+          by: actor,
+        },
+      ],
+      skipped: 2,
+    });
+    const loaded = await h.service.get(view.review.id);
+    expect(loaded.review.findingDecisions).toEqual([
+      existing.decision,
+      expect.objectContaining({ findingId: 'f2', state: 'accepted' }),
+    ]);
+    expect(loaded.review.findingDecisions).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ findingId: 'f3' })]),
+    );
+
+    const replay = await h.service.decideFindings(
+      view.review.id,
+      { state: 'dismissed' },
+      { actor, requestId: 'bulk-decisions-1' },
+    );
+    expect(replay).toEqual(bulk);
+  });
+
+  it('does not duplicate decisions when concurrent bulk requests target the same findings', async () => {
+    const h = await harness({
+      report: report([finding({ id: 'f1' }), finding({ id: 'f2' })]),
+    });
+    const view = await h.service.create(
+      {
+        repoRoot: '/tmp/repo',
+        title: 'Concurrent bulk decisions',
+        scope: h.scope,
+        reviewer: { backend: 'fake' },
+      },
+      { actor },
+    );
+    await h.service.runReviewer(view.review.id, { actor });
+
+    const [accepted, dismissed] = await Promise.all([
+      h.service.decideFindings(
+        view.review.id,
+        { state: 'accepted' },
+        { actor, requestId: 'bulk-concurrent-accepted' },
+      ),
+      h.service.decideFindings(
+        view.review.id,
+        { state: 'dismissed' },
+        { actor, requestId: 'bulk-concurrent-dismissed' },
+      ),
+    ]);
+
+    expect(accepted.decisions.length + dismissed.decisions.length).toBe(2);
+    const loaded = await h.service.get(view.review.id);
+    const decisions = loaded.review.findingDecisions ?? [];
+    expect(decisions).toHaveLength(2);
+    expect(new Set(decisions.map((decision) => decision.findingId))).toEqual(new Set(['f1', 'f2']));
+    expect(new Set(decisions.map((decision) => decision.state)).size).toBe(1);
+  });
+
+  it('rejects bulk decisions for a coverage-partial stored report', async () => {
+    const h = await harness({ report: report() });
+    const view = await h.service.create(
+      {
+        repoRoot: '/tmp/repo',
+        title: 'Partial bulk decisions',
+        scope: h.scope,
+        reviewer: { backend: 'fake' },
+      },
+      { actor },
+    );
+    await h.service.runReviewer(view.review.id, { actor });
+
+    const files = [{ path: 'src/a.ts', status: 'failed' as const }];
+    await h.store.append(
+      view.review.id,
+      createEvent({
+        reviewId: view.review.id,
+        type: 'agent/report',
+        actor: { name: 'Reviewer', kind: 'agent' },
+        data: {
+          report: {
+            ...report(),
+            reviewId: view.review.id,
+            round: 1,
+            backend: 'fake',
+            rejected: [],
+            warnings: [],
+          },
+          coverage: { files, totals: summarizeCoverage(files) },
+        },
+      }),
+    );
+    const loaded = await h.service.get(view.review.id);
+    expect(loaded.review.agent?.status).toBe('partial');
+
+    await expectError(
+      h.service.decideFindings(view.review.id, { state: 'accepted' }, { actor }),
+      'validation',
+    );
+    expect((await h.service.get(view.review.id)).review.findingDecisions ?? []).toEqual([]);
+  });
+
+  it('rejects bulk decisions when the latest round has no report', async () => {
+    const h = await harness({ report: report() });
+    const view = await h.service.create(
+      {
+        repoRoot: '/tmp/repo',
+        title: 'Stale bulk decisions',
+        scope: h.scope,
+        reviewer: { backend: 'fake' },
+      },
+      { actor },
+    );
+    await h.service.runReviewer(view.review.id, { actor });
+    await h.lifecycle.addRound(view.review.id, snapshot(undefined, 'c'.repeat(40)), actor);
+
+    await expectError(
+      h.service.decideFindings(view.review.id, { state: 'accepted' }, { actor }),
+      'validation',
+    );
+  });
+
+  it('rejects bulk decisions before a final report exists', async () => {
+    const h = await harness();
+    const view = await h.service.create(
+      {
+        repoRoot: '/tmp/repo',
+        title: 'Unreported bulk decisions',
+        scope: h.scope,
+      },
+      { actor },
+    );
+
+    await expectError(
+      h.service.decideFindings(view.review.id, { state: 'accepted' }, { actor }),
+      'validation',
+    );
+  });
+
+  it('rejects bulk decisions for a closed review', async () => {
+    const h = await harness({ report: report() });
+    const view = await h.service.create(
+      {
+        repoRoot: '/tmp/repo',
+        title: 'Closed bulk decisions',
+        scope: h.scope,
+        reviewer: { backend: 'fake' },
+      },
+      { actor },
+    );
+    await h.service.runReviewer(view.review.id, { actor });
+    await h.service.close(view.review.id, 'closed', { actor });
+
+    await expectError(
+      h.service.decideFindings(view.review.id, { state: 'accepted' }, { actor }),
+      'conflict',
+    );
   });
 
   it('rejects unknown findings and invalid decision notes through the service', async () => {

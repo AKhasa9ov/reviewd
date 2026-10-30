@@ -3222,6 +3222,18 @@ function deriveOutcome(previous, next, nextSnapshot, suggestion) {
   return { round: next.round, status: "outdated", confidence: "low" };
 }
 
+// packages/core/src/review/final.ts
+function isFinalReviewReport(review, report = review.report) {
+  const latestRound = review.rounds.at(-1);
+  if (report === void 0 || latestRound === void 0 || report.round !== latestRound.no) {
+    return false;
+  }
+  const agent = review.agent;
+  if (agent === void 0) return true;
+  if (agent.status !== "done") return false;
+  return agent.coverage === void 0 || isCoverageComplete(agent.coverage);
+}
+
 // packages/core/src/review/fold.ts
 var ReviewFoldError = class extends Error {
   constructor(message) {
@@ -3809,6 +3821,19 @@ var ReviewStore = class _ReviewStore {
     return new _ReviewStore(absolute, createdAt);
   }
   async append(reviewId, event) {
+    const appended = await this.appendInternal(reviewId, event);
+    if (appended === null) throw new Error("unconditional append was skipped");
+    return appended;
+  }
+  /**
+   * Appends an event only when `accept` returns true for the review state
+   * observed inside the per-review critical section. Returning null means the
+   * event was not written. This makes existence checks atomic with the append.
+   */
+  async appendIf(reviewId, event, accept) {
+    return await this.appendInternal(reviewId, event, accept);
+  }
+  async appendInternal(reviewId, event, accept) {
     if (this.closed) throw new Error("review store is closed");
     const id = safeReviewId(reviewId);
     if (!isReviewEvent(event)) {
@@ -3837,6 +3862,7 @@ var ReviewStore = class _ReviewStore {
         if (event.type !== "review/created") throw new ReviewNotFoundError(id);
         entry = { state: event.data.review, eventCount: 0 };
       }
+      if (accept !== void 0 && !accept(entry.state)) return null;
       const state = fold(entry.state, event);
       const sequenced = { ...event, seq: entry.eventCount + 1 };
       const payload = `${JSON.stringify(sequenced)}
@@ -4168,6 +4194,66 @@ function findComment2(state, commentId) {
   }
   return comment;
 }
+function requireLatestReport(state, reviewId) {
+  const latestRound = state.rounds.at(-1);
+  if (state.report === void 0 || latestRound === void 0) {
+    throw new ReviewLifecycleError("invalid-input", `review has no reviewer report: ${reviewId}`, {
+      reviewId
+    });
+  }
+  if (state.report.round !== latestRound.no) {
+    throw new ReviewLifecycleError(
+      "invalid-input",
+      `reviewer report is from round ${state.report.round}, latest is ${latestRound.no}`,
+      { reviewId }
+    );
+  }
+  return state.report;
+}
+function requireFinalReport(state, reviewId) {
+  const report = requireLatestReport(state, reviewId);
+  if (!isFinalReviewReport(state)) {
+    throw new ReviewLifecycleError("invalid-input", `reviewer report is not final: ${reviewId}`, {
+      reviewId
+    });
+  }
+  return report;
+}
+function normalizeDecisionInput(input, reviewId) {
+  if (input.state !== "accepted" && input.state !== "dismissed") {
+    throw new ReviewLifecycleError("invalid-input", `unknown finding decision: ${input.state}`, {
+      reviewId
+    });
+  }
+  if (input.note !== void 0 && typeof input.note !== "string") {
+    throw new ReviewLifecycleError("invalid-input", "finding decision note must be a string", {
+      reviewId
+    });
+  }
+  const note = input.note?.trim();
+  if (note !== void 0 && note.length > 4e3) {
+    throw new ReviewLifecycleError("invalid-input", "finding decision note is too long", {
+      reviewId
+    });
+  }
+  return {
+    state: input.state,
+    ...note === void 0 || note === "" ? {} : { note }
+  };
+}
+function requireFinding(report, findingId, reviewId) {
+  if (!report.findings.some((finding) => finding.id === findingId)) {
+    throw new ReviewLifecycleError("finding-not-found", `unknown finding: ${findingId}`, {
+      reviewId,
+      findingId
+    });
+  }
+}
+function hasDecision(state, findingId, round) {
+  return (state.findingDecisions ?? []).some(
+    (decision) => decision.round === round && decision.findingId === findingId
+  );
+}
 var ReviewLifecycle = class {
   store;
   now;
@@ -4425,49 +4511,15 @@ var ReviewLifecycle = class {
     return this.findComment(await this.get(reviewId), commentId);
   }
   async decideFinding(reviewId, findingId, input, actor) {
-    if (input.state !== "accepted" && input.state !== "dismissed") {
-      throw new ReviewLifecycleError("invalid-input", `unknown finding decision: ${input.state}`, {
-        reviewId
-      });
-    }
-    if (input.note !== void 0 && typeof input.note !== "string") {
-      throw new ReviewLifecycleError("invalid-input", "finding decision note must be a string", {
-        reviewId
-      });
-    }
-    const note = input.note?.trim();
-    if (note !== void 0 && note.length > 4e3) {
-      throw new ReviewLifecycleError("invalid-input", "finding decision note is too long", {
-        reviewId
-      });
-    }
+    const normalized = normalizeDecisionInput(input, reviewId);
     const state = await this.requireOpen(reviewId);
-    const latestRound = state.rounds.at(-1);
-    if (state.report === void 0 || latestRound === void 0) {
-      throw new ReviewLifecycleError(
-        "invalid-input",
-        `review has no reviewer report: ${reviewId}`,
-        { reviewId }
-      );
-    }
-    if (state.report.round !== latestRound.no) {
-      throw new ReviewLifecycleError(
-        "invalid-input",
-        `reviewer report is from round ${state.report.round}, latest is ${latestRound.no}`,
-        { reviewId }
-      );
-    }
-    if (!state.report.findings.some((finding) => finding.id === findingId)) {
-      throw new ReviewLifecycleError("finding-not-found", `unknown finding: ${findingId}`, {
-        reviewId,
-        findingId
-      });
-    }
+    const report = requireFinalReport(state, reviewId);
+    requireFinding(report, findingId, reviewId);
     const decision = {
       findingId,
-      round: state.report.round,
-      state: input.state,
-      ...note === void 0 || note === "" ? {} : { note },
+      round: report.round,
+      state: normalized.state,
+      ...normalized.note === void 0 ? {} : { note: normalized.note },
       by: actor,
       at: this.now().toISOString()
     };
@@ -4482,6 +4534,56 @@ var ReviewLifecycle = class {
       })
     );
     return decision;
+  }
+  /**
+   * Records a decision only when the finding has no decision for the same
+   * report round. The existence check and append share the store's per-review
+   * critical section, so two concurrent bulk requests cannot both win.
+   * Returns null when another writer decided the finding first.
+   */
+  async decideFindingIfUndecided(reviewId, findingId, input, actor) {
+    const normalized = normalizeDecisionInput(input, reviewId);
+    const state = await this.requireOpen(reviewId);
+    const report = requireFinalReport(state, reviewId);
+    requireFinding(report, findingId, reviewId);
+    const decision = {
+      findingId,
+      round: report.round,
+      state: normalized.state,
+      by: actor,
+      at: this.now().toISOString()
+    };
+    const appended = await this.store.appendIf(
+      reviewId,
+      createEvent({
+        reviewId,
+        type: "finding/decision",
+        actor,
+        data: { decision },
+        now: this.now
+      }),
+      (current) => {
+        if (current.deletedAt !== void 0) {
+          throw new ReviewLifecycleError("not-found", `review not found: ${reviewId}`, {
+            reviewId
+          });
+        }
+        if (current.status === "closed") {
+          throw new ReviewLifecycleError("closed", `review is closed: ${reviewId}`, { reviewId });
+        }
+        const currentReport = requireFinalReport(current, reviewId);
+        if (currentReport.round !== decision.round) {
+          throw new ReviewLifecycleError(
+            "invalid-input",
+            `reviewer report is from round ${currentReport.round}, expected ${decision.round}`,
+            { reviewId }
+          );
+        }
+        requireFinding(currentReport, findingId, reviewId);
+        return !hasDecision(current, findingId, decision.round);
+      }
+    );
+    return appended === null ? null : decision;
   }
   async updateReview(reviewId, input, actor) {
     await this.requireOpen(reviewId);
@@ -5932,6 +6034,71 @@ var ReviewServiceImpl = class {
         }
       },
       `finding.decision:${id}:${findingId}`,
+      ctx.requestId
+    );
+  }
+  async decideFindings(id, input, ctx) {
+    assertContext(ctx);
+    return await this.idempotent(
+      async () => {
+        if (input.state !== "accepted" && input.state !== "dismissed") {
+          throw new ReviewError("validation", `unknown finding decision: ${String(input.state)}`, {
+            id
+          });
+        }
+        let review;
+        try {
+          review = await this.lifecycle.get(id);
+        } catch (error) {
+          throw this.translate(error);
+        }
+        if (review.deletedAt !== void 0) {
+          throw new ReviewError("not-found", `review not found: ${id}`, { id });
+        }
+        if (review.status === "closed") {
+          throw new ReviewError("conflict", `review is closed: ${id}`, { id });
+        }
+        const latestRound = review.rounds.at(-1);
+        const report = review.report;
+        if (report === void 0 || latestRound === void 0) {
+          throw new ReviewError("validation", `review has no reviewer report: ${id}`, { id });
+        }
+        if (report.round !== latestRound.no) {
+          throw new ReviewError(
+            "validation",
+            `reviewer report is from round ${report.round}, latest is ${latestRound.no}`,
+            { id }
+          );
+        }
+        if (!isFinalReviewReport(review)) {
+          throw new ReviewError("validation", `reviewer report is not final: ${id}`, { id });
+        }
+        const decided = new Set(
+          (review.findingDecisions ?? []).filter((decision) => decision.round === report.round).map((decision) => decision.findingId)
+        );
+        const targets = report.findings.filter(
+          (finding) => finding.kind !== "praise" && !decided.has(finding.id)
+        );
+        const decisions = [];
+        try {
+          for (const finding of targets) {
+            const decision = await this.lifecycle.decideFindingIfUndecided(
+              id,
+              finding.id,
+              { state: input.state },
+              ctx.actor
+            );
+            if (decision !== null) decisions.push(decision);
+          }
+        } catch (error) {
+          throw this.translate(error);
+        }
+        return {
+          decisions,
+          skipped: report.findings.length - decisions.length
+        };
+      },
+      `finding.decisions:${id}`,
       ctx.requestId
     );
   }
@@ -8593,6 +8760,17 @@ async function handle(req, res, ctx, options) {
         decodeURIComponent(rest[1]),
         ctxFor(req, options.auth)
       );
+      await ctx.hub.sync(reviewId);
+      sendJson(res, 200, view);
+      return;
+    }
+    if (rest[0] === "findings" && rest[1] === "decisions" && rest.length === 2 && method === "POST") {
+      const body = await readJson(req, ctx.config.maxBodyBytes);
+      const state = body.state;
+      if (state !== "accepted" && state !== "dismissed") {
+        throw new ApiError("validation", "state must be accepted or dismissed");
+      }
+      const view = await ctx.service.decideFindings(reviewId, { state }, ctxFor(req, options.auth));
       await ctx.hub.sync(reviewId);
       sendJson(res, 200, view);
       return;

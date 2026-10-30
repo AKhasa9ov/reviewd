@@ -1035,6 +1035,22 @@ export async function handle(
     }
     if (
       rest[0] === 'findings' &&
+      rest[1] === 'decisions' &&
+      rest.length === 2 &&
+      method === 'POST'
+    ) {
+      const body = await readJson(req, ctx.config.maxBodyBytes);
+      const state = body.state;
+      if (state !== 'accepted' && state !== 'dismissed') {
+        throw new ApiError('validation', 'state must be accepted or dismissed');
+      }
+      const view = await ctx.service.decideFindings(reviewId, { state }, ctxFor(req, options.auth));
+      await ctx.hub.sync(reviewId);
+      sendJson(res, 200, view);
+      return;
+    }
+    if (
+      rest[0] === 'findings' &&
       rest[1] !== undefined &&
       rest[2] === 'decision' &&
       rest.length === 3 &&

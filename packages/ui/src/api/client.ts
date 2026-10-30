@@ -1,4 +1,5 @@
 import type {
+  BulkFindingDecisionView,
   CommentState,
   CommentView,
   EventsResponse,
@@ -7,6 +8,7 @@ import type {
   CreateReviewResponse,
   DirectoryListing,
   FindingDecisionInput,
+  FindingDecisionState,
   FindingDecisionView,
   HealthResponse,
   LatestFeedbackView,
@@ -328,6 +330,13 @@ export class ApiClient {
     return this.request<FindingDecisionView>(
       `/api/reviews/${encodeURIComponent(id)}/findings/${encodeURIComponent(findingId)}/decision`,
       { method: 'POST', body: input },
+    );
+  }
+
+  async decideFindings(id: string, state: FindingDecisionState): Promise<BulkFindingDecisionView> {
+    return this.request<BulkFindingDecisionView>(
+      `/api/reviews/${encodeURIComponent(id)}/findings/decisions`,
+      { method: 'POST', body: { state } },
     );
   }
 

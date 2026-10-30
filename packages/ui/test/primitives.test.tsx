@@ -150,6 +150,20 @@ describe('Dialog', () => {
     await user.click(document.querySelector('.cr-overlay') as HTMLElement);
     expect(onClose).toHaveBeenCalledOnce();
   });
+
+  it('can disable close controls while a task is pending', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    render(
+      <Dialog open title="Saving" onClose={onClose} closeDisabled>
+        <p>Body</p>
+      </Dialog>,
+    );
+    expect(screen.getByRole('button', { name: 'Close dialog' })).toBeDisabled();
+    await user.keyboard('{Escape}');
+    await user.click(document.querySelector('.cr-overlay') as HTMLElement);
+    expect(onClose).not.toHaveBeenCalled();
+  });
 });
 
 describe('Tabs', () => {

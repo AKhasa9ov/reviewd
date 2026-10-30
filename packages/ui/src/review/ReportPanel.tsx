@@ -5,11 +5,13 @@ import type {
   CommentState,
   Finding,
   FindingDecision,
+  FindingDecisionState,
 } from '@dsh-code-review/core';
 import { Badge, EmptyState } from '../primitives/Feedback.js';
 import { Select } from '../primitives/Field.js';
 import { Tabs } from '../primitives/Tabs.js';
 import { Button } from '../primitives/Button.js';
+import { Dialog } from '../primitives/Dialog.js';
 import { FindingDecisionControls } from './FindingDecisionControls.js';
 import type {
   FindingDecisionControlsProps,
@@ -61,6 +63,10 @@ export interface ReportPanelProps {
   onDecide?: FindingDecisionControlsProps['onDecide'];
   decidingFindingId?: string | undefined;
   findingDecisionError?: FindingDecisionError | null;
+  /** Decisions applied to the whole report in one request. */
+  onDecideAll?: ((state: FindingDecisionState) => Promise<boolean>) | undefined;
+  bulkPending?: boolean;
+  bulkError?: string | null;
   /** True while this report is a merge of shards that have already finished. */
   partial?: boolean;
   /** Shard completion progress for a partial report. */
@@ -153,6 +159,9 @@ export function ReportPanel({
   onDecide,
   decidingFindingId,
   findingDecisionError,
+  onDecideAll,
+  bulkPending = false,
+  bulkError,
   partial = false,
   liveProgress,
   live = true,
@@ -176,6 +185,9 @@ export function ReportPanel({
   const [questionPage, setQuestionPage] = useState(0);
   const [section, setSection] = useState<ReportSection>('issues');
   const [expandedFindings, setExpandedFindings] = useState<ReadonlySet<string>>(() => new Set());
+  const [bulkState, setBulkState] = useState<FindingDecisionState | null>(null);
+  const [bulkRound, setBulkRound] = useState<number | null>(null);
+  const [bulkAttempted, setBulkAttempted] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const questionListRef = useRef<HTMLDivElement>(null);
   const findings =
@@ -183,6 +195,24 @@ export function ReportPanel({
       ? []
       : filterFindings(report.findings, severity, category);
   const questions = report === null || report === undefined ? [] : report.questions;
+  const remainingFindings =
+    report === null || report === undefined
+      ? 0
+      : report.findings.filter((finding) => finding.kind !== 'praise' && !decisions.has(finding.id))
+          .length;
+  const showBulkActions =
+    !partial && !readOnly && canDecide && onDecideAll !== undefined && remainingFindings > 0;
+  const dialogRound = round ?? report?.round ?? 1;
+
+  useEffect(() => {
+    if (bulkState === null || bulkPending) return;
+    // A round switch or a report losing eligibility makes the confirmation stale.
+    if (bulkRound !== dialogRound || !showBulkActions) {
+      setBulkState(null);
+      setBulkRound(null);
+      setBulkAttempted(false);
+    }
+  }, [bulkPending, bulkRound, bulkState, dialogRound, showBulkActions]);
   const pageCount = Math.max(1, Math.ceil(findings.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount - 1);
   const pageStart = currentPage * PAGE_SIZE;
@@ -256,6 +286,31 @@ export function ReportPanel({
   function commentsFor(file: string, line: number): readonly Comment[] {
     return commentsAtLine(comments, reportRound, file, line, 'new');
   }
+
+  function openBulkDialog(state: FindingDecisionState): void {
+    setBulkAttempted(false);
+    setBulkRound(dialogRound);
+    setBulkState(state);
+  }
+
+  function closeBulkDialog(): void {
+    if (!bulkPending) {
+      setBulkState(null);
+      setBulkRound(null);
+      setBulkAttempted(false);
+    }
+  }
+
+  async function submitBulkDecision(): Promise<void> {
+    if (bulkState === null || onDecideAll === undefined) return;
+    setBulkAttempted(true);
+    if (await onDecideAll(bulkState)) setBulkState(null);
+  }
+
+  const bulkAction = bulkState === 'accepted' ? 'Accept' : 'Dismiss';
+  const bulkFindingNoun = remainingFindings === 1 ? 'finding' : 'findings';
+  const bulkTitle =
+    bulkState === 'accepted' ? 'Accept all remaining findings?' : 'Dismiss all remaining findings?';
 
   return (
     <div className="cr-report">
@@ -357,6 +412,28 @@ export function ReportPanel({
                       >
                         Clear filters
                       </button>
+                    ) : null}
+                    {showBulkActions ? (
+                      <div
+                        className="cr-report-bulk-actions"
+                        role="group"
+                        aria-label="Bulk finding decisions"
+                      >
+                        <Button
+                          size="small"
+                          variant="secondary"
+                          onClick={() => openBulkDialog('accepted')}
+                        >
+                          Accept all remaining ({remainingFindings})
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="secondary"
+                          onClick={() => openBulkDialog('dismissed')}
+                        >
+                          Dismiss all remaining ({remainingFindings})
+                        </Button>
+                      </div>
                     ) : null}
                   </div>
 
@@ -698,6 +775,40 @@ export function ReportPanel({
           </ul>
         </section>
       ) : null}
+
+      <Dialog
+        open={bulkState !== null}
+        title={bulkTitle}
+        description={`This will ${bulkAction.toLowerCase()} ${remainingFindings} ${bulkFindingNoun} in the current report. Existing decisions and notes stay unchanged.`}
+        closeDisabled={bulkPending}
+        onClose={closeBulkDialog}
+        actions={
+          <>
+            <Button
+              size="small"
+              variant="secondary"
+              disabled={bulkPending}
+              onClick={closeBulkDialog}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="small"
+              variant={bulkState === 'accepted' ? 'primary' : 'danger'}
+              loading={bulkPending}
+              onClick={() => void submitBulkDecision()}
+            >
+              {bulkAction} {remainingFindings} {bulkFindingNoun}
+            </Button>
+          </>
+        }
+      >
+        {bulkAttempted && bulkError !== null && bulkError !== undefined ? (
+          <p className="cr-error" role="alert">
+            {bulkError}
+          </p>
+        ) : null}
+      </Dialog>
     </div>
   );
 }

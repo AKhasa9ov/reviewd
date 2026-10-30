@@ -103,6 +103,17 @@ export interface FindingDecisionView {
   decision: FindingDecision;
 }
 
+export interface BulkFindingDecisionInput {
+  state: FindingDecisionState;
+}
+
+export interface BulkFindingDecisionView {
+  /** Decisions appended by this request, in report order. */
+  decisions: FindingDecision[];
+  /** Findings left untouched because they were praise or already decided. */
+  skipped: number;
+}
+
 export interface SubmitInput {
   verdict: 'approve' | 'request-changes' | 'comment';
   summary?: string;
@@ -238,6 +249,11 @@ export interface ReviewService {
     input: FindingDecisionInput,
     ctx: CallContext,
   ): Promise<FindingDecisionView>;
+  decideFindings(
+    id: ReviewId,
+    input: BulkFindingDecisionInput,
+    ctx: CallContext,
+  ): Promise<BulkFindingDecisionView>;
   events(id: ReviewId, after?: number): Promise<ReviewEvent[]>;
   suggestionAction(
     id: ReviewId,

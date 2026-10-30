@@ -403,6 +403,29 @@ describe('ReviewStore', () => {
     await reopened.close();
   });
 
+  it('checks the conditional predicate inside the append critical section', async () => {
+    const root = await tempRoot();
+    const store = await ReviewStore.open(root);
+    await store.append(reviewId, created());
+
+    const [first, second] = await Promise.all([
+      store.appendIf(
+        reviewId,
+        event('round/created', { round: round() }, 'evt_round_a'),
+        (state) => state.rounds.length === 0,
+      ),
+      store.appendIf(
+        reviewId,
+        event('round/created', { round: round() }, 'evt_round_b'),
+        (state) => state.rounds.length === 0,
+      ),
+    ]);
+
+    expect([first, second].filter((value) => value !== null)).toHaveLength(1);
+    expect((await store.load(reviewId)).rounds).toHaveLength(1);
+    await store.close();
+  });
+
   it('keeps an append committed when the cache cannot be written', async () => {
     const root = await tempRoot();
     const store = await ReviewStore.open(root);

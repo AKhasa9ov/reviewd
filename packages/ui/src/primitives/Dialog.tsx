@@ -20,6 +20,7 @@ export interface DialogProps {
   children?: ReactNode;
   actions?: ReactNode;
   labelledBy?: string;
+  closeDisabled?: boolean;
 }
 
 export function Dialog({
@@ -29,6 +30,7 @@ export function Dialog({
   onClose,
   children,
   actions,
+  closeDisabled = false,
 }: DialogProps): JSX.Element | null {
   const titleId = useId();
   const descriptionId = useId();
@@ -55,7 +57,7 @@ export function Dialog({
   function onKeyDown(event: ReactKeyboardEvent<HTMLDivElement>): void {
     if (event.key === 'Escape') {
       event.preventDefault();
-      onCloseRef.current();
+      if (!closeDisabled) onCloseRef.current();
       return;
     }
     if (event.key !== 'Tab') return;
@@ -82,7 +84,7 @@ export function Dialog({
     <div
       className="cr-overlay"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onCloseRef.current();
+        if (event.target === event.currentTarget && !closeDisabled) onCloseRef.current();
       }}
     >
       <div
@@ -110,6 +112,7 @@ export function Dialog({
             type="button"
             className="cr-icon-button"
             aria-label="Close dialog"
+            disabled={closeDisabled}
             onClick={onClose}
           >
             <CloseIcon />
