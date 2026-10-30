@@ -914,7 +914,10 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
     }
   }
 
-  async function submitAllFindingDecisions(state: FindingDecisionState): Promise<boolean> {
+  async function submitSelectedFindingDecisions(
+    state: FindingDecisionState,
+    findingIds: string[],
+  ): Promise<boolean> {
     if (view === null || finalReportForRound === null) {
       setBulkDecisionError('The report is no longer available.');
       return false;
@@ -922,10 +925,10 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
     setBulkDecisionPending(true);
     setBulkDecisionError(null);
     try {
-      const result = await client.decideFindings(id, state);
+      const result = await client.decideFindings(id, state, findingIds);
       const count = result.decisions.length;
       if (count === 0) {
-        toast('No findings left to decide');
+        toast('No selected findings left to decide');
       } else {
         toast(
           `${state === 'accepted' ? 'Accepted' : 'Dismissed'} ${count} ${
@@ -1579,7 +1582,7 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
                 onDecide={canDecideFinding ? submitFindingDecision : undefined}
                 decidingFindingId={decidingFindingId}
                 findingDecisionError={findingDecisionError}
-                onDecideAll={canDecideFinding ? submitAllFindingDecisions : undefined}
+                onDecideSelected={canDecideFinding ? submitSelectedFindingDecisions : undefined}
                 bulkPending={bulkDecisionPending}
                 bulkError={bulkDecisionError}
                 onJump={jumpToLocation}

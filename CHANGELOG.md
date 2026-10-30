@@ -32,9 +32,11 @@ versions may contain breaking changes.
 
 ### Added
 
-- The report toolbar can accept or dismiss every remaining finding in the final reviewer report
-  in one confirmed request. Existing decisions and notes are preserved, praise is skipped, and
-  partial, stale or active reviewer runs are excluded from both the UI and the API.
+- The report toolbar can select findings with per-card checkboxes, select all findings matching
+  the current filter across pages, and accept or dismiss the selection in one confirmed request.
+  Accepted/dismissed badges are visible on collapsed cards. Existing decisions and notes are
+  preserved, praise is skipped, and partial, stale or active reviewer runs are excluded from the
+  UI and the API.
 - Host reviewer workers can run shards in parallel: `workerConcurrency` starts that many
   independent worker loops (default 3, clamped to 1–8), each with its own registration,
   heartbeat and reviewer agent. Shard reports are merged in plan order so completion order

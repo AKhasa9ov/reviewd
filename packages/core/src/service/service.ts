@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { createId } from '../review/ids.js';
 import { ReviewNotFoundError } from '../review/store.js';
 import type { GcResult } from '../review/store.js';
@@ -57,7 +58,41 @@ import type {
 } from './types.js';
 
 const IDEMPOTENCY_LIMIT = 1000;
+const MAX_BULK_FINDING_IDS = 1000;
 const VERDICTS = new Set(['approve', 'request-changes', 'comment']);
+
+function normalizeBulkFindingIds(ids: unknown, reviewId: ReviewId): Set<string> {
+  if (!Array.isArray(ids)) {
+    throw new ReviewError('validation', 'findingIds must be an array', { id: reviewId });
+  }
+  if (ids.length === 0) {
+    throw new ReviewError('validation', 'findingIds must not be empty', { id: reviewId });
+  }
+  if (ids.length > MAX_BULK_FINDING_IDS) {
+    throw new ReviewError(
+      'validation',
+      `findingIds must contain at most ${MAX_BULK_FINDING_IDS} entries`,
+      { id: reviewId },
+    );
+  }
+  const selected = new Set<string>();
+  for (const findingId of ids) {
+    if (typeof findingId !== 'string' || findingId.trim() === '') {
+      throw new ReviewError('validation', 'findingIds must contain non-empty strings', {
+        id: reviewId,
+      });
+    }
+    selected.add(findingId);
+  }
+  return selected;
+}
+
+function bulkSelectionKey(selected: Set<string> | null): string {
+  if (selected === null) return 'all';
+  return createHash('sha256')
+    .update([...selected].sort().join('\u0000'))
+    .digest('hex');
+}
 const COMMENT_STATES = new Set<CommentState>(['open', 'resolved', 'dismissed']);
 
 function clone<T>(value: T): T {
@@ -525,6 +560,8 @@ export class ReviewServiceImpl implements ReviewService {
     ctx: CallContext,
   ): Promise<BulkFindingDecisionView> {
     assertContext(ctx);
+    const selected =
+      input.findingIds === undefined ? null : normalizeBulkFindingIds(input.findingIds, id);
     return await this.idempotent(
       async () => {
         if (input.state !== 'accepted' && input.state !== 'dismissed') {
@@ -568,7 +605,10 @@ export class ReviewServiceImpl implements ReviewService {
             .map((decision) => decision.findingId),
         );
         const targets = report.findings.filter(
-          (finding) => finding.kind !== 'praise' && !decided.has(finding.id),
+          (finding) =>
+            finding.kind !== 'praise' &&
+            !decided.has(finding.id) &&
+            (selected === null || selected.has(finding.id)),
         );
         const decisions: FindingDecision[] = [];
         try {
@@ -587,10 +627,13 @@ export class ReviewServiceImpl implements ReviewService {
 
         return {
           decisions,
-          skipped: report.findings.length - decisions.length,
+          skipped:
+            selected === null
+              ? report.findings.length - decisions.length
+              : selected.size - decisions.length,
         };
       },
-      `finding.decisions:${id}`,
+      `finding.decisions:${id}:${input.state}:${bulkSelectionKey(selected)}`,
       ctx.requestId,
     );
   }

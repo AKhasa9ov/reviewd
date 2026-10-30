@@ -1044,7 +1044,24 @@ export async function handle(
       if (state !== 'accepted' && state !== 'dismissed') {
         throw new ApiError('validation', 'state must be accepted or dismissed');
       }
-      const view = await ctx.service.decideFindings(reviewId, { state }, ctxFor(req, options.auth));
+      const findingIds = body.findingIds;
+      if (
+        findingIds !== undefined &&
+        (!Array.isArray(findingIds) ||
+          findingIds.length === 0 ||
+          findingIds.length > 1000 ||
+          findingIds.some((findingId) => typeof findingId !== 'string' || findingId.trim() === ''))
+      ) {
+        throw new ApiError(
+          'validation',
+          'findingIds must be a non-empty array of up to 1000 non-empty strings',
+        );
+      }
+      const view = await ctx.service.decideFindings(
+        reviewId,
+        { state, ...(findingIds === undefined ? {} : { findingIds }) },
+        ctxFor(req, options.auth),
+      );
       await ctx.hub.sync(reviewId);
       sendJson(res, 200, view);
       return;

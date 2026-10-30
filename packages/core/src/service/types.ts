@@ -105,6 +105,11 @@ export interface FindingDecisionView {
 
 export interface BulkFindingDecisionInput {
   state: FindingDecisionState;
+  /**
+   * When present, decide only these findings. Omit it to decide every remaining
+   * non-praise finding in the report.
+   */
+  findingIds?: string[];
 }
 
 export interface BulkFindingDecisionView {

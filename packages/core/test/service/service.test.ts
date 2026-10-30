@@ -808,7 +808,117 @@ describe('ReviewServiceImpl', () => {
       { state: 'dismissed' },
       { actor, requestId: 'bulk-decisions-1' },
     );
-    expect(replay).toEqual(bulk);
+    // A different state is a different operation even when the client reuses a request id.
+    expect(replay).toEqual({ decisions: [], skipped: 3 });
+    expect((await h.service.get(view.review.id)).review.findingDecisions).toEqual([
+      existing.decision,
+      expect.objectContaining({ findingId: 'f2', state: 'accepted' }),
+    ]);
+  });
+
+  it('decides only the selected findings', async () => {
+    const h = await harness({
+      report: report([finding({ id: 'f1' }), finding({ id: 'f2' }), finding({ id: 'f3' })]),
+    });
+    const view = await h.service.create(
+      {
+        repoRoot: '/tmp/repo',
+        title: 'Selected bulk decisions',
+        scope: h.scope,
+        reviewer: { backend: 'fake' },
+      },
+      { actor },
+    );
+    await h.service.runReviewer(view.review.id, { actor });
+
+    const bulk = await h.service.decideFindings(
+      view.review.id,
+      { state: 'accepted', findingIds: ['f2'] },
+      { actor, requestId: 'bulk-selected-1' },
+    );
+
+    expect(bulk).toEqual({
+      decisions: [expect.objectContaining({ findingId: 'f2', state: 'accepted', round: 1 })],
+      skipped: 0,
+    });
+    expect((await h.service.get(view.review.id)).review.findingDecisions).toEqual([
+      expect.objectContaining({ findingId: 'f2' }),
+    ]);
+  });
+
+  it('skips praise, already decided and unknown selected findings', async () => {
+    const h = await harness({
+      report: report([
+        finding({ id: 'f1' }),
+        finding({ id: 'f2', kind: 'praise' }),
+        finding({ id: 'f3' }),
+      ]),
+    });
+    const view = await h.service.create(
+      {
+        repoRoot: '/tmp/repo',
+        title: 'Filtered selected decisions',
+        scope: h.scope,
+        reviewer: { backend: 'fake' },
+      },
+      { actor },
+    );
+    await h.service.runReviewer(view.review.id, { actor });
+    await h.service.decideFinding(
+      view.review.id,
+      'f1',
+      { state: 'dismissed' },
+      { actor, requestId: 'selected-existing' },
+    );
+
+    const bulk = await h.service.decideFindings(
+      view.review.id,
+      { state: 'accepted', findingIds: ['f1', 'f2', 'f3', 'missing'] },
+      { actor, requestId: 'bulk-selected-skip' },
+    );
+
+    expect(bulk).toEqual({
+      decisions: [expect.objectContaining({ findingId: 'f3', state: 'accepted', round: 1 })],
+      skipped: 3,
+    });
+    expect((await h.service.get(view.review.id)).review.findingDecisions).toEqual([
+      expect.objectContaining({ findingId: 'f1', state: 'dismissed' }),
+      expect.objectContaining({ findingId: 'f3', state: 'accepted' }),
+    ]);
+  });
+
+  it('rejects an empty or oversized selected finding list', async () => {
+    const h = await harness({ report: report([finding({ id: 'f1' })]) });
+    const view = await h.service.create(
+      {
+        repoRoot: '/tmp/repo',
+        title: 'Invalid selected decisions',
+        scope: h.scope,
+        reviewer: { backend: 'fake' },
+      },
+      { actor },
+    );
+    await h.service.runReviewer(view.review.id, { actor });
+
+    await expectError(
+      h.service.decideFindings(
+        view.review.id,
+        { state: 'accepted', findingIds: [] },
+        { actor, requestId: 'bulk-empty' },
+      ),
+      'validation',
+    );
+    await expectError(
+      h.service.decideFindings(
+        view.review.id,
+        {
+          state: 'accepted',
+          findingIds: Array.from({ length: 1001 }, (_, index) => `f${index}`),
+        },
+        { actor, requestId: 'bulk-oversized' },
+      ),
+      'validation',
+    );
   });
 
   it('does not duplicate decisions when concurrent bulk requests target the same findings', async () => {

@@ -12,6 +12,8 @@ export interface FindingDecisionError {
 export interface FindingDecisionControlsProps {
   finding: Finding;
   decision?: FindingDecision | undefined;
+  /** Reports show the decision badge in the card header instead. */
+  showStatus?: boolean;
   readOnly?: boolean;
   pending?: boolean;
   error?: string | null;
@@ -31,6 +33,7 @@ function actionLabel(state: FindingDecisionState): string {
 export function FindingDecisionControls({
   finding,
   decision,
+  showStatus = true,
   readOnly = false,
   pending = false,
   error,
@@ -63,11 +66,13 @@ export function FindingDecisionControls({
 
   return (
     <div className="cr-finding-decision" aria-label="Finding decision">
-      {decision !== undefined ? (
+      {decision !== undefined && (showStatus || decision.note !== undefined) ? (
         <div className="cr-finding-decision-status">
-          <Badge tone={decision.state === 'accepted' ? 'success' : 'neutral'}>
-            {decision.state === 'accepted' ? 'Accepted' : 'Dismissed'}
-          </Badge>
+          {showStatus ? (
+            <Badge tone={decision.state === 'accepted' ? 'success' : 'neutral'}>
+              {decision.state === 'accepted' ? 'Accepted' : 'Dismissed'}
+            </Badge>
+          ) : null}
           {decision.note !== undefined ? (
             <p className="cr-finding-decision-note">
               <span className="cr-finding-decision-note-label">Note to the agent:</span>{' '}

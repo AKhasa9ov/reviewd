@@ -69,7 +69,7 @@ Codes: `unauthorized`, `forbidden`, `not-found`, `validation`, `conflict`, `stal
 | DELETE | `/api/reviews/:id/comments/:cid`            | soft-deletes; replies stay as a tombstone                                   |
 | POST   | `/api/reviews/:id/comments/:cid/suggestion` | `{action: accept\|decline\|apply}`                                          |
 | POST   | `/api/reviews/:id/findings/:fid/decision`   | `{state: accepted\|dismissed, note?}`; latest report round only             |
-| POST   | `/api/reviews/:id/findings/decisions`       | `{state: accepted\|dismissed}`; all remaining non-praise findings           |
+| POST   | `/api/reviews/:id/findings/decisions`       | `{state: accepted\|dismissed, findingIds?}`; selected or all remaining      |
 | POST   | `/api/reviews/:id/refresh`                  | optional `{scope}`; appends a round                                         |
 | POST   | `/api/reviews/:id/submit`                   | `{verdict,summary?,includeResolved?,harness?}`                              |
 | POST   | `/api/reviews/:id/close`                    | `{verdict: approved\|closed}`                                               |
@@ -100,12 +100,13 @@ Closed reviews reject decisions. The report must be final: it must belong to the
 the reviewer must be done, and any coverage ledger must be complete. The event is
 `finding/decision` and is folded into `review.findingDecisions`.
 
-`POST /api/reviews/:id/findings/decisions` applies one state to every remaining finding in the
-latest report in a single request. Findings with an existing decision for that round and praise
-findings are left untouched, including their notes. The response contains the appended
-`decisions` and the number of `skipped` findings. Validation matches the per-finding endpoint:
-the review must be open and have a final report for its latest round (complete coverage, reviewer
-not queued, running, failed, skipped or partial).
+`POST /api/reviews/:id/findings/decisions` applies one state to the selected findings, or to
+every remaining finding when `findingIds` is omitted, in a single request. `findingIds` is a
+non-empty array of up to 1000 strings; unknown, praise and already decided findings are skipped.
+Findings with an existing decision for that round are left untouched, including their notes. The
+response contains the appended `decisions` and the number of `skipped` findings. Validation
+matches the per-finding endpoint: the review must be open and have a final report for its latest
+round (complete coverage, reviewer not queued, running, failed, skipped or partial).
 
 ### Editing and deleting
 

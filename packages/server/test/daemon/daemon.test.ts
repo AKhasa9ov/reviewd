@@ -1707,6 +1707,62 @@ describe('bulk review finding decisions', () => {
     expect(calls).toEqual([{ id: 'rev_1', input: { state: 'dismissed' } }]);
   });
 
+  it('passes selected finding ids through to the service', async () => {
+    const calls: unknown[] = [];
+    const service = {
+      async decideFindings(id: string, input: { state: string; findingIds?: string[] }) {
+        calls.push({ id, input });
+        return { decisions: [], skipped: 0 };
+      },
+      async events() {
+        return [];
+      },
+      async list() {
+        return { items: [], total: 0, limit: 50, offset: 0 };
+      },
+    } as unknown as ReviewService;
+    const { daemonUrl } = await running({}, { service });
+
+    const response = await fetch(`${daemonUrl}/api/reviews/rev_1/findings/decisions`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ state: 'accepted', findingIds: ['f2', 'f4'] }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(calls).toEqual([
+      { id: 'rev_1', input: { state: 'accepted', findingIds: ['f2', 'f4'] } },
+    ]);
+  });
+
+  it('rejects an empty or malformed selected finding list before calling the service', async () => {
+    let called = false;
+    const service = {
+      async decideFindings() {
+        called = true;
+        return { decisions: [], skipped: 0 };
+      },
+      async events() {
+        return [];
+      },
+      async list() {
+        return { items: [], total: 0, limit: 50, offset: 0 };
+      },
+    } as unknown as ReviewService;
+    const { daemonUrl } = await running({}, { service });
+
+    for (const findingIds of [[], [''], [1]]) {
+      const response = await fetch(`${daemonUrl}/api/reviews/rev_1/findings/decisions`, {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ state: 'accepted', findingIds }),
+      });
+      expect(response.status).toBe(400);
+      expect((await read(response)).error.code).toBe('validation');
+    }
+    expect(called).toBe(false);
+  });
+
   it('rejects an unknown bulk decision state before calling the service', async () => {
     let called = false;
     const service = {

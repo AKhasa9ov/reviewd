@@ -333,10 +333,17 @@ export class ApiClient {
     );
   }
 
-  async decideFindings(id: string, state: FindingDecisionState): Promise<BulkFindingDecisionView> {
+  async decideFindings(
+    id: string,
+    state: FindingDecisionState,
+    findingIds?: readonly string[],
+  ): Promise<BulkFindingDecisionView> {
     return this.request<BulkFindingDecisionView>(
       `/api/reviews/${encodeURIComponent(id)}/findings/decisions`,
-      { method: 'POST', body: { state } },
+      {
+        method: 'POST',
+        body: { state, ...(findingIds === undefined ? {} : { findingIds }) },
+      },
     );
   }
 

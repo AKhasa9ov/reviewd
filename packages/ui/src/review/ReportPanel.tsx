@@ -63,8 +63,9 @@ export interface ReportPanelProps {
   onDecide?: FindingDecisionControlsProps['onDecide'];
   decidingFindingId?: string | undefined;
   findingDecisionError?: FindingDecisionError | null;
-  /** Decisions applied to the whole report in one request. */
-  onDecideAll?: ((state: FindingDecisionState) => Promise<boolean>) | undefined;
+  /** Decisions applied to the selected findings in one request. */
+  onDecideSelected?:
+    ((state: FindingDecisionState, findingIds: string[]) => Promise<boolean>) | undefined;
   bulkPending?: boolean;
   bulkError?: string | null;
   /** True while this report is a merge of shards that have already finished. */
@@ -159,7 +160,7 @@ export function ReportPanel({
   onDecide,
   decidingFindingId,
   findingDecisionError,
-  onDecideAll,
+  onDecideSelected,
   bulkPending = false,
   bulkError,
   partial = false,
@@ -185,7 +186,9 @@ export function ReportPanel({
   const [questionPage, setQuestionPage] = useState(0);
   const [section, setSection] = useState<ReportSection>('issues');
   const [expandedFindings, setExpandedFindings] = useState<ReadonlySet<string>>(() => new Set());
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set());
   const [bulkState, setBulkState] = useState<FindingDecisionState | null>(null);
+  const [bulkFindingIds, setBulkFindingIds] = useState<readonly string[]>([]);
   const [bulkRound, setBulkRound] = useState<number | null>(null);
   const [bulkAttempted, setBulkAttempted] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
@@ -195,24 +198,38 @@ export function ReportPanel({
       ? []
       : filterFindings(report.findings, severity, category);
   const questions = report === null || report === undefined ? [] : report.questions;
-  const remainingFindings =
+  const decidableFindings =
     report === null || report === undefined
-      ? 0
-      : report.findings.filter((finding) => finding.kind !== 'praise' && !decisions.has(finding.id))
-          .length;
-  const showBulkActions =
-    !partial && !readOnly && canDecide && onDecideAll !== undefined && remainingFindings > 0;
+      ? []
+      : report.findings.filter(
+          (finding) => finding.kind !== 'praise' && !decisions.has(finding.id),
+        );
+  const selectedFindings = decidableFindings.filter((finding) => selectedIds.has(finding.id));
+  const selectedCount = selectedFindings.length;
+  const filteredDecidable = findings.filter(
+    (finding) => finding.kind !== 'praise' && !decisions.has(finding.id),
+  );
+  const allFilteredSelected =
+    filteredDecidable.length > 0 &&
+    filteredDecidable.every((finding) => selectedIds.has(finding.id));
+  const someFilteredSelected = filteredDecidable.some((finding) => selectedIds.has(finding.id));
+  const showSelection = !partial && !readOnly && canDecide && onDecideSelected !== undefined;
   const dialogRound = round ?? report?.round ?? 1;
 
   useEffect(() => {
     if (bulkState === null || bulkPending) return;
     // A round switch or a report losing eligibility makes the confirmation stale.
-    if (bulkRound !== dialogRound || !showBulkActions) {
+    if (bulkRound !== dialogRound || !showSelection || bulkFindingIds.length === 0) {
       setBulkState(null);
+      setBulkFindingIds([]);
       setBulkRound(null);
       setBulkAttempted(false);
     }
-  }, [bulkPending, bulkRound, bulkState, dialogRound, showBulkActions]);
+  }, [bulkFindingIds, bulkPending, bulkRound, bulkState, dialogRound, showSelection]);
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [severity, category, report?.reviewId, report?.round, partial, canDecide, readOnly]);
   const pageCount = Math.max(1, Math.ceil(findings.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount - 1);
   const pageStart = currentPage * PAGE_SIZE;
@@ -231,6 +248,31 @@ export function ReportPanel({
       else next.add(findingId);
       return next;
     });
+  }
+
+  function toggleSelection(findingId: string): void {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(findingId)) next.delete(findingId);
+      else next.add(findingId);
+      return next;
+    });
+  }
+
+  function toggleAllFiltered(): void {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (allFilteredSelected) {
+        for (const finding of filteredDecidable) next.delete(finding.id);
+      } else {
+        for (const finding of filteredDecidable) next.add(finding.id);
+      }
+      return next;
+    });
+  }
+
+  function clearSelection(): void {
+    setSelectedIds(new Set());
   }
 
   useEffect(() => {
@@ -289,6 +331,7 @@ export function ReportPanel({
 
   function openBulkDialog(state: FindingDecisionState): void {
     setBulkAttempted(false);
+    setBulkFindingIds(selectedFindings.map((finding) => finding.id));
     setBulkRound(dialogRound);
     setBulkState(state);
   }
@@ -296,21 +339,26 @@ export function ReportPanel({
   function closeBulkDialog(): void {
     if (!bulkPending) {
       setBulkState(null);
+      setBulkFindingIds([]);
       setBulkRound(null);
       setBulkAttempted(false);
     }
   }
 
   async function submitBulkDecision(): Promise<void> {
-    if (bulkState === null || onDecideAll === undefined) return;
+    if (bulkState === null || onDecideSelected === undefined) return;
     setBulkAttempted(true);
-    if (await onDecideAll(bulkState)) setBulkState(null);
+    if (await onDecideSelected(bulkState, [...bulkFindingIds])) {
+      setBulkState(null);
+      setBulkFindingIds([]);
+      setSelectedIds(new Set());
+    }
   }
 
   const bulkAction = bulkState === 'accepted' ? 'Accept' : 'Dismiss';
-  const bulkFindingNoun = remainingFindings === 1 ? 'finding' : 'findings';
-  const bulkTitle =
-    bulkState === 'accepted' ? 'Accept all remaining findings?' : 'Dismiss all remaining findings?';
+  const bulkCount = bulkFindingIds.length;
+  const bulkFindingNoun = bulkCount === 1 ? 'finding' : 'findings';
+  const bulkTitle = `${bulkAction} ${bulkCount} selected ${bulkFindingNoun}?`;
 
   return (
     <div className="cr-report">
@@ -413,29 +461,67 @@ export function ReportPanel({
                         Clear filters
                       </button>
                     ) : null}
-                    {showBulkActions ? (
-                      <div
-                        className="cr-report-bulk-actions"
-                        role="group"
-                        aria-label="Bulk finding decisions"
-                      >
-                        <Button
-                          size="small"
-                          variant="secondary"
-                          onClick={() => openBulkDialog('accepted')}
-                        >
-                          Accept all remaining ({remainingFindings})
-                        </Button>
-                        <Button
-                          size="small"
-                          variant="secondary"
-                          onClick={() => openBulkDialog('dismissed')}
-                        >
-                          Dismiss all remaining ({remainingFindings})
-                        </Button>
-                      </div>
-                    ) : null}
                   </div>
+
+                  {showSelection && filteredDecidable.length > 0 ? (
+                    <div
+                      className="cr-report-selection"
+                      role="group"
+                      aria-label="Finding selection"
+                    >
+                      <label className="cr-check cr-report-select-all">
+                        <input
+                          type="checkbox"
+                          checked={allFilteredSelected}
+                          disabled={bulkPending}
+                          ref={(input) => {
+                            if (input !== null) {
+                              input.indeterminate = someFilteredSelected && !allFilteredSelected;
+                            }
+                          }}
+                          onChange={toggleAllFiltered}
+                        />
+                        <span>Select all filtered ({filteredDecidable.length})</span>
+                      </label>
+                      {selectedCount > 0 ? (
+                        <>
+                          <span className="cr-meta" aria-live="polite">
+                            {selectedCount} selected
+                          </span>
+                          <button
+                            type="button"
+                            className="cr-link-button"
+                            disabled={bulkPending}
+                            onClick={clearSelection}
+                          >
+                            Clear selection
+                          </button>
+                          <div
+                            className="cr-report-bulk-actions"
+                            role="group"
+                            aria-label="Selected finding decisions"
+                          >
+                            <Button
+                              size="small"
+                              variant="secondary"
+                              disabled={bulkPending}
+                              onClick={() => openBulkDialog('accepted')}
+                            >
+                              Accept selected ({selectedCount})
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="secondary"
+                              disabled={bulkPending}
+                              onClick={() => openBulkDialog('dismissed')}
+                            >
+                              Dismiss selected ({selectedCount})
+                            </Button>
+                          </div>
+                        </>
+                      ) : null}
+                    </div>
+                  ) : null}
 
                   {findings.length === 0 ? (
                     <EmptyState
@@ -464,6 +550,8 @@ export function ReportPanel({
                         <ol className="cr-findings" aria-label="Reviewer findings">
                           {visibleFindings.map((finding) => {
                             const expanded = expandedFindings.has(finding.id);
+                            const decision = decisions.get(finding.id);
+                            const selected = selectedIds.has(finding.id);
                             const bodyId = `report-finding-body-${finding.id}`;
                             return (
                               <li
@@ -475,7 +563,7 @@ export function ReportPanel({
                                 <div
                                   className={`cr-finding${
                                     expanded ? ' cr-finding-expanded' : ' cr-finding-collapsed'
-                                  }`}
+                                  }${selected ? ' cr-finding-selected' : ''}`}
                                 >
                                   <div
                                     className="cr-finding-head"
@@ -496,12 +584,32 @@ export function ReportPanel({
                                     >
                                       <span aria-hidden="true">{expanded ? '▾' : '▸'}</span>
                                     </button>
+                                    {showSelection &&
+                                    finding.kind !== 'praise' &&
+                                    decision === undefined ? (
+                                      <input
+                                        type="checkbox"
+                                        className="cr-finding-select"
+                                        checked={selected}
+                                        disabled={bulkPending}
+                                        aria-label={`Select finding ${finding.title}`}
+                                        onClick={(event) => event.stopPropagation()}
+                                        onChange={() => toggleSelection(finding.id)}
+                                      />
+                                    ) : null}
                                     <Badge tone={severityTone(finding.severity)}>
                                       {finding.severity}
                                     </Badge>
                                     <Badge tone="neutral">{finding.category}</Badge>
                                     {finding.kind !== 'issue' ? (
                                       <Badge tone="info">{finding.kind}</Badge>
+                                    ) : null}
+                                    {decision !== undefined ? (
+                                      <Badge
+                                        tone={decision.state === 'accepted' ? 'success' : 'neutral'}
+                                      >
+                                        {decision.state === 'accepted' ? 'Accepted' : 'Dismissed'}
+                                      </Badge>
                                     ) : null}
                                     <button
                                       type="button"
@@ -550,7 +658,8 @@ export function ReportPanel({
                                       ) : null}
                                       <FindingDecisionControls
                                         finding={finding}
-                                        decision={decisions.get(finding.id)}
+                                        decision={decision}
+                                        showStatus={false}
                                         readOnly={!canDecide || onDecide === undefined}
                                         pending={decidingFindingId === finding.id}
                                         error={
@@ -779,7 +888,7 @@ export function ReportPanel({
       <Dialog
         open={bulkState !== null}
         title={bulkTitle}
-        description={`This will ${bulkAction.toLowerCase()} ${remainingFindings} ${bulkFindingNoun} in the current report. Existing decisions and notes stay unchanged.`}
+        description={`This will ${bulkAction.toLowerCase()} ${bulkCount} selected ${bulkFindingNoun} in the current report. Existing decisions and notes stay unchanged.`}
         closeDisabled={bulkPending}
         onClose={closeBulkDialog}
         actions={
@@ -798,7 +907,7 @@ export function ReportPanel({
               loading={bulkPending}
               onClick={() => void submitBulkDecision()}
             >
-              {bulkAction} {remainingFindings} {bulkFindingNoun}
+              {bulkAction} {bulkCount} {bulkFindingNoun}
             </Button>
           </>
         }

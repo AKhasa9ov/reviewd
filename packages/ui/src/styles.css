@@ -3530,6 +3530,22 @@ body.cr-selecting-lines {
   width: 170px;
 }
 
+.cr-report-selection {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--cr-space-2);
+  margin-top: var(--cr-space-2);
+  padding: var(--cr-space-2) var(--cr-space-3);
+  border: 1px solid var(--cr-border);
+  border-radius: var(--cr-radius-control);
+  background: var(--cr-surface-raised);
+}
+
+.cr-report-select-all {
+  margin-right: var(--cr-space-1);
+}
+
 .cr-report-bulk-actions {
   display: flex;
   flex-wrap: wrap;
@@ -3693,6 +3709,20 @@ body.cr-selecting-lines {
   min-width: 0;
   margin-bottom: var(--cr-space-2);
   cursor: pointer;
+}
+
+.cr-finding-select {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--cr-primary);
+  cursor: pointer;
+}
+
+.cr-finding-selected {
+  border-color: var(--cr-primary);
+  box-shadow: inset 0 0 0 1px var(--cr-primary);
 }
 
 .cr-finding-location {

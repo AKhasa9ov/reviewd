@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentReport, Finding, FindingDecision } from '@dsh-code-review/core';
@@ -22,11 +22,14 @@ function finding(index: number, overrides: Partial<Finding> = {}): Finding {
   };
 }
 
-function decision(findingId: string): FindingDecision {
+function decision(
+  findingId: string,
+  state: FindingDecision['state'] = 'accepted',
+): FindingDecision {
   return {
     findingId,
     round: 1,
-    state: 'accepted',
+    state,
     by: { name: 'Ada', kind: 'human' },
     at: '2026-10-29T12:00:00.000Z',
   };
@@ -50,181 +53,233 @@ function report(findings: Finding[]): AgentReport {
 }
 
 describe('bulk finding decisions', () => {
-  it('offers accept and dismiss for every remaining non-praise finding', () => {
+  it('offers checkboxes and visible status badges for the current report', () => {
     render(
       <ReportPanel
         report={report([finding(1), finding(2), finding(3), finding(4, { kind: 'praise' })])}
         decisions={new Map([['f1', decision('f1')]])}
         canDecide
-        onDecideAll={vi.fn(async () => true)}
+        onDecideSelected={vi.fn(async () => true)}
         onJump={() => undefined}
       />,
     );
 
-    expect(screen.getByRole('button', { name: 'Accept all remaining (2)' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Dismiss all remaining (2)' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Select finding Finding 2' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Select finding Finding 3' })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('checkbox', { name: 'Select finding Finding 1' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('checkbox', { name: 'Select finding Finding 4' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Select all filtered (2)' })).toBeInTheDocument();
+
+    const acceptedCard = screen.getByText('Finding 1').closest('.cr-finding') as HTMLElement;
+    expect(within(acceptedCard).getByText('Accepted')).toBeInTheDocument();
   });
 
-  it('counts every finding in the report, not only filtered findings', async () => {
+  it('selects every filtered finding across pages and confirms the selected action', async () => {
     const user = userEvent.setup();
+    const onDecideSelected = vi.fn(async () => true);
     render(
       <ReportPanel
-        report={report([finding(1), finding(2), finding(3, { severity: 'blocker' })])}
+        report={report(Array.from({ length: 60 }, (_, index) => finding(index + 1)))}
         canDecide
-        onDecideAll={vi.fn(async () => true)}
+        onDecideSelected={onDecideSelected}
+        onJump={() => undefined}
+      />,
+    );
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select all filtered (60)' }));
+    expect(screen.getByText('60 selected')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Next report page (top)' }));
+    expect(screen.getAllByText('51–60 of 60')).toHaveLength(2);
+    expect(screen.getByText('60 selected')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Accept selected (60)' }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('Accept 60 selected findings?');
+    expect(screen.getByRole('dialog')).toHaveTextContent(
+      'This will accept 60 selected findings in the current report. Existing decisions and notes stay unchanged.',
+    );
+    await user.click(screen.getByRole('button', { name: 'Accept 60 findings' }));
+
+    expect(onDecideSelected).toHaveBeenCalledWith(
+      'accepted',
+      Array.from({ length: 60 }, (_, index) => `f${index + 1}`),
+    );
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+    expect(screen.queryByText('60 selected')).not.toBeInTheDocument();
+  });
+
+  it('accepts and dismisses only the checked findings', async () => {
+    const user = userEvent.setup();
+    const onDecideSelected = vi.fn(async () => true);
+    render(
+      <ReportPanel
+        report={report([finding(1), finding(2), finding(3)])}
+        canDecide
+        onDecideSelected={onDecideSelected}
+        onJump={() => undefined}
+      />,
+    );
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select finding Finding 2' }));
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Accept selected (1)' }));
+    await user.click(screen.getByRole('button', { name: 'Accept 1 finding' }));
+    expect(onDecideSelected).toHaveBeenLastCalledWith('accepted', ['f2']);
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select finding Finding 3' }));
+    await user.click(screen.getByRole('button', { name: 'Dismiss selected (1)' }));
+    await user.click(screen.getByRole('button', { name: 'Dismiss 1 finding' }));
+    expect(onDecideSelected).toHaveBeenLastCalledWith('dismissed', ['f3']);
+  });
+
+  it('selects only findings matching the current filters and clears selection on filter changes', async () => {
+    const user = userEvent.setup();
+    const onDecideSelected = vi.fn(async () => true);
+    render(
+      <ReportPanel
+        report={report([
+          finding(1),
+          finding(2, { severity: 'blocker' }),
+          finding(3, { severity: 'blocker', kind: 'praise' }),
+        ])}
+        canDecide
+        onDecideSelected={onDecideSelected}
         onJump={() => undefined}
       />,
     );
 
     await user.selectOptions(screen.getByLabelText('Severity'), 'blocker');
-    expect(screen.getByRole('button', { name: 'Accept all remaining (3)' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Select all filtered (1)' })).toBeInTheDocument();
+    await user.click(screen.getByRole('checkbox', { name: 'Select all filtered (1)' }));
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('Severity'), 'all');
+    expect(screen.queryByText('1 selected')).not.toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Select all filtered (2)' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select finding Finding 1' }));
+    await user.click(screen.getByRole('button', { name: 'Accept selected (1)' }));
+    await user.click(screen.getByRole('button', { name: 'Accept 1 finding' }));
+    expect(onDecideSelected).toHaveBeenCalledWith('accepted', ['f1']);
+    expect(onDecideSelected).not.toHaveBeenCalledWith('accepted', ['f2']);
   });
 
-  it('confirms accept all with the remaining count and closes after success', async () => {
-    const user = userEvent.setup();
-    const onDecideAll = vi.fn(async () => true);
-    render(
-      <ReportPanel
-        report={report([finding(1), finding(2), finding(3)])}
-        decisions={new Map([['f1', decision('f1')]])}
-        canDecide
-        onDecideAll={onDecideAll}
-        onJump={() => undefined}
-      />,
-    );
-
-    await user.click(screen.getByRole('button', { name: 'Accept all remaining (2)' }));
-
-    const dialog = screen.getByRole('dialog');
-    expect(dialog).toHaveTextContent('Accept all remaining findings?');
-    expect(dialog).toHaveTextContent(
-      'This will accept 2 findings in the current report. Existing decisions and notes stay unchanged.',
-    );
-    await user.click(screen.getByRole('button', { name: 'Accept 2 findings' }));
-
-    expect(onDecideAll).toHaveBeenCalledWith('accepted');
-    await waitFor(() => {
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    });
-  });
-
-  it('dismisses all after confirmation', async () => {
-    const user = userEvent.setup();
-    const onDecideAll = vi.fn(async () => true);
+  it('shows accepted and dismissed badges without expanding the card', () => {
     render(
       <ReportPanel
         report={report([finding(1), finding(2)])}
+        decisions={
+          new Map([
+            ['f1', decision('f1', 'accepted')],
+            ['f2', decision('f2', 'dismissed')],
+          ])
+        }
         canDecide
-        onDecideAll={onDecideAll}
+        onDecideSelected={vi.fn(async () => true)}
         onJump={() => undefined}
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Dismiss all remaining (2)' }));
-    await user.click(screen.getByRole('button', { name: 'Dismiss 2 findings' }));
-
-    expect(onDecideAll).toHaveBeenCalledWith('dismissed');
+    const acceptedCard = screen.getByText('Finding 1').closest('.cr-finding') as HTMLElement;
+    const dismissedCard = screen.getByText('Finding 2').closest('.cr-finding') as HTMLElement;
+    expect(within(acceptedCard).getByText('Accepted')).toBeInTheDocument();
+    expect(within(dismissedCard).getByText('Dismissed')).toBeInTheDocument();
+    expect(acceptedCard).not.toHaveClass('cr-finding-expanded');
   });
 
-  it('cancels without deciding and keeps the dialog open on a bulk error', async () => {
+  it('keeps the dialog open on an error and lets the user cancel', async () => {
     const user = userEvent.setup();
-    const onDecideAll = vi.fn(async () => false);
+    const onDecideSelected = vi.fn(async () => false);
     const { rerender } = render(
       <ReportPanel
         report={report([finding(1)])}
         canDecide
-        onDecideAll={onDecideAll}
+        onDecideSelected={onDecideSelected}
         onJump={() => undefined}
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Accept all remaining (1)' }));
-    await user.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(onDecideAll).not.toHaveBeenCalled();
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: 'Accept all remaining (1)' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Select finding Finding 1' }));
+    await user.click(screen.getByRole('button', { name: 'Accept selected (1)' }));
     await user.click(screen.getByRole('button', { name: 'Accept 1 finding' }));
-    expect(onDecideAll).toHaveBeenCalledWith('accepted');
     expect(screen.getByRole('dialog')).toBeInTheDocument();
 
     rerender(
       <ReportPanel
         report={report([finding(1)])}
         canDecide
-        onDecideAll={onDecideAll}
+        onDecideSelected={onDecideSelected}
         bulkError="Could not save bulk decisions."
         onJump={() => undefined}
       />,
     );
     expect(screen.getByRole('alert')).toHaveTextContent('Could not save bulk decisions.');
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('hides bulk actions when no findings remain, decisions are disabled, or the report is partial', () => {
-    const onDecideAll = vi.fn(async () => true);
+  it('hides selection when decisions are unavailable, the report is partial, or the review is read-only', () => {
+    const onDecideSelected = vi.fn(async () => true);
     const { rerender } = render(
       <ReportPanel
         report={report([finding(1)])}
-        decisions={new Map([['f1', decision('f1')]])}
-        canDecide
-        onDecideAll={onDecideAll}
-        onJump={() => undefined}
-      />,
-    );
-    expect(screen.queryByRole('button', { name: /all remaining/ })).not.toBeInTheDocument();
-
-    rerender(
-      <ReportPanel
-        report={report([finding(1)])}
         canDecide={false}
-        onDecideAll={onDecideAll}
+        onDecideSelected={onDecideSelected}
         onJump={() => undefined}
       />,
     );
-    expect(screen.queryByRole('button', { name: /all remaining/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
 
     rerender(
       <ReportPanel
         report={report([finding(1)])}
         canDecide
         readOnly
-        onDecideAll={onDecideAll}
+        onDecideSelected={onDecideSelected}
         onJump={() => undefined}
       />,
     );
-    expect(screen.queryByRole('button', { name: /all remaining/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
 
     rerender(
       <ReportPanel
         report={report([finding(1)])}
         canDecide
         partial
-        onDecideAll={onDecideAll}
+        onDecideSelected={onDecideSelected}
         onJump={() => undefined}
       />,
     );
-    expect(screen.queryByRole('button', { name: /all remaining/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   });
 
   it('closes an open confirmation when decisions become unavailable', async () => {
     const user = userEvent.setup();
-    const onDecideAll = vi.fn(async () => true);
+    const onDecideSelected = vi.fn(async () => true);
     const { rerender } = render(
       <ReportPanel
         report={report([finding(1)])}
         canDecide
-        onDecideAll={onDecideAll}
+        onDecideSelected={onDecideSelected}
         onJump={() => undefined}
       />,
     );
-    await user.click(screen.getByRole('button', { name: /Accept all remaining/ }));
+    await user.click(screen.getByRole('checkbox', { name: 'Select finding Finding 1' }));
+    await user.click(screen.getByRole('button', { name: 'Accept selected (1)' }));
     expect(screen.getByRole('dialog')).toBeInTheDocument();
 
     rerender(
       <ReportPanel
         report={report([finding(1)])}
         canDecide={false}
-        onDecideAll={onDecideAll}
+        onDecideSelected={onDecideSelected}
         onJump={() => undefined}
       />,
     );
@@ -234,17 +289,18 @@ describe('bulk finding decisions', () => {
 
   it('closes an open confirmation when the selected round changes', async () => {
     const user = userEvent.setup();
-    const onDecideAll = vi.fn(async () => true);
+    const onDecideSelected = vi.fn(async () => true);
     const { rerender } = render(
       <ReportPanel
         report={report([finding(1)])}
         canDecide
         round={1}
-        onDecideAll={onDecideAll}
+        onDecideSelected={onDecideSelected}
         onJump={() => undefined}
       />,
     );
-    await user.click(screen.getByRole('button', { name: /Accept all remaining/ }));
+    await user.click(screen.getByRole('checkbox', { name: 'Select finding Finding 1' }));
+    await user.click(screen.getByRole('button', { name: 'Accept selected (1)' }));
     expect(screen.getByRole('dialog')).toBeInTheDocument();
 
     rerender(
@@ -252,7 +308,7 @@ describe('bulk finding decisions', () => {
         report={report([finding(1)])}
         canDecide
         round={2}
-        onDecideAll={onDecideAll}
+        onDecideSelected={onDecideSelected}
         onJump={() => undefined}
       />,
     );

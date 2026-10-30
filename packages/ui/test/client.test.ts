@@ -233,6 +233,20 @@ describe('ApiClient', () => {
     expect(JSON.parse(String(init.body))).toEqual({ state: 'dismissed' });
   });
 
+  it('posts selected finding ids for a bulk decision', async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({ decisions: [{ findingId: 'f1', state: 'accepted' }], skipped: 0 }),
+    );
+    const client = clientWith(fetchImpl as unknown as typeof fetch);
+    await client.decideFindings('rev/1', 'accepted', ['f1', 'f2']);
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('/api/reviews/rev%2F1/findings/decisions');
+    expect(JSON.parse(String(init.body))).toEqual({
+      state: 'accepted',
+      findingIds: ['f1', 'f2'],
+    });
+  });
+
   it('supports auth, health, snapshot and events shapes', async () => {
     const fetchImpl = vi.fn(async (url: RequestInfo | URL) => {
       const value = String(url);

@@ -5637,8 +5637,39 @@ function buildFeedback(input) {
 }
 
 // packages/core/src/service/service.ts
+import { createHash as createHash4 } from "node:crypto";
 var IDEMPOTENCY_LIMIT = 1e3;
+var MAX_BULK_FINDING_IDS = 1e3;
 var VERDICTS = /* @__PURE__ */ new Set(["approve", "request-changes", "comment"]);
+function normalizeBulkFindingIds(ids, reviewId) {
+  if (!Array.isArray(ids)) {
+    throw new ReviewError("validation", "findingIds must be an array", { id: reviewId });
+  }
+  if (ids.length === 0) {
+    throw new ReviewError("validation", "findingIds must not be empty", { id: reviewId });
+  }
+  if (ids.length > MAX_BULK_FINDING_IDS) {
+    throw new ReviewError(
+      "validation",
+      `findingIds must contain at most ${MAX_BULK_FINDING_IDS} entries`,
+      { id: reviewId }
+    );
+  }
+  const selected = /* @__PURE__ */ new Set();
+  for (const findingId of ids) {
+    if (typeof findingId !== "string" || findingId.trim() === "") {
+      throw new ReviewError("validation", "findingIds must contain non-empty strings", {
+        id: reviewId
+      });
+    }
+    selected.add(findingId);
+  }
+  return selected;
+}
+function bulkSelectionKey(selected) {
+  if (selected === null) return "all";
+  return createHash4("sha256").update([...selected].sort().join("\0")).digest("hex");
+}
 var COMMENT_STATES = /* @__PURE__ */ new Set(["open", "resolved", "dismissed"]);
 function clone(value) {
   return structuredClone(value);
@@ -6039,6 +6070,7 @@ var ReviewServiceImpl = class {
   }
   async decideFindings(id, input, ctx) {
     assertContext(ctx);
+    const selected = input.findingIds === void 0 ? null : normalizeBulkFindingIds(input.findingIds, id);
     return await this.idempotent(
       async () => {
         if (input.state !== "accepted" && input.state !== "dismissed") {
@@ -6077,7 +6109,7 @@ var ReviewServiceImpl = class {
           (review.findingDecisions ?? []).filter((decision) => decision.round === report.round).map((decision) => decision.findingId)
         );
         const targets = report.findings.filter(
-          (finding) => finding.kind !== "praise" && !decided.has(finding.id)
+          (finding) => finding.kind !== "praise" && !decided.has(finding.id) && (selected === null || selected.has(finding.id))
         );
         const decisions = [];
         try {
@@ -6095,10 +6127,10 @@ var ReviewServiceImpl = class {
         }
         return {
           decisions,
-          skipped: report.findings.length - decisions.length
+          skipped: selected === null ? report.findings.length - decisions.length : selected.size - decisions.length
         };
       },
-      `finding.decisions:${id}`,
+      `finding.decisions:${id}:${input.state}:${bulkSelectionKey(selected)}`,
       ctx.requestId
     );
   }
@@ -8770,7 +8802,18 @@ async function handle(req, res, ctx, options) {
       if (state !== "accepted" && state !== "dismissed") {
         throw new ApiError("validation", "state must be accepted or dismissed");
       }
-      const view = await ctx.service.decideFindings(reviewId, { state }, ctxFor(req, options.auth));
+      const findingIds = body.findingIds;
+      if (findingIds !== void 0 && (!Array.isArray(findingIds) || findingIds.length === 0 || findingIds.length > 1e3 || findingIds.some((findingId) => typeof findingId !== "string" || findingId.trim() === ""))) {
+        throw new ApiError(
+          "validation",
+          "findingIds must be a non-empty array of up to 1000 non-empty strings"
+        );
+      }
+      const view = await ctx.service.decideFindings(
+        reviewId,
+        { state, ...findingIds === void 0 ? {} : { findingIds } },
+        ctxFor(req, options.auth)
+      );
       await ctx.hub.sync(reviewId);
       sendJson(res, 200, view);
       return;

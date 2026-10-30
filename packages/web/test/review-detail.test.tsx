@@ -42,6 +42,7 @@ function fakeClient(overrides: Partial<Record<keyof ApiClient, unknown>> = {}): 
         at: '2026-10-27T12:00:00.000Z',
       },
     })),
+    decideFindings: vi.fn(async () => ({ decisions: [], skipped: 0 })),
     submit: vi.fn(),
     refresh: vi.fn(),
     events: vi.fn(async () => ({ events: [], latestSeq: 0 })),
@@ -653,6 +654,36 @@ describe('review detail', () => {
       'aria-pressed',
       'false',
     );
+  });
+
+  it('submits selected findings through the selected bulk action', async () => {
+    const user = userEvent.setup();
+    const decideFindings = vi.fn(async (_id: string, state: string, findingIds: string[]) => ({
+      decisions: findingIds.map((findingId) => ({
+        findingId,
+        round: 2,
+        state,
+        by: { name: 'Ada', kind: 'human' },
+        at: '2026-10-27T12:00:00.000Z',
+      })),
+      skipped: 0,
+    }));
+    go('/review/rev_01?round=2&tab=report');
+    render(<App client={fakeClient({ decideFindings })} />);
+
+    await screen.findByRole('heading', { name: 'Billing retry semantics' });
+    await user.click(screen.getByRole('tab', { name: /Issues/ }));
+    await user.click(
+      await screen.findByRole('checkbox', {
+        name: 'Select finding Retry budget is hard-coded',
+      }),
+    );
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Accept selected (1)' }));
+    await user.click(screen.getByRole('button', { name: 'Accept 1 finding' }));
+
+    await waitFor(() => expect(decideFindings).toHaveBeenCalledWith('rev_01', 'accepted', ['f1']));
+    expect(await screen.findByText('Accepted 1 finding')).toBeInTheDocument();
   });
 
   it('hides finding decisions on a closed review', async () => {
