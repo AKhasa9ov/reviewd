@@ -16,7 +16,11 @@ export interface DeliveryRecord {
   submissionId: string;
   harness: string;
   initiator?: DeliveryInitiator;
-  feedback: { markdown: string };
+  feedback: {
+    markdown: string;
+    /** The daemon includes the structured package; older records may not. */
+    json?: { verdict?: 'approve' | 'request-changes' | 'comment' };
+  };
 }
 
 export interface SessionControllerLike {
@@ -61,9 +65,17 @@ function wait(ms: number, signal: AbortSignal): Promise<void> {
 }
 
 function contentFor(record: DeliveryRecord): string {
+  const verdict = record.feedback.json?.verdict;
   const header = `Code review feedback — ${record.reviewId} round ${String(record.round)}\n\n`;
+  if (verdict === 'approve') {
+    // An approved submit closes the review; the feedback package still says to
+    // apply changes, so do not forward it and start a fix round against a closed review.
+    return `${header}The review was approved. No fix round is required.`;
+  }
+  const action =
+    'Start the fix round now: apply the requested changes, run the tests, then call review_refresh and report the result with evidence.';
   const markdown = record.feedback.markdown ?? '';
-  return `${header}${markdown}`.slice(0, MAX_FEEDBACK_CHARS);
+  return `${header}${action}\n\n${markdown}`.slice(0, MAX_FEEDBACK_CHARS);
 }
 
 async function deliverOne(

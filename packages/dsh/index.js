@@ -9709,11 +9709,18 @@ function wait(ms, signal) {
   });
 }
 function contentFor(record) {
+  const verdict = record.feedback.json?.verdict;
   const header = `Code review feedback \u2014 ${record.reviewId} round ${String(record.round)}
 
 `;
+  if (verdict === "approve") {
+    return `${header}The review was approved. No fix round is required.`;
+  }
+  const action = "Start the fix round now: apply the requested changes, run the tests, then call review_refresh and report the result with evidence.";
   const markdown = record.feedback.markdown ?? "";
-  return `${header}${markdown}`.slice(0, MAX_FEEDBACK_CHARS);
+  return `${header}${action}
+
+${markdown}`.slice(0, MAX_FEEDBACK_CHARS);
 }
 async function deliverOne(deps, record, signal) {
   const initiator = record.initiator;
@@ -10280,7 +10287,7 @@ async function runWorkerLoop(deps, signal) {
 
 // packages/dsh/src/host.ts
 var name = "code-review";
-var inject = ["tools", "commands", "webServer", "connection"];
+var inject = ["tools", "commands", "webServer", "connection", "sessionController"];
 function withConnectionGate(connection, handler) {
   return async (req, res) => {
     const rejection = connection.requestRejection({ headers: req.headers });
@@ -10334,6 +10341,10 @@ function startReviewLoops(ctx, config, api, ready) {
           `code-review: delivery stopped: ${error instanceof Error ? error.message : "unknown"}`
         );
       });
+    } else {
+      ctx.logger?.warn?.(
+        "code-review: delivery disabled: sessionController is unavailable; submitted feedback will stay pending"
+      );
     }
   };
   if (ready === void 0) {

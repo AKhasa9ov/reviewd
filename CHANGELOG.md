@@ -17,6 +17,10 @@ versions may contain breaking changes.
 
 ### Fixed
 
+- The DSH Host now injects `sessionController`, so submitting feedback wakes the initiating
+  session instead of leaving the delivery pending. The delivered prompt explicitly starts a
+  fix round for `request-changes` and `comment` submissions; `approve` gets only an approval
+  notice because it closes the review.
 - Review appends are serialized per review; the derived cache is best-effort and rebuilt when missing, and GC uses `closedAt` and preserves referenced snapshots.
 - The Files changed tab counts every path from the complete snapshot manifest, matching the file
   panel and lazy diff loader for bounded snapshots instead of showing only the retained diff count.

@@ -225,13 +225,18 @@ pre-review, or `command` when the daemon is configured for a command reviewer. W
 
 ## Delivery
 
-Feedback for `harness=dsh` is polled from `/api/deliveries/pending`. Each record carries
-the initiator saved with the review. The Host resumes that session (including a closed
-one) through `ctx.sessionController.resolveAgent`, calls `prompt` with
-`mode:'queue'` and the stable idempotency key `cr:<deliveryKey>`, then acks. Prompt
-failures retry with capped backoff; after three failed attempts the Host POSTs
-`/api/deliveries/:id/fail` and stops prompting that record. A successful ack resets the
-budget; no partial prompt is acked. Legacy/CLI deliveries without an initiator stay
+Feedback for `harness=dsh` is polled from `/api/deliveries/pending`. The Host lists
+`sessionController` in its required plugin `inject`, so Cordis applies the plugin only while
+that bridge is available; a direct `startReviewLoops` call without it logs a warning and
+leaves submitted feedback pending. Each record carries the initiator saved with the review.
+The Host resumes that session (including a closed one) through
+`ctx.sessionController.resolveAgent`, calls `prompt` with
+`mode:'queue'` and the stable idempotency key `cr:<deliveryKey>`, then acks. The prompt
+starts with an explicit fix-round instruction for `request-changes` and `comment`
+submissions; an `approve` submission only receives an approval notice because it closes the
+review. Prompt failures retry with capped backoff; after three failed attempts the Host
+POSTs `/api/deliveries/:id/fail` and stops prompting that record. A successful ack resets
+the budget; no partial prompt is acked. Legacy/CLI deliveries without an initiator stay
 pending for a human or CLI.
 
 ## Store, upgrade and uninstall

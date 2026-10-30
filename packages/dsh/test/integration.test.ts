@@ -139,4 +139,38 @@ describe('DSH bundle against a real review daemon', () => {
     expect(prompts[0].content[0].text).toContain('Fix the delivery path');
     expect((await api.get<any>('/api/deliveries/pending?harness=dsh')).deliveries).toHaveLength(0);
   }, 30_000);
+
+  it('keeps the approve verdict and closes the review before queuing delivery', async () => {
+    const { url, repo } = await fixture();
+    const definitions: Array<any> = [];
+    const ctx: any = {
+      tools: {
+        register: (definition: unknown) => {
+          definitions.push(definition);
+          return () => undefined;
+        },
+      },
+    };
+    const api = new ReviewApi(config(url));
+    createReviewTools(ctx, config(url), api);
+    const start = definitions.find((definition) => definition.name === 'review_start');
+    const started = await start.execute(
+      { repo: repo.root, title: 'Approve contract', base: 'main', head: 'feature' },
+      {
+        agent: { id: 'agent_1', session: { id: 'session_1' } },
+        signal: new AbortController().signal,
+      },
+    );
+    const reviewId = started.reviewId as string;
+
+    const submitted = await api.post<any>(`/api/reviews/${reviewId}/submit`, {
+      verdict: 'approve',
+    });
+    expect(submitted.submission.feedback.json.verdict).toBe('approve');
+    expect((await api.get<any>(`/api/reviews/${reviewId}`)).review.status).toBe('closed');
+
+    const pending = await api.get<any>('/api/deliveries/pending?harness=dsh');
+    expect(pending.deliveries).toHaveLength(1);
+    expect(pending.deliveries[0].feedback.json.verdict).toBe('approve');
+  }, 30_000);
 });

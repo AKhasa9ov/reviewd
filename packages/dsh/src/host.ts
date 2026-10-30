@@ -15,7 +15,11 @@ import { runWorkerLoop } from './worker.js';
 import type { WorkerDeps } from './worker.js';
 
 export const name = 'code-review';
-export const inject = ['tools', 'commands', 'webServer', 'connection'];
+// sessionController is what lets the delivery loop wake the review initiator.
+// It is required: Cordis defers apply() until this service exists, so the Host
+// never silently starts without the bridge. The warning in startReviewLoops is
+// for a direct helper call or a service that disappears after startup.
+export const inject = ['tools', 'commands', 'webServer', 'connection', 'sessionController'];
 
 type AnyRecord = Record<string, unknown>;
 
@@ -125,6 +129,10 @@ export function startReviewLoops(
           `code-review: delivery stopped: ${error instanceof Error ? error.message : 'unknown'}`,
         );
       });
+    } else {
+      ctx.logger?.warn?.(
+        'code-review: delivery disabled: sessionController is unavailable; submitted feedback will stay pending',
+      );
     }
   };
 

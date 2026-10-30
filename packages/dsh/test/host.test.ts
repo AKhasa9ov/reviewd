@@ -132,6 +132,10 @@ describe('host plugin connection gate', () => {
     expect(inject).toContain('connection');
   });
 
+  it('injects sessionController so delivery can wake the initiator', () => {
+    expect(inject).toContain('sessionController');
+  });
+
   it('rejects unauthorized requests to the code-review prefix', async () => {
     let checked = false;
     const { ctx, getRoutes } = createContext(() => {
@@ -327,6 +331,17 @@ describe('review loop readiness', () => {
     await vi.waitFor(() =>
       expect(get).toHaveBeenCalledWith('/api/deliveries/pending?harness=dsh', expect.anything()),
     );
+    stop();
+  });
+
+  it('warns when the delivery helper is started without sessionController', async () => {
+    const warn = vi.fn();
+    const { api, get } = loopApi();
+    const stop = startReviewLoops(loopContext(warn), normalizeConfig({ worker: false }), api);
+
+    await vi.waitFor(() => expect(warn).toHaveBeenCalled());
+    expect(warn.mock.calls[0]?.[0]).toContain('sessionController');
+    expect(get).not.toHaveBeenCalled();
     stop();
   });
 
