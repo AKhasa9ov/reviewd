@@ -109,7 +109,9 @@ export function CommentThread({
               return (
                 <li className="cr-reply" key={item.id}>
                   <div className="cr-reply-head">
-                    <strong>{item.author.name}</strong>
+                    {item.author.name === replySource.label ? null : (
+                      <strong>{item.author.name}</strong>
+                    )}
                     <Badge tone={replySource.tone}>{replySource.label}</Badge>
                     <time className="cr-meta" dateTime={item.createdAt}>
                       {formatAge(item.createdAt)}
@@ -169,7 +171,9 @@ export function CommentThread({
         <span className="cr-avatar" aria-hidden="true">
           {comment.author.name.slice(0, 1).toUpperCase()}
         </span>
-        <span className="cr-thread-author">{comment.author.name}</span>
+        {comment.author.name === source.label ? null : (
+          <span className="cr-thread-author">{comment.author.name}</span>
+        )}
         <Badge tone={source.tone}>{source.label}</Badge>
         <time className="cr-meta" dateTime={comment.createdAt} title={comment.createdAt}>
           {formatAge(comment.createdAt)}
@@ -246,7 +250,9 @@ export function CommentThread({
             return (
               <li className="cr-reply" key={item.id}>
                 <div className="cr-reply-head">
-                  <strong>{item.author.name}</strong>
+                  {item.author.name === replySource.label ? null : (
+                    <strong>{item.author.name}</strong>
+                  )}
                   <Badge tone={replySource.tone}>{replySource.label}</Badge>
                   <time className="cr-meta" dateTime={item.createdAt}>
                     {formatAge(item.createdAt)}

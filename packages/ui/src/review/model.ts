@@ -272,7 +272,7 @@ export function fixCounts(review: ReviewState): Record<FixGroup, number> {
     'needs-decision': 0,
   };
   for (const comment of review.comments) {
-    if (comment.deletedAt !== undefined || isTransferredComment(comment)) continue;
+    if (comment.deletedAt !== undefined) continue;
     counts[fixStatus(review, comment)] += 1;
   }
   return counts;
@@ -285,10 +285,7 @@ export function filterComments(review: ReviewState, filter: FixFilter): Comment[
     );
   }
   return review.comments.filter(
-    (comment) =>
-      comment.deletedAt === undefined &&
-      !isTransferredComment(comment) &&
-      fixStatus(review, comment) === filter,
+    (comment) => comment.deletedAt === undefined && fixStatus(review, comment) === filter,
   );
 }
 

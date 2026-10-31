@@ -101,6 +101,24 @@ describe('CommentThread CRUD', () => {
     expect(screen.getAllByText('AI')).toHaveLength(2);
   });
 
+  it('does not repeat the AI label as both the author name and badge', () => {
+    renderThread(
+      comment({
+        author: { name: 'AI', kind: 'agent' },
+        replies: [
+          {
+            id: 'rep_ai',
+            author: { name: 'AI', kind: 'agent' },
+            body: 'A reply',
+            createdAt: at,
+          },
+        ],
+      }),
+    );
+
+    expect(screen.getAllByText('AI')).toHaveLength(2);
+  });
+
   it('does not offer edit or delete for a transferred AI finding', () => {
     renderThread(
       comment({

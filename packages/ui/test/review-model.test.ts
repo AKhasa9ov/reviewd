@@ -237,7 +237,7 @@ describe('review model anchors and status', () => {
     expect(filterComments(r, 'addressed').map((item) => item.id)).toEqual(['c1', 'c4']);
   });
 
-  it('keeps transferred AI comments out of human fix filters but in all', () => {
+  it('counts transferred AI comments as open threads that need a decision', () => {
     const human = comment('c1', [anchor(1, 1)]);
     const ai = comment('c2', [anchor(1, 2)], {
       author: { name: 'AI', kind: 'agent' },
@@ -249,9 +249,9 @@ describe('review model anchors and status', () => {
       addressed: 0,
       'not-fixed': 0,
       outdated: 0,
-      'needs-decision': 1,
+      'needs-decision': 2,
     });
-    expect(filterComments(r, 'needs-decision').map((item) => item.id)).toEqual(['c1']);
+    expect(filterComments(r, 'needs-decision').map((item) => item.id)).toEqual(['c1', 'c2']);
     expect(filterComments(r, 'all').map((item) => item.id)).toEqual(['c1', 'c2']);
   });
 
