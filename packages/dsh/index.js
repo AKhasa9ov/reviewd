@@ -3698,14 +3698,12 @@ function splitEventLines(content) {
   if (content.endsWith("\n")) lines.pop();
   return lines;
 }
-function parseReview(content, reviewId) {
+function parseEventLog(content, reviewId) {
   const hasTrailingNewline = content.endsWith("\n");
   const lines = splitEventLines(content);
   if (lines.length === 0) throw new ReviewNotFoundError(reviewId);
-  let state;
-  let eventCount = 0;
-  let torn = false;
   const events = [];
+  let torn = false;
   for (let index = 0; index < lines.length; index++) {
     const line = lines[index] ?? "";
     const lineNo = index + 1;
@@ -3735,7 +3733,16 @@ function parseReview(content, reviewId) {
       throw corrupt(reviewId, lineNo, "invalid review event");
     }
     parsed.seq ??= lineNo;
-    events.push(structuredClone(parsed));
+    events.push(parsed);
+  }
+  return { events, eventCount: events.length, torn };
+}
+function parseReview(content, reviewId) {
+  const { events, eventCount, torn } = parseEventLog(content, reviewId);
+  let state;
+  for (let index = 0; index < events.length; index++) {
+    const parsed = events[index];
+    const lineNo = index + 1;
     try {
       if (state === void 0) {
         if (parsed.type !== "review/created") {
@@ -3748,7 +3755,6 @@ function parseReview(content, reviewId) {
     } catch (error) {
       throw corrupt(reviewId, lineNo, error.message);
     }
-    eventCount += 1;
   }
   if (state === void 0) throw new ReviewNotFoundError(reviewId);
   if (torn) state.warnings = [...state.warnings ?? [], "torn-tail"];
@@ -3850,6 +3856,12 @@ var ReviewStore = class _ReviewStore {
       await mkdir(dir, { recursive: true });
       const eventsPath = join(dir, "events.jsonl");
       await this.repairTornTail(eventsPath);
+      let fileBytes = 0;
+      try {
+        fileBytes = (await stat2(eventsPath)).size;
+      } catch (error) {
+        if (error.code !== "ENOENT") throw error;
+      }
       let entry = this.entries.get(id);
       if (entry === void 0) {
         try {
@@ -3864,6 +3876,9 @@ var ReviewStore = class _ReviewStore {
       }
       if (accept !== void 0 && !accept(entry.state)) return null;
       const state = fold(entry.state, event);
+      if (state.warnings !== void 0) {
+        state.warnings = state.warnings.filter((warning) => warning !== "torn-tail");
+      }
       const sequenced = { ...event, seq: entry.eventCount + 1 };
       const payload = `${JSON.stringify(sequenced)}
 `;
@@ -3877,7 +3892,14 @@ var ReviewStore = class _ReviewStore {
       } finally {
         await handle2.close();
       }
-      const next = { state, eventCount: entry.eventCount + 1 };
+      const next = {
+        state,
+        eventCount: entry.eventCount + 1,
+        // The stat is taken after repairing a torn tail, so it is the exact
+        // byte offset where this append started. Do not trust a cached byte
+        // count that may describe a larger pre-repair file.
+        bytes: fileBytes + Buffer.byteLength(payload)
+      };
       this.entries.set(id, next);
       await this.writeCache(id, next).catch(() => void 0);
       return structuredClone(sequenced);
@@ -3887,8 +3909,7 @@ var ReviewStore = class _ReviewStore {
     if (this.closed) throw new Error("review store is closed");
     const id = safeReviewId(reviewId);
     return await this.withReviewLock(id, async () => {
-      const entry = await this.readEntry(id);
-      this.entries.set(id, entry);
+      const entry = await this.readState(id);
       return structuredClone(entry.state);
     });
   }
@@ -3899,9 +3920,17 @@ var ReviewStore = class _ReviewStore {
       throw new ReviewEventError("invalid-event", "after must be a non-negative integer");
     }
     return await this.withReviewLock(id, async () => {
-      const entry = await this.readEntry(id);
-      this.entries.set(id, entry);
-      return structuredClone((entry.events ?? []).filter((event) => (event.seq ?? 0) > after));
+      let content;
+      try {
+        content = await readFile2(join(this.reviewDir(id), "events.jsonl"), "utf8");
+      } catch (error) {
+        if (error.code === "ENOENT") {
+          throw new ReviewNotFoundError(id);
+        }
+        throw error;
+      }
+      const { events } = parseEventLog(content, id);
+      return structuredClone(events.filter((event) => (event.seq ?? 0) > after));
     });
   }
   async list() {
@@ -4086,6 +4115,33 @@ var ReviewStore = class _ReviewStore {
     if (content === "" || content.endsWith("\n")) return;
     const lastNewline = content.lastIndexOf("\n");
     await truncate(eventsPath, lastNewline < 0 ? 0 : lastNewline + 1);
+  }
+  /**
+   * Reads state without replaying the log when the event file is unchanged.
+   * `snapshot.json` is a replay cache, so a matching byte length and event
+   * count prove it describes this log prefix. Mutations still go through
+   * `readEntry` when the cache is missing or stale, preserving log validation.
+   */
+  async readState(reviewId) {
+    const eventsPath = join(this.reviewDir(reviewId), "events.jsonl");
+    let eventBytes;
+    try {
+      eventBytes = (await stat2(eventsPath)).size;
+    } catch (error) {
+      if (error.code === "ENOENT") {
+        throw new ReviewNotFoundError(reviewId);
+      }
+      throw error;
+    }
+    const cache = await this.readCache(reviewId).catch(() => null);
+    if (cache !== null && cache.eventBytes === eventBytes && cache.eventCount === cache.state.version && cache.state.id === reviewId) {
+      const entry2 = { state: cache.state, eventCount: cache.eventCount, bytes: eventBytes };
+      this.entries.set(reviewId, entry2);
+      return entry2;
+    }
+    const entry = await this.readEntry(reviewId);
+    this.entries.set(reviewId, entry);
+    return entry;
   }
   async readEntry(reviewId) {
     const dir = this.reviewDir(reviewId);
@@ -6969,13 +7025,13 @@ var EventHub = class {
     return () => this.listeners.delete(listener);
   }
   async syncOnce(reviewId) {
-    const events = await this.service.events(reviewId, 0);
     const known = this.reviews.get(reviewId) ?? [];
     const knownLatest = Math.max(
       0,
       ...known.map((event) => event.seq ?? 0),
       this.latest.get(reviewId) ?? 0
     );
+    const events = await this.service.events(reviewId, knownLatest);
     const fresh = events.filter((event) => (event.seq ?? 0) > knownLatest);
     if (fresh.length === 0) {
       if (knownLatest > 0) this.latest.set(reviewId, knownLatest);

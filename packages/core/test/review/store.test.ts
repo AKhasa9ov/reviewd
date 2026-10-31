@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   coverageFromPrompt,
   fold,
@@ -15,6 +15,7 @@ import type {
   Anchor,
   Comment,
   ReviewEvent,
+  ReviewId,
   ReviewState,
   Round,
   Snapshot,
@@ -191,6 +192,48 @@ describe('ReviewStore', () => {
       { round: 1, status: 'applied', confidence: 'high' },
     ]);
     expect(state.status).toBe('closed');
+    await store.close();
+  });
+
+  it('loads a fresh replay cache without replaying the event log', async () => {
+    const root = await tempRoot();
+    const store = await ReviewStore.open(root);
+    await store.append(reviewId, created());
+    await store.append(reviewId, event('round/created', { round: round() }, 'evt_round'));
+    await store.close();
+
+    const reopened = await ReviewStore.open(root);
+    const internal = reopened as unknown as {
+      readEntry: (id: ReviewId) => Promise<unknown>;
+    };
+    const replay = vi.spyOn(internal, 'readEntry');
+    const state = await reopened.load(reviewId);
+
+    expect(state.title).toBe('Review state');
+    expect(state.rounds).toHaveLength(1);
+    expect(replay).not.toHaveBeenCalled();
+    await reopened.close();
+  });
+
+  it('reads an event tail without replaying review state', async () => {
+    const root = await tempRoot();
+    const store = await ReviewStore.open(root);
+    await store.append(reviewId, created());
+    await store.append(reviewId, event('round/created', { round: round() }, 'evt_round'));
+    await store.append(
+      reviewId,
+      event('comment/added', { comment: comment('cmt_tail') }, 'evt_comment'),
+    );
+
+    const internal = store as unknown as {
+      readEntry: (id: ReviewId) => Promise<unknown>;
+    };
+    const replay = vi.spyOn(internal, 'readEntry');
+    const tail = await store.events(reviewId, 1);
+
+    expect(tail.map((item) => item.seq)).toEqual([2, 3]);
+    expect(tail.map((item) => item.type)).toEqual(['round/created', 'comment/added']);
+    expect(replay).not.toHaveBeenCalled();
     await store.close();
   });
 

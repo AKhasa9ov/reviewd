@@ -169,13 +169,13 @@ export class EventHub {
   }
 
   private async syncOnce(reviewId: string): Promise<ReviewEvent[]> {
-    const events = await this.service.events(reviewId, 0);
     const known = this.reviews.get(reviewId) ?? [];
     const knownLatest = Math.max(
       0,
       ...known.map((event) => event.seq ?? 0),
       this.latest.get(reviewId) ?? 0,
     );
+    const events = await this.service.events(reviewId, knownLatest);
     const fresh = events.filter((event) => (event.seq ?? 0) > knownLatest);
     if (fresh.length === 0) {
       if (knownLatest > 0) this.latest.set(reviewId, knownLatest);

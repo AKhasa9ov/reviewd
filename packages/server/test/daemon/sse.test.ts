@@ -8,6 +8,7 @@ import { EventHub } from '../../src/daemon/sse.js';
 
 class FakeService {
   private readonly byId = new Map<string, ReviewEvent[]>();
+  readonly afterCalls: number[] = [];
   delayMs = 0;
 
   set(reviewId: string, count: number): void {
@@ -18,6 +19,7 @@ class FakeService {
   }
 
   async events(reviewId: string, after = 0): Promise<ReviewEvent[]> {
+    this.afterCalls.push(after);
     if (this.delayMs > 0) {
       await new Promise((resolve) => setTimeout(resolve, this.delayMs));
     }
@@ -79,6 +81,7 @@ describe('EventHub global cursor', () => {
     expect(cursor).toBe(1100);
 
     await expect(hub.sync('rev_a')).resolves.toEqual([]);
+    expect(service.afterCalls).toEqual([0, 1100]);
     expect(hub.globalAfter(0)).toHaveLength(1000);
     expect(hub.globalAfter(0).at(-1)?.seq).toBe(cursor);
   });
