@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ReviewState, SubmitInput } from '@dsh-code-review/core';
 import { Badge } from '../primitives/Feedback.js';
-import { latestAnchor } from './model.js';
+import { actorSource, latestAnchor } from './model.js';
 import { Button } from '../primitives/Button.js';
 import { Dialog } from '../primitives/Dialog.js';
 import { Textarea } from '../primitives/Field.js';
@@ -43,9 +43,13 @@ export function SubmitDialog({
   const [summary, setSummary] = useState('');
   const [includeResolved, setIncludeResolved] = useState(false);
   const previous = (review.submissions?.length ?? 0) > 0;
-  const pending = review.comments.filter((comment) => comment.state === 'open');
+  const pending = review.comments.filter(
+    (comment) => comment.deletedAt === undefined && comment.state === 'open',
+  );
   const unresolved = pending.length;
-  const resolved = review.comments.filter((comment) => comment.state === 'resolved').length;
+  const resolved = review.comments.filter(
+    (comment) => comment.deletedAt === undefined && comment.state === 'resolved',
+  ).length;
 
   useEffect(() => {
     if (!open) return;
@@ -138,6 +142,7 @@ export function SubmitDialog({
               {pending.map((comment) => {
                 const anchor = latestAnchor(comment);
                 const body = comment.body.replace(/\s+/g, ' ').trim();
+                const source = actorSource(comment.author.kind);
                 return (
                   <li key={comment.id}>
                     <button
@@ -149,6 +154,7 @@ export function SubmitDialog({
                       <span className="cr-submit-pending-path cr-mono">
                         {anchor === undefined ? 'unanchored' : `${anchor.path}:${anchor.lineStart}`}
                       </span>
+                      <Badge tone={source.tone}>{source.label}</Badge>
                       <span className="cr-submit-pending-body">{body}</span>
                     </button>
                   </li>

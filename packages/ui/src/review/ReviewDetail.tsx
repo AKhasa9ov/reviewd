@@ -537,6 +537,27 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
     [view?.review.agent, view?.review.id, selectedRound],
   );
   const report = finalReportForRound ?? liveReport?.report ?? null;
+  const transferredFindingIds = useMemo(() => {
+    const round = report?.round;
+    if (view === null || round === undefined) return new Set<string>();
+    return new Set(
+      view.review.comments
+        .filter(
+          (comment) =>
+            comment.deletedAt === undefined &&
+            comment.sourceFindingId !== undefined &&
+            comment.anchors.some((anchor) => anchor.round === round),
+        )
+        .map((comment) => comment.sourceFindingId as string),
+    );
+  }, [view, report?.round]);
+  const visibleReportFindings = useMemo(
+    () =>
+      report === null
+        ? []
+        : report.findings.filter((finding) => !transferredFindingIds.has(finding.id)),
+    [report, transferredFindingIds],
+  );
   const reportAgentPartial = view?.review.agent?.status === 'partial';
   const reportIsPartial =
     (finalReportForRound === null && liveReport !== null) ||
@@ -1234,7 +1255,7 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
       deltaHint={deltaHint}
       onRequestNextRound={() => setRefreshOpen(true)}
       changedPaths={changed}
-      findings={report !== null ? report.findings : []}
+      findings={visibleReportFindings}
       questions={report !== null ? report.questions : []}
       findingDecisions={finalReportForRound !== null ? findingDecisions : undefined}
       onDecideFinding={canDecideFinding ? submitFindingDecision : undefined}
@@ -1587,6 +1608,8 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
                 bulkError={bulkDecisionError}
                 onJump={jumpToLocation}
                 comments={reportComments}
+                transferredFindingIds={transferredFindingIds}
+                onOpenConversation={() => setTab('conversation')}
                 round={selectedRound ?? 1}
                 readOnly={readOnly}
                 activeCommentId={activeCommentId}

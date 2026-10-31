@@ -124,7 +124,8 @@ function isComment(value: unknown): value is Comment {
     (value.editedAt === undefined || isTimestamp(value.editedAt)) &&
     (value.editedBy === undefined || isActor(value.editedBy)) &&
     (value.deletedAt === undefined || isTimestamp(value.deletedAt)) &&
-    (value.deletedBy === undefined || isActor(value.deletedBy))
+    (value.deletedBy === undefined || isActor(value.deletedBy)) &&
+    (value.sourceFindingId === undefined || typeof value.sourceFindingId === 'string')
   );
 }
 
@@ -137,6 +138,7 @@ function isFindingDecision(value: unknown): value is FindingDecision {
     value.round > 0 &&
     (value.state === 'accepted' || value.state === 'dismissed') &&
     (value.note === undefined || typeof value.note === 'string') &&
+    (value.commentId === undefined || typeof value.commentId === 'string') &&
     isRecord(value.by) &&
     typeof value.by.name === 'string' &&
     (value.by.kind === 'human' || value.by.kind === 'agent' || value.by.kind === 'system') &&

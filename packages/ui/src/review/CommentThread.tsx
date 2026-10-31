@@ -4,7 +4,7 @@ import { Badge } from '../primitives/Feedback.js';
 import { Button } from '../primitives/Button.js';
 import { Textarea } from '../primitives/Field.js';
 import { formatAge } from '../format.js';
-import { anchorHistory } from './model.js';
+import { actorSource, anchorHistory, isTransferredComment } from './model.js';
 
 export interface CommentThreadProps {
   comment: Comment;
@@ -48,6 +48,8 @@ export function CommentThread({
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const history = anchorHistory(comment);
+  const source = actorSource(comment.author.kind);
+  const transferred = isTransferredComment(comment);
   const quoteLines = history.to?.quote.split('\n') ?? [];
   const shownQuote = quoteLines.slice(0, compact ? 6 : 14);
   const anchor = history.to;
@@ -102,17 +104,21 @@ export function CommentThread({
         <div className="cr-thread-tombstone">Comment deleted</div>
         {comment.replies.length > 0 ? (
           <ol className="cr-replies" aria-label="Replies">
-            {comment.replies.map((item) => (
-              <li className="cr-reply" key={item.id}>
-                <div className="cr-reply-head">
-                  <strong>{item.author.name}</strong>
-                  <time className="cr-meta" dateTime={item.createdAt}>
-                    {formatAge(item.createdAt)}
-                  </time>
-                </div>
-                <div className="cr-reply-body">{item.body}</div>
-              </li>
-            ))}
+            {comment.replies.map((item) => {
+              const replySource = actorSource(item.author.kind);
+              return (
+                <li className="cr-reply" key={item.id}>
+                  <div className="cr-reply-head">
+                    <strong>{item.author.name}</strong>
+                    <Badge tone={replySource.tone}>{replySource.label}</Badge>
+                    <time className="cr-meta" dateTime={item.createdAt}>
+                      {formatAge(item.createdAt)}
+                    </time>
+                  </div>
+                  <div className="cr-reply-body">{item.body}</div>
+                </li>
+              );
+            })}
           </ol>
         ) : null}
       </article>
@@ -164,7 +170,7 @@ export function CommentThread({
           {comment.author.name.slice(0, 1).toUpperCase()}
         </span>
         <span className="cr-thread-author">{comment.author.name}</span>
-        <span className="cr-meta">{comment.author.kind}</span>
+        <Badge tone={source.tone}>{source.label}</Badge>
         <time className="cr-meta" dateTime={comment.createdAt} title={comment.createdAt}>
           {formatAge(comment.createdAt)}
         </time>
@@ -235,17 +241,21 @@ export function CommentThread({
 
       {comment.replies.length > 0 ? (
         <ol className="cr-replies" aria-label="Replies">
-          {comment.replies.map((item) => (
-            <li className="cr-reply" key={item.id}>
-              <div className="cr-reply-head">
-                <strong>{item.author.name}</strong>
-                <time className="cr-meta" dateTime={item.createdAt}>
-                  {formatAge(item.createdAt)}
-                </time>
-              </div>
-              <div className="cr-reply-body">{item.body}</div>
-            </li>
-          ))}
+          {comment.replies.map((item) => {
+            const replySource = actorSource(item.author.kind);
+            return (
+              <li className="cr-reply" key={item.id}>
+                <div className="cr-reply-head">
+                  <strong>{item.author.name}</strong>
+                  <Badge tone={replySource.tone}>{replySource.label}</Badge>
+                  <time className="cr-meta" dateTime={item.createdAt}>
+                    {formatAge(item.createdAt)}
+                  </time>
+                </div>
+                <div className="cr-reply-body">{item.body}</div>
+              </li>
+            );
+          })}
         </ol>
       ) : null}
 
@@ -288,7 +298,7 @@ export function CommentThread({
           >
             Reply
           </Button>
-          {onEdit !== undefined ? (
+          {onEdit !== undefined && !transferred ? (
             <Button
               size="small"
               variant="ghost"
@@ -301,7 +311,7 @@ export function CommentThread({
               Edit
             </Button>
           ) : null}
-          {onDelete !== undefined ? (
+          {onDelete !== undefined && !transferred ? (
             <Button
               size="small"
               variant="ghost"

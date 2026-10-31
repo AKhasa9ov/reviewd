@@ -36,6 +36,8 @@ export interface FindingDecision {
   state: FindingDecisionState;
   /** Optional message passed to the agent with the next feedback package. */
   note?: string;
+  /** Comment created when this decision accepted a finding. */
+  commentId?: CommentId;
   by: Actor;
   at: string;
 }
@@ -100,6 +102,8 @@ export interface Comment {
   /** Soft-deletion marker. Deleted comments are hidden from feedback and visible only as tombstones. */
   deletedAt?: string;
   deletedBy?: Actor;
+  /** Set when this comment was transferred from an accepted agent finding. */
+  sourceFindingId?: string;
 }
 
 export interface Round {

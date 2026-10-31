@@ -900,6 +900,15 @@ export async function handle(
       sendJson(res, 200, await ctx.service.snapshot(reviewId, round, file));
       return;
     }
+    if (rest[0] === 'transfer-findings' && rest.length === 1 && method === 'POST') {
+      const result = await ctx.service.transferAcceptedFindings(
+        reviewId,
+        ctxFor(req, options.auth),
+      );
+      await ctx.hub.sync(reviewId);
+      sendJson(res, 200, result);
+      return;
+    }
     if (rest[0] === 'events' && method === 'GET') {
       await ctx.service.get(reviewId);
       const afterParam = url.searchParams.get('after') ?? req.headers['last-event-id'] ?? '0';

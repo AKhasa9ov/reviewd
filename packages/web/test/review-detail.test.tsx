@@ -490,6 +490,37 @@ describe('review detail', () => {
     expect(await screen.findByText('Comment posted')).toBeInTheDocument();
   });
 
+  it('moves an accepted finding into comments and hides the report card', async () => {
+    const user = userEvent.setup();
+    const withTransferred = structuredClone(reviewView);
+    withTransferred.review.comments.push(
+      comment(
+        'c_ai',
+        'Retry budget is hard-coded. AI transferred this accepted finding.',
+        [makeAnchor(2, 'src/auth.ts', 11, 12)],
+        'open',
+        {
+          author: { name: 'Reviewer', kind: 'agent' },
+          sourceFindingId: 'f1',
+        },
+      ),
+    );
+    go('/review/rev_01?round=2&tab=report');
+    render(<App client={fakeClient({ getReview: vi.fn(async () => withTransferred) })} />);
+    await screen.findByRole('heading', { name: 'Billing retry semantics' });
+
+    await user.click(screen.getByRole('tab', { name: /Issues/ }));
+    expect(screen.queryByText('Retry budget is hard-coded')).not.toBeInTheDocument();
+    expect(screen.getByText('1 accepted')).toBeInTheDocument();
+    expect(screen.getByText('moved to comments')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Open Conversation' }));
+    expect(
+      await screen.findByText('Retry budget is hard-coded. AI transferred this accepted finding.'),
+    ).toBeInTheDocument();
+    expect(within(screen.getByTestId('comment-c_ai')).getByText('AI')).toBeInTheDocument();
+  });
+
   it('shows and posts a finding comment from the report', async () => {
     const user = userEvent.setup();
     go('/review/rev_01?round=2&tab=report');

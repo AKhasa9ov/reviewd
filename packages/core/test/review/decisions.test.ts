@@ -155,6 +155,150 @@ describe('finding decisions', () => {
     expect(events.at(-1)?.type).toBe('finding/decision');
   });
 
+  it('transfers an accepted finding into one AI comment', async () => {
+    const { lifecycle, reviewId, store } = await seeded();
+
+    const decision = await lifecycle.decideFinding(reviewId, 'f1', { state: 'accepted' }, actor);
+
+    const loaded = await lifecycle.get(reviewId);
+    expect(loaded.comments).toHaveLength(1);
+    const transferred = loaded.comments[0]!;
+    expect(transferred).toMatchObject({
+      sourceFindingId: 'f1',
+      author: { name: 'AI', kind: 'agent' },
+      state: 'open',
+      reviewId,
+    });
+    expect(transferred.body).toContain('Off by one');
+    expect(transferred.body).toContain('The loop skips the last item.');
+    expect(transferred.anchors).toEqual([
+      expect.objectContaining({
+        path: 'src/a.ts',
+        lineStart: 2,
+        lineEnd: 2,
+        round: 1,
+        quote: 'for (let i = 0; i < n - 1; i++)',
+      }),
+    ]);
+    expect(decision.commentId).toBe(transferred.id);
+
+    const decisionEvent = (await store.events(reviewId)).at(-1);
+    expect(decisionEvent?.type).toBe('finding/decision');
+    expect(decisionEvent?.data).toMatchObject({
+      decision: { findingId: 'f1', commentId: transferred.id },
+      comment: { id: transferred.id, sourceFindingId: 'f1' },
+    });
+  });
+
+  it('does not create a second comment when the finding is accepted twice', async () => {
+    const { lifecycle, reviewId } = await seeded();
+
+    await lifecycle.decideFinding(reviewId, 'f1', { state: 'accepted' }, actor);
+    await lifecycle.decideFinding(
+      reviewId,
+      'f1',
+      { state: 'accepted', note: 'second decision' },
+      actor,
+    );
+
+    const loaded = await lifecycle.get(reviewId);
+    expect(loaded.comments).toHaveLength(1);
+    expect(loaded.findingDecisions).toHaveLength(2);
+    expect(loaded.findingDecisions?.at(-1)?.commentId).toBe(loaded.comments[0]?.id);
+  });
+
+  it('soft-deletes the transferred comment when the finding is dismissed', async () => {
+    const { lifecycle, reviewId } = await seeded();
+
+    await lifecycle.decideFinding(reviewId, 'f1', { state: 'accepted' }, actor);
+    const dismissed = await lifecycle.decideFinding(reviewId, 'f1', { state: 'dismissed' }, actor);
+
+    const loaded = await lifecycle.get(reviewId);
+    expect(loaded.comments).toHaveLength(1);
+    expect(loaded.comments[0]).toMatchObject({
+      sourceFindingId: 'f1',
+      deletedBy: actor,
+    });
+    expect(loaded.comments[0]?.deletedAt).toBeDefined();
+    expect(dismissed.commentId).toBe(loaded.comments[0]?.id);
+  });
+
+  it('creates a fresh comment when a dismissed finding is accepted again', async () => {
+    const { lifecycle, reviewId } = await seeded();
+
+    await lifecycle.decideFinding(reviewId, 'f1', { state: 'accepted' }, actor);
+    const firstId = (await lifecycle.get(reviewId)).comments[0]?.id;
+    await lifecycle.decideFinding(reviewId, 'f1', { state: 'dismissed' }, actor);
+    const accepted = await lifecycle.decideFinding(reviewId, 'f1', { state: 'accepted' }, actor);
+
+    const loaded = await lifecycle.get(reviewId);
+    const active = loaded.comments.filter((comment) => comment.deletedAt === undefined);
+    expect(active).toHaveLength(1);
+    expect(active[0]?.id).not.toBe(firstId);
+    expect(accepted.commentId).toBe(active[0]?.id);
+    expect(loaded.comments).toHaveLength(2);
+  });
+
+  it('backfills a comment for an accepted decision without one', async () => {
+    const { lifecycle, reviewId, store } = await seeded();
+    await store.append(
+      reviewId,
+      createEvent({
+        reviewId,
+        type: 'finding/decision',
+        actor,
+        data: {
+          decision: {
+            findingId: 'f1',
+            round: 1,
+            state: 'accepted',
+            note: 'Fix this too',
+            by: actor,
+            at: '2026-10-27T12:00:00.000Z',
+          },
+        },
+      }),
+    );
+
+    const comments = await lifecycle.transferAcceptedFindings(reviewId, actor);
+
+    expect(comments).toHaveLength(1);
+    expect(comments[0]).toMatchObject({
+      sourceFindingId: 'f1',
+      author: { name: 'AI', kind: 'agent' },
+      state: 'open',
+    });
+    expect(comments[0]?.body).toContain('Note to the agent: Fix this too');
+    expect(await lifecycle.transferAcceptedFindings(reviewId, actor)).toEqual([]);
+    expect((await lifecycle.get(reviewId)).comments).toHaveLength(1);
+  });
+
+  it('does not backfill a finding whose latest decision is dismissed', async () => {
+    const { lifecycle, reviewId, store } = await seeded();
+    for (const state of ['accepted', 'dismissed'] as const) {
+      await store.append(
+        reviewId,
+        createEvent({
+          reviewId,
+          type: 'finding/decision',
+          actor,
+          data: {
+            decision: {
+              findingId: 'f1',
+              round: 1,
+              state,
+              by: actor,
+              at: '2026-10-27T12:00:00.000Z',
+            },
+          },
+        }),
+      );
+    }
+
+    expect(await lifecycle.transferAcceptedFindings(reviewId, actor)).toEqual([]);
+    expect((await lifecycle.get(reviewId)).comments).toHaveLength(0);
+  });
+
   it('keeps the latest decision for the same finding', async () => {
     const { lifecycle, reviewId } = await seeded();
 

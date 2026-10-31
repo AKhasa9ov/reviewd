@@ -82,6 +82,10 @@ export interface FixClaimData {
 
 export interface FindingDecisionData {
   decision: FindingDecision;
+  /** Present when accepting a finding also creates its comment. */
+  comment?: Comment;
+  /** Present when dismissing an accepted finding removes its transferred comment. */
+  deletedCommentId?: string;
 }
 
 export interface SuggestionAppliedData {

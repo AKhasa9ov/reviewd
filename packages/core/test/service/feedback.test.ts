@@ -203,6 +203,25 @@ describe('buildFeedback', () => {
     expect(first.json.acceptedSuggestions).toHaveLength(1);
   });
 
+  it('does not count transferred AI comments as human resolved feedback', () => {
+    const feedback = buildFeedback(
+      input({
+        comments: [
+          comment({ id: 'cmt_human', state: 'resolved' }),
+          comment({
+            id: 'cmt_ai',
+            state: 'resolved',
+            author: { name: 'AI', kind: 'agent' },
+            sourceFindingId: 'f1',
+          }),
+        ],
+      }),
+    );
+
+    expect(feedback.json.humanComments).toEqual([]);
+    expect(feedback.json.resolved).toEqual({ count: 1, commentIds: ['cmt_human'] });
+  });
+
   it('excludes soft-deleted comments and their suggestions from feedback', () => {
     const feedback = buildFeedback(
       input({

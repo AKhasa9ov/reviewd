@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentReport, Finding, FindingDecision } from '@dsh-code-review/core';
@@ -76,6 +76,25 @@ describe('bulk finding decisions', () => {
 
     const acceptedCard = screen.getByText('Finding 1').closest('.cr-finding') as HTMLElement;
     expect(within(acceptedCard).getByText('Accepted')).toBeInTheDocument();
+  });
+
+  it('hides accepted findings that already have a comment and links to Conversation', () => {
+    const onOpenConversation = vi.fn();
+    render(
+      <ReportPanel
+        report={report([finding(1), finding(2)])}
+        transferredFindingIds={new Set(['f1'])}
+        onOpenConversation={onOpenConversation}
+        onJump={() => undefined}
+      />,
+    );
+
+    expect(screen.queryByText('Finding 1')).not.toBeInTheDocument();
+    expect(screen.getByText('Finding 2')).toBeInTheDocument();
+    expect(screen.getByText('1 accepted')).toBeInTheDocument();
+    expect(screen.getByText('moved to comments')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Open Conversation' }));
+    expect(onOpenConversation).toHaveBeenCalledTimes(1);
   });
 
   it('selects every filtered finding across pages and confirms the selected action', async () => {

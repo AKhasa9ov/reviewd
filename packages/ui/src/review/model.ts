@@ -1,6 +1,7 @@
 import { mergeShardReports } from '@dsh-code-review/core/browser';
 import type {
   Anchor,
+  ActorKind,
   AgentReport,
   AgentState,
   Comment,
@@ -250,6 +251,19 @@ export function fixStatus(review: ReviewState, comment: Comment): FixGroup {
   return 'needs-decision';
 }
 
+export function actorSource(kind: ActorKind): {
+  label: 'AI' | 'Human' | 'System';
+  tone: 'info' | 'neutral' | 'warning';
+} {
+  if (kind === 'agent') return { label: 'AI', tone: 'info' };
+  if (kind === 'system') return { label: 'System', tone: 'warning' };
+  return { label: 'Human', tone: 'neutral' };
+}
+
+export function isTransferredComment(comment: Comment): boolean {
+  return comment.sourceFindingId !== undefined;
+}
+
 export function fixCounts(review: ReviewState): Record<FixGroup, number> {
   const counts: Record<FixGroup, number> = {
     addressed: 0,
@@ -258,7 +272,7 @@ export function fixCounts(review: ReviewState): Record<FixGroup, number> {
     'needs-decision': 0,
   };
   for (const comment of review.comments) {
-    if (comment.deletedAt !== undefined) continue;
+    if (comment.deletedAt !== undefined || isTransferredComment(comment)) continue;
     counts[fixStatus(review, comment)] += 1;
   }
   return counts;
@@ -271,7 +285,10 @@ export function filterComments(review: ReviewState, filter: FixFilter): Comment[
     );
   }
   return review.comments.filter(
-    (comment) => comment.deletedAt === undefined && fixStatus(review, comment) === filter,
+    (comment) =>
+      comment.deletedAt === undefined &&
+      !isTransferredComment(comment) &&
+      fixStatus(review, comment) === filter,
   );
 }
 

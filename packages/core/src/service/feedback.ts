@@ -201,7 +201,9 @@ export function buildFeedback(input: BuildFeedbackInput): FeedbackPackage {
   const openComments = activeComments.filter(
     (comment) => comment.author.kind === 'human' && comment.state === 'open',
   );
-  const resolved = activeComments.filter((comment) => comment.state === 'resolved');
+  const resolved = activeComments.filter(
+    (comment) => comment.author.kind === 'human' && comment.state === 'resolved',
+  );
 
   const reportFindings = report?.findings ?? [];
   const decisions = new Map<string, FindingDecision>();

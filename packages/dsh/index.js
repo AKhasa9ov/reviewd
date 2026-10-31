@@ -3331,6 +3331,20 @@ function fold(state, event) {
     case "finding/decision": {
       next.findingDecisions ??= [];
       next.findingDecisions.push(structuredClone(event.data.decision));
+      if (event.data.comment !== void 0) {
+        const comment = event.data.comment;
+        if (next.comments.some((candidate) => candidate.id === comment.id)) {
+          throw new ReviewFoldError(`duplicate comment: ${comment.id}`);
+        }
+        next.comments.push(structuredClone(comment));
+      }
+      if (event.data.deletedCommentId !== void 0) {
+        const comment = findComment(next, event.data.deletedCommentId);
+        if (comment.deletedAt === void 0) {
+          comment.deletedAt = event.at;
+          comment.deletedBy = structuredClone(event.actor);
+        }
+      }
       break;
     }
     case "review/updated": {
@@ -3496,6 +3510,9 @@ function fold(state, event) {
   return next;
 }
 
+// packages/core/src/review/lifecycle.ts
+import { createHash as createHash4 } from "node:crypto";
+
 // packages/core/src/review/store.ts
 import { randomBytes as randomBytes2 } from "node:crypto";
 import {
@@ -3556,11 +3573,11 @@ function isActor2(value) {
 }
 function isComment(value) {
   if (!isRecord2(value)) return false;
-  return typeof value.id === "string" && typeof value.reviewId === "string" && isTimestamp(value.createdAt) && typeof value.body === "string" && (value.state === "open" || value.state === "resolved" || value.state === "dismissed") && Array.isArray(value.replies) && Array.isArray(value.anchors) && Array.isArray(value.outcomes) && (value.editedAt === void 0 || isTimestamp(value.editedAt)) && (value.editedBy === void 0 || isActor2(value.editedBy)) && (value.deletedAt === void 0 || isTimestamp(value.deletedAt)) && (value.deletedBy === void 0 || isActor2(value.deletedBy));
+  return typeof value.id === "string" && typeof value.reviewId === "string" && isTimestamp(value.createdAt) && typeof value.body === "string" && (value.state === "open" || value.state === "resolved" || value.state === "dismissed") && Array.isArray(value.replies) && Array.isArray(value.anchors) && Array.isArray(value.outcomes) && (value.editedAt === void 0 || isTimestamp(value.editedAt)) && (value.editedBy === void 0 || isActor2(value.editedBy)) && (value.deletedAt === void 0 || isTimestamp(value.deletedAt)) && (value.deletedBy === void 0 || isActor2(value.deletedBy)) && (value.sourceFindingId === void 0 || typeof value.sourceFindingId === "string");
 }
 function isFindingDecision(value) {
   if (!isRecord2(value)) return false;
-  return typeof value.findingId === "string" && typeof value.round === "number" && Number.isInteger(value.round) && value.round > 0 && (value.state === "accepted" || value.state === "dismissed") && (value.note === void 0 || typeof value.note === "string") && isRecord2(value.by) && typeof value.by.name === "string" && (value.by.kind === "human" || value.by.kind === "agent" || value.by.kind === "system") && isTimestamp(value.at);
+  return typeof value.findingId === "string" && typeof value.round === "number" && Number.isInteger(value.round) && value.round > 0 && (value.state === "accepted" || value.state === "dismissed") && (value.note === void 0 || typeof value.note === "string") && (value.commentId === void 0 || typeof value.commentId === "string") && isRecord2(value.by) && typeof value.by.name === "string" && (value.by.kind === "human" || value.by.kind === "agent" || value.by.kind === "system") && isTimestamp(value.at);
 }
 function isReviewState(value) {
   if (!isRecord2(value)) return false;
@@ -4298,12 +4315,69 @@ function normalizeDecisionInput(input, reviewId) {
   };
 }
 function requireFinding(report, findingId, reviewId) {
-  if (!report.findings.some((finding) => finding.id === findingId)) {
+  const finding = report.findings.find((candidate) => candidate.id === findingId);
+  if (finding === void 0) {
     throw new ReviewLifecycleError("finding-not-found", `unknown finding: ${findingId}`, {
       reviewId,
       findingId
     });
   }
+  return finding;
+}
+function activeFindingComment(state, findingId) {
+  return state.comments.find(
+    (comment) => comment.sourceFindingId === findingId && comment.deletedAt === void 0
+  );
+}
+function findingAnchor(finding, round, now) {
+  return {
+    id: createId("anc", now),
+    round,
+    path: finding.file,
+    side: "new",
+    lineStart: finding.lineStart,
+    lineEnd: finding.lineEnd,
+    quote: finding.evidence,
+    contextBefore: [],
+    contextAfter: [],
+    hunkHeader: "",
+    contentHash: createHash4("sha256").update(finding.evidence, "utf8").digest("hex"),
+    state: "active"
+  };
+}
+function transferredCommentBody(finding, note) {
+  return [
+    finding.title,
+    finding.rationale,
+    finding.evidence.trim() === "" ? "" : `Evidence:
+${finding.evidence}`,
+    note === void 0 ? "" : `Note to the agent: ${note}`
+  ].filter((part) => part !== "").join("\n\n");
+}
+function transferredComment(reviewId, finding, round, note, now) {
+  return {
+    id: createId("cmt", now),
+    reviewId,
+    createdAt: now().toISOString(),
+    author: { name: "AI", kind: "agent" },
+    body: transferredCommentBody(finding, note),
+    ...finding.suggestion === void 0 ? {} : { suggestion: structuredClone(finding.suggestion) },
+    state: "open",
+    replies: [],
+    anchors: [findingAnchor(finding, round, now)],
+    outcomes: [],
+    sourceFindingId: finding.id
+  };
+}
+function decisionTransfer(state, reviewId, finding, round, decisionState, note, now) {
+  const existing = activeFindingComment(state, finding.id);
+  if (decisionState === "accepted") {
+    if (existing !== void 0) return { commentId: existing.id };
+    const comment = transferredComment(reviewId, finding, round, note, now);
+    return { comment, commentId: comment.id };
+  }
+  if (existing === void 0) return {};
+  return { deletedCommentId: existing.id, commentId: existing.id };
 }
 function hasDecision(state, findingId, round) {
   return (state.findingDecisions ?? []).some(
@@ -4570,14 +4644,25 @@ var ReviewLifecycle = class {
     const normalized = normalizeDecisionInput(input, reviewId);
     const state = await this.requireOpen(reviewId);
     const report = requireFinalReport(state, reviewId);
-    requireFinding(report, findingId, reviewId);
+    const finding = requireFinding(report, findingId, reviewId);
+    const at = this.now().toISOString();
+    const transfer = decisionTransfer(
+      state,
+      reviewId,
+      finding,
+      report.round,
+      normalized.state,
+      normalized.note,
+      this.now
+    );
     const decision = {
       findingId,
       round: report.round,
       state: normalized.state,
       ...normalized.note === void 0 ? {} : { note: normalized.note },
+      ...transfer.commentId === void 0 ? {} : { commentId: transfer.commentId },
       by: actor,
-      at: this.now().toISOString()
+      at
     };
     await this.store.append(
       reviewId,
@@ -4585,7 +4670,11 @@ var ReviewLifecycle = class {
         reviewId,
         type: "finding/decision",
         actor,
-        data: { decision },
+        data: {
+          decision,
+          ...transfer.comment === void 0 ? {} : { comment: transfer.comment },
+          ...transfer.deletedCommentId === void 0 ? {} : { deletedCommentId: transfer.deletedCommentId }
+        },
         now: this.now
       })
     );
@@ -4601,13 +4690,24 @@ var ReviewLifecycle = class {
     const normalized = normalizeDecisionInput(input, reviewId);
     const state = await this.requireOpen(reviewId);
     const report = requireFinalReport(state, reviewId);
-    requireFinding(report, findingId, reviewId);
+    const finding = requireFinding(report, findingId, reviewId);
+    const at = this.now().toISOString();
+    const transfer = decisionTransfer(
+      state,
+      reviewId,
+      finding,
+      report.round,
+      normalized.state,
+      normalized.note,
+      this.now
+    );
     const decision = {
       findingId,
       round: report.round,
       state: normalized.state,
+      ...transfer.commentId === void 0 ? {} : { commentId: transfer.commentId },
       by: actor,
-      at: this.now().toISOString()
+      at
     };
     const appended = await this.store.appendIf(
       reviewId,
@@ -4615,7 +4715,11 @@ var ReviewLifecycle = class {
         reviewId,
         type: "finding/decision",
         actor,
-        data: { decision },
+        data: {
+          decision,
+          ...transfer.comment === void 0 ? {} : { comment: transfer.comment },
+          ...transfer.deletedCommentId === void 0 ? {} : { deletedCommentId: transfer.deletedCommentId }
+        },
         now: this.now
       }),
       (current) => {
@@ -4640,6 +4744,54 @@ var ReviewLifecycle = class {
       }
     );
     return appended === null ? null : decision;
+  }
+  /**
+   * Materializes a comment for accepted findings that predate automatic
+   * transfer. It is idempotent: an active source comment suppresses a second
+   * append, and `appendIf` re-checks the current state inside the review lock.
+   */
+  async transferAcceptedFindings(reviewId, actor) {
+    const state = await this.get(reviewId);
+    if (state.deletedAt !== void 0 || !isFinalReviewReport(state)) return [];
+    const report = state.report;
+    if (report === void 0) return [];
+    const latest = /* @__PURE__ */ new Map();
+    for (const decision of state.findingDecisions ?? []) {
+      if (decision.round === report.round) latest.set(decision.findingId, decision);
+    }
+    const accepted = new Set(
+      [...latest.values()].filter((decision) => decision.state === "accepted").map((decision) => decision.findingId)
+    );
+    const transferred = [];
+    for (const finding of report.findings) {
+      if (!accepted.has(finding.id) || activeFindingComment(state, finding.id) !== void 0) {
+        continue;
+      }
+      const note = latest.get(finding.id)?.note;
+      const comment = transferredComment(reviewId, finding, report.round, note, this.now);
+      const appended = await this.store.appendIf(
+        reviewId,
+        createEvent({
+          reviewId,
+          type: "comment/added",
+          actor,
+          data: { comment },
+          now: this.now
+        }),
+        (current) => {
+          if (current.deletedAt !== void 0) return false;
+          if (!isFinalReviewReport(current) || current.report?.round !== report.round) {
+            return false;
+          }
+          const decision = [...current.findingDecisions ?? []].reverse().find(
+            (candidate) => candidate.round === report.round && candidate.findingId === finding.id
+          );
+          return decision?.state === "accepted" && activeFindingComment(current, finding.id) === void 0;
+        }
+      );
+      if (appended !== null) transferred.push(comment);
+    }
+    return transferred;
   }
   async updateReview(reviewId, input, actor) {
     await this.requireOpen(reviewId);
@@ -5564,7 +5716,9 @@ function buildFeedback(input) {
   const openComments = activeComments.filter(
     (comment) => comment.author.kind === "human" && comment.state === "open"
   );
-  const resolved = activeComments.filter((comment) => comment.state === "resolved");
+  const resolved = activeComments.filter(
+    (comment) => comment.author.kind === "human" && comment.state === "resolved"
+  );
   const reportFindings = report?.findings ?? [];
   const decisions = /* @__PURE__ */ new Map();
   for (const finding of reportFindings) {
@@ -5693,7 +5847,7 @@ function buildFeedback(input) {
 }
 
 // packages/core/src/service/service.ts
-import { createHash as createHash4 } from "node:crypto";
+import { createHash as createHash5 } from "node:crypto";
 var IDEMPOTENCY_LIMIT = 1e3;
 var MAX_BULK_FINDING_IDS = 1e3;
 var VERDICTS = /* @__PURE__ */ new Set(["approve", "request-changes", "comment"]);
@@ -5724,7 +5878,7 @@ function normalizeBulkFindingIds(ids, reviewId) {
 }
 function bulkSelectionKey(selected) {
   if (selected === null) return "all";
-  return createHash4("sha256").update([...selected].sort().join("\0")).digest("hex");
+  return createHash5("sha256").update([...selected].sort().join("\0")).digest("hex");
 }
 var COMMENT_STATES = /* @__PURE__ */ new Set(["open", "resolved", "dismissed"]);
 function clone(value) {
@@ -6187,6 +6341,21 @@ var ReviewServiceImpl = class {
         };
       },
       `finding.decisions:${id}:${input.state}:${bulkSelectionKey(selected)}`,
+      ctx.requestId
+    );
+  }
+  async transferAcceptedFindings(id, ctx) {
+    assertContext(ctx);
+    return await this.idempotent(
+      async () => {
+        try {
+          const comments = await this.lifecycle.transferAcceptedFindings(id, ctx.actor);
+          return { transferred: comments.length };
+        } catch (error) {
+          throw this.translate(error);
+        }
+      },
+      `finding.transfer:${id}`,
       ctx.requestId
     );
   }
@@ -8738,6 +8907,15 @@ async function handle(req, res, ctx, options) {
         throw new ApiError("validation", "round is required");
       const file = url.searchParams.get("file") ?? void 0;
       sendJson(res, 200, await ctx.service.snapshot(reviewId, round, file));
+      return;
+    }
+    if (rest[0] === "transfer-findings" && rest.length === 1 && method === "POST") {
+      const result = await ctx.service.transferAcceptedFindings(
+        reviewId,
+        ctxFor(req, options.auth)
+      );
+      await ctx.hub.sync(reviewId);
+      sendJson(res, 200, result);
       return;
     }
     if (rest[0] === "events" && method === "GET") {

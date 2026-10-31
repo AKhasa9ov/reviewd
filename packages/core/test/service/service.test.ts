@@ -816,6 +816,54 @@ describe('ReviewServiceImpl', () => {
     ]);
   });
 
+  it('transfers accepted findings through the service idempotently', async () => {
+    const h = await harness({ report: report([finding({ id: 'f1' })]) });
+    const view = await h.service.create(
+      {
+        repoRoot: '/tmp/repo',
+        title: 'Transfer accepted findings',
+        scope: h.scope,
+        reviewer: { backend: 'fake' },
+      },
+      { actor },
+    );
+    await h.service.runReviewer(view.review.id, { actor });
+    await h.store.append(
+      view.review.id,
+      createEvent({
+        reviewId: view.review.id,
+        type: 'finding/decision',
+        actor,
+        data: {
+          decision: {
+            findingId: 'f1',
+            round: 1,
+            state: 'accepted',
+            by: actor,
+            at: '2026-10-27T12:00:00.000Z',
+          },
+        },
+      }),
+    );
+
+    const first = await h.service.transferAcceptedFindings(view.review.id, {
+      actor,
+      requestId: 'transfer-1',
+    });
+    const replay = await h.service.transferAcceptedFindings(view.review.id, {
+      actor,
+      requestId: 'transfer-1',
+    });
+    const second = await h.service.transferAcceptedFindings(view.review.id, { actor });
+
+    expect(first).toEqual({ transferred: 1 });
+    expect(replay).toEqual(first);
+    expect(second).toEqual({ transferred: 0 });
+    expect((await h.service.get(view.review.id)).review.comments).toEqual([
+      expect.objectContaining({ sourceFindingId: 'f1', author: { name: 'AI', kind: 'agent' } }),
+    ]);
+  });
+
   it('decides only the selected findings', async () => {
     const h = await harness({
       report: report([finding({ id: 'f1' }), finding({ id: 'f2' }), finding({ id: 'f3' })]),

@@ -83,6 +83,44 @@ describe('CommentThread CRUD', () => {
     expect(screen.queryByLabelText('Edit comment')).not.toBeInTheDocument();
   });
 
+  it('labels human and AI authors in the header and replies', () => {
+    renderThread(
+      comment({
+        author: { name: 'Reviewer', kind: 'agent' },
+        replies: [
+          {
+            id: 'rep_ai',
+            author: { name: 'AI Reviewer', kind: 'agent' },
+            body: 'A reply',
+            createdAt: at,
+          },
+        ],
+      }),
+    );
+
+    expect(screen.getAllByText('AI')).toHaveLength(2);
+  });
+
+  it('does not offer edit or delete for a transferred AI finding', () => {
+    renderThread(
+      comment({
+        author: { name: 'Reviewer', kind: 'agent' },
+        sourceFindingId: 'f1',
+      }),
+    );
+
+    expect(screen.getByText('AI')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Resolve' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reply' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+  });
+
+  it('labels a human comment', () => {
+    renderThread(comment());
+    expect(screen.getByText('Human')).toBeInTheDocument();
+  });
+
   it('requires confirmation before deleting a comment', async () => {
     const user = userEvent.setup();
     const onDelete = vi.fn(async () => undefined);

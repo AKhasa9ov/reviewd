@@ -37,6 +37,7 @@ import type {
   BulkFindingDecisionInput,
   BulkFindingDecisionView,
   CallContext,
+  TransferAcceptedFindingsView,
   CommentEditInput,
   CommentView,
   FindingDecisionInput,
@@ -634,6 +635,25 @@ export class ReviewServiceImpl implements ReviewService {
         };
       },
       `finding.decisions:${id}:${input.state}:${bulkSelectionKey(selected)}`,
+      ctx.requestId,
+    );
+  }
+
+  async transferAcceptedFindings(
+    id: ReviewId,
+    ctx: CallContext,
+  ): Promise<TransferAcceptedFindingsView> {
+    assertContext(ctx);
+    return await this.idempotent(
+      async () => {
+        try {
+          const comments = await this.lifecycle.transferAcceptedFindings(id, ctx.actor);
+          return { transferred: comments.length };
+        } catch (error) {
+          throw this.translate(error);
+        }
+      },
+      `finding.transfer:${id}`,
       ctx.requestId,
     );
   }

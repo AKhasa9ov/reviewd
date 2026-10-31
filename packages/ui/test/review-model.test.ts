@@ -237,6 +237,24 @@ describe('review model anchors and status', () => {
     expect(filterComments(r, 'addressed').map((item) => item.id)).toEqual(['c1', 'c4']);
   });
 
+  it('keeps transferred AI comments out of human fix filters but in all', () => {
+    const human = comment('c1', [anchor(1, 1)]);
+    const ai = comment('c2', [anchor(1, 2)], {
+      author: { name: 'AI', kind: 'agent' },
+      sourceFindingId: 'f1',
+    });
+    const r = review([human, ai]);
+
+    expect(fixCounts(r)).toEqual({
+      addressed: 0,
+      'not-fixed': 0,
+      outdated: 0,
+      'needs-decision': 1,
+    });
+    expect(filterComments(r, 'needs-decision').map((item) => item.id)).toEqual(['c1']);
+    expect(filterComments(r, 'all').map((item) => item.id)).toEqual(['c1', 'c2']);
+  });
+
   it('counts comments per round and unresolved threads', () => {
     const c = comment('c1', [anchor(1, 1), anchor(2, 1)]);
     const r = review([c, comment('c2', [anchor(1, 1)], { state: 'resolved' })]);

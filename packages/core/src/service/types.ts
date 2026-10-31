@@ -119,6 +119,11 @@ export interface BulkFindingDecisionView {
   skipped: number;
 }
 
+export interface TransferAcceptedFindingsView {
+  /** Comments created by this idempotent backfill. */
+  transferred: number;
+}
+
 export interface SubmitInput {
   verdict: 'approve' | 'request-changes' | 'comment';
   summary?: string;
@@ -259,6 +264,7 @@ export interface ReviewService {
     input: BulkFindingDecisionInput,
     ctx: CallContext,
   ): Promise<BulkFindingDecisionView>;
+  transferAcceptedFindings(id: ReviewId, ctx: CallContext): Promise<TransferAcceptedFindingsView>;
   events(id: ReviewId, after?: number): Promise<ReviewEvent[]>;
   suggestionAction(
     id: ReviewId,

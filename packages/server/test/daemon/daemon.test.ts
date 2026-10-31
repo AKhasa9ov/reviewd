@@ -1666,6 +1666,33 @@ describe('review finding decisions', () => {
 });
 
 describe('bulk review finding decisions', () => {
+  it('routes an accepted-finding transfer to the service', async () => {
+    const calls: unknown[] = [];
+    const service = {
+      async transferAcceptedFindings(id: string, ctx: unknown) {
+        calls.push({ id, ctx });
+        return { transferred: 2 };
+      },
+      async events() {
+        return [];
+      },
+      async list() {
+        return { items: [], total: 0, limit: 50, offset: 0 };
+      },
+    } as unknown as ReviewService;
+    const { daemonUrl } = await running({}, { service });
+
+    const response = await fetch(`${daemonUrl}/api/reviews/rev_1/transfer-findings`, {
+      method: 'POST',
+      headers: headers(),
+    });
+
+    expect(response.status).toBe(200);
+    expect(await read(response)).toEqual({ transferred: 2 });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({ id: 'rev_1' });
+  });
+
   it('routes a bulk decision to the service', async () => {
     const calls: unknown[] = [];
     const service = {

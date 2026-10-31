@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { captureAnchor, AnchorError, reanchor } from './anchors.js';
 import { createEvent } from './events.js';
 import { isFinalReviewReport } from './final.js';
@@ -20,7 +21,7 @@ import type {
   Round,
 } from './types.js';
 import type { Snapshot } from '../types.js';
-import type { ReviewerConfig } from '../reviewer/types.js';
+import type { Finding, ReviewerConfig } from '../reviewer/types.js';
 
 export type ReviewLifecycleErrorCode =
   | 'not-found'
@@ -127,13 +128,98 @@ function requireFinding(
   report: NonNullable<ReviewState['report']>,
   findingId: string,
   reviewId: ReviewId,
-): void {
-  if (!report.findings.some((finding) => finding.id === findingId)) {
+): Finding {
+  const finding = report.findings.find((candidate) => candidate.id === findingId);
+  if (finding === undefined) {
     throw new ReviewLifecycleError('finding-not-found', `unknown finding: ${findingId}`, {
       reviewId,
       findingId,
     });
   }
+  return finding;
+}
+
+function activeFindingComment(state: ReviewState, findingId: string): Comment | undefined {
+  return state.comments.find(
+    (comment) => comment.sourceFindingId === findingId && comment.deletedAt === undefined,
+  );
+}
+
+function findingAnchor(finding: Finding, round: number, now: () => Date): Anchor {
+  return {
+    id: createId('anc', now),
+    round,
+    path: finding.file,
+    side: 'new',
+    lineStart: finding.lineStart,
+    lineEnd: finding.lineEnd,
+    quote: finding.evidence,
+    contextBefore: [],
+    contextAfter: [],
+    hunkHeader: '',
+    contentHash: createHash('sha256').update(finding.evidence, 'utf8').digest('hex'),
+    state: 'active',
+  };
+}
+
+function transferredCommentBody(finding: Finding, note: string | undefined): string {
+  return [
+    finding.title,
+    finding.rationale,
+    finding.evidence.trim() === '' ? '' : `Evidence:\n${finding.evidence}`,
+    note === undefined ? '' : `Note to the agent: ${note}`,
+  ]
+    .filter((part) => part !== '')
+    .join('\n\n');
+}
+
+function transferredComment(
+  reviewId: ReviewId,
+  finding: Finding,
+  round: number,
+  note: string | undefined,
+  now: () => Date,
+): Comment {
+  return {
+    id: createId('cmt', now),
+    reviewId,
+    createdAt: now().toISOString(),
+    author: { name: 'AI', kind: 'agent' },
+    body: transferredCommentBody(finding, note),
+    ...(finding.suggestion === undefined
+      ? {}
+      : { suggestion: structuredClone(finding.suggestion) }),
+    state: 'open',
+    replies: [],
+    anchors: [findingAnchor(finding, round, now)],
+    outcomes: [],
+    sourceFindingId: finding.id,
+  };
+}
+
+interface DecisionTransfer {
+  comment?: Comment;
+  deletedCommentId?: string;
+  commentId?: string;
+}
+
+function decisionTransfer(
+  state: ReviewState,
+  reviewId: ReviewId,
+  finding: Finding,
+  round: number,
+  decisionState: FindingDecisionState,
+  note: string | undefined,
+  now: () => Date,
+): DecisionTransfer {
+  const existing = activeFindingComment(state, finding.id);
+  if (decisionState === 'accepted') {
+    if (existing !== undefined) return { commentId: existing.id };
+    const comment = transferredComment(reviewId, finding, round, note, now);
+    return { comment, commentId: comment.id };
+  }
+  if (existing === undefined) return {};
+  return { deletedCommentId: existing.id, commentId: existing.id };
 }
 
 function hasDecision(state: ReviewState, findingId: string, round: number): boolean {
@@ -447,15 +533,26 @@ export class ReviewLifecycle {
     const normalized = normalizeDecisionInput(input, reviewId);
     const state = await this.requireOpen(reviewId);
     const report = requireFinalReport(state, reviewId);
-    requireFinding(report, findingId, reviewId);
+    const finding = requireFinding(report, findingId, reviewId);
+    const at = this.now().toISOString();
+    const transfer = decisionTransfer(
+      state,
+      reviewId,
+      finding,
+      report.round,
+      normalized.state,
+      normalized.note,
+      this.now,
+    );
 
     const decision: FindingDecision = {
       findingId,
       round: report.round,
       state: normalized.state,
       ...(normalized.note === undefined ? {} : { note: normalized.note }),
+      ...(transfer.commentId === undefined ? {} : { commentId: transfer.commentId }),
       by: actor,
-      at: this.now().toISOString(),
+      at,
     };
     await this.store.append(
       reviewId,
@@ -463,7 +560,13 @@ export class ReviewLifecycle {
         reviewId,
         type: 'finding/decision',
         actor,
-        data: { decision },
+        data: {
+          decision,
+          ...(transfer.comment === undefined ? {} : { comment: transfer.comment }),
+          ...(transfer.deletedCommentId === undefined
+            ? {}
+            : { deletedCommentId: transfer.deletedCommentId }),
+        },
         now: this.now,
       }),
     );
@@ -485,14 +588,25 @@ export class ReviewLifecycle {
     const normalized = normalizeDecisionInput(input, reviewId);
     const state = await this.requireOpen(reviewId);
     const report = requireFinalReport(state, reviewId);
-    requireFinding(report, findingId, reviewId);
+    const finding = requireFinding(report, findingId, reviewId);
+    const at = this.now().toISOString();
+    const transfer = decisionTransfer(
+      state,
+      reviewId,
+      finding,
+      report.round,
+      normalized.state,
+      normalized.note,
+      this.now,
+    );
 
     const decision: FindingDecision = {
       findingId,
       round: report.round,
       state: normalized.state,
+      ...(transfer.commentId === undefined ? {} : { commentId: transfer.commentId }),
       by: actor,
-      at: this.now().toISOString(),
+      at,
     };
     const appended = await this.store.appendIf(
       reviewId,
@@ -500,7 +614,13 @@ export class ReviewLifecycle {
         reviewId,
         type: 'finding/decision',
         actor,
-        data: { decision },
+        data: {
+          decision,
+          ...(transfer.comment === undefined ? {} : { comment: transfer.comment }),
+          ...(transfer.deletedCommentId === undefined
+            ? {}
+            : { deletedCommentId: transfer.deletedCommentId }),
+        },
         now: this.now,
       }),
       (current) => {
@@ -525,6 +645,62 @@ export class ReviewLifecycle {
       },
     );
     return appended === null ? null : decision;
+  }
+
+  /**
+   * Materializes a comment for accepted findings that predate automatic
+   * transfer. It is idempotent: an active source comment suppresses a second
+   * append, and `appendIf` re-checks the current state inside the review lock.
+   */
+  async transferAcceptedFindings(reviewId: ReviewId, actor: Actor): Promise<Comment[]> {
+    const state = await this.get(reviewId);
+    if (state.deletedAt !== undefined || !isFinalReviewReport(state)) return [];
+    const report = state.report;
+    if (report === undefined) return [];
+    const latest = new Map<string, FindingDecision>();
+    for (const decision of state.findingDecisions ?? []) {
+      if (decision.round === report.round) latest.set(decision.findingId, decision);
+    }
+    const accepted = new Set(
+      [...latest.values()]
+        .filter((decision) => decision.state === 'accepted')
+        .map((decision) => decision.findingId),
+    );
+    const transferred: Comment[] = [];
+    for (const finding of report.findings) {
+      if (!accepted.has(finding.id) || activeFindingComment(state, finding.id) !== undefined) {
+        continue;
+      }
+      const note = latest.get(finding.id)?.note;
+      const comment = transferredComment(reviewId, finding, report.round, note, this.now);
+      const appended = await this.store.appendIf(
+        reviewId,
+        createEvent({
+          reviewId,
+          type: 'comment/added',
+          actor,
+          data: { comment },
+          now: this.now,
+        }),
+        (current) => {
+          if (current.deletedAt !== undefined) return false;
+          if (!isFinalReviewReport(current) || current.report?.round !== report.round) {
+            return false;
+          }
+          const decision = [...(current.findingDecisions ?? [])]
+            .reverse()
+            .find(
+              (candidate) => candidate.round === report.round && candidate.findingId === finding.id,
+            );
+          return (
+            decision?.state === 'accepted' &&
+            activeFindingComment(current, finding.id) === undefined
+          );
+        },
+      );
+      if (appended !== null) transferred.push(comment);
+    }
+    return transferred;
   }
 
   async updateReview(

@@ -214,6 +214,7 @@ function help(): string {
     '               [--session-id <id> [--harness <name>] [--cwd <path>]]',
     '  review status <id> | review feedback <id> [--wait] [--format md|json]',
     '  review comments list|add ... | review submit ... | review refresh <id>',
+    '  review transfer-findings <id>',
     '  review fix-status <id> --json @file.json | review health | review gc',
     '  review serve --host <h> --port <p> --store <dir> [--public-url <url>]',
     '',
@@ -629,6 +630,21 @@ async function runRemote(
     if (id === undefined) throw new UsageError('refresh requires a review id');
     const result = await client.post(`/api/reviews/${encodeURIComponent(id)}/refresh`, {});
     io.stdout.write(json ? `${JSON.stringify(result, null, 2)}\n` : `refreshed ${id}\n`);
+    return 0;
+  }
+
+  if (command === 'transfer-findings') {
+    const id = args.shift();
+    if (id === undefined) throw new UsageError('transfer-findings requires a review id');
+    const result = await client.post(
+      `/api/reviews/${encodeURIComponent(id)}/transfer-findings`,
+      {},
+    );
+    io.stdout.write(
+      json
+        ? `${JSON.stringify(result, null, 2)}\n`
+        : `transferred ${(result.transferred as number | undefined) ?? 0} findings\n`,
+    );
     return 0;
   }
 

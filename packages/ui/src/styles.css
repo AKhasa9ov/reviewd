@@ -3505,6 +3505,14 @@ body.cr-selecting-lines {
   scrollbar-width: thin;
 }
 
+.cr-report-transferred {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--cr-space-2);
+  margin: 0 0 var(--cr-space-3);
+}
+
 .cr-report-counts {
   display: flex;
   flex-wrap: wrap;

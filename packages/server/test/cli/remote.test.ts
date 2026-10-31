@@ -271,6 +271,7 @@ describe('remote maintenance commands', () => {
     );
     const { fetch, calls } = fakeFetch((call) => {
       if (call.url.endsWith('/refresh')) return { body: { review: { id: 'rev_1' } } };
+      if (call.url.endsWith('/transfer-findings')) return { body: { transferred: 2 } };
       if (call.url.endsWith('/fix-status')) return { body: { ok: true } };
       return { body: { removedReviews: [], removedSnapshots: 0 } };
     });
@@ -279,6 +280,12 @@ describe('remote maintenance commands', () => {
     const refresh = capture();
     expect(await runCli(['refresh', 'rev_1'], refresh.io, config)).toBe(0);
     expect(calls.at(-1)?.url).toBe('http://d/api/reviews/rev_1/refresh');
+
+    const transfer = capture();
+    expect(await runCli(['transfer-findings', 'rev_1', '--json'], transfer.io, config)).toBe(0);
+    expect(calls.at(-1)?.url).toBe('http://d/api/reviews/rev_1/transfer-findings');
+    expect(calls.at(-1)?.body).toEqual({});
+    expect(JSON.parse(transfer.out.join(''))).toEqual({ transferred: 2 });
 
     const fix = capture();
     expect(await runCli(['fix-status', 'rev_1', '--json', `@${claimsFile}`], fix.io, config)).toBe(

@@ -77,6 +77,9 @@ export interface ReportPanelProps {
   /** The reviewer is active but no shard has reported yet. */
   pending?: boolean;
   comments?: readonly Comment[];
+  /** Findings whose accepted comment already exists outside this report. */
+  transferredFindingIds?: ReadonlySet<string>;
+  onOpenConversation?: (() => void) | undefined;
   round?: number;
   readOnly?: boolean;
   activeCommentId?: string | undefined;
@@ -91,6 +94,7 @@ export interface ReportPanelProps {
 }
 
 const EMPTY_DECISIONS = new Map<string, FindingDecision>();
+const EMPTY_TRANSFERRED = new Set<string>();
 const PAGE_SIZE = 50;
 
 type ReportSection = 'issues' | 'questions';
@@ -168,6 +172,8 @@ export function ReportPanel({
   live = true,
   pending = false,
   comments = [],
+  transferredFindingIds = EMPTY_TRANSFERRED,
+  onOpenConversation,
   round,
   readOnly = false,
   activeCommentId,
@@ -193,17 +199,20 @@ export function ReportPanel({
   const [bulkAttempted, setBulkAttempted] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const questionListRef = useRef<HTMLDivElement>(null);
+  const activeFindings =
+    report === null || report === undefined
+      ? []
+      : report.findings.filter((finding) => !transferredFindingIds.has(finding.id));
+  const transferredCount =
+    report === null || report === undefined ? 0 : report.findings.length - activeFindings.length;
   const findings =
     report === null || report === undefined
       ? []
-      : filterFindings(report.findings, severity, category);
+      : filterFindings(activeFindings, severity, category);
   const questions = report === null || report === undefined ? [] : report.questions;
-  const decidableFindings =
-    report === null || report === undefined
-      ? []
-      : report.findings.filter(
-          (finding) => finding.kind !== 'praise' && !decisions.has(finding.id),
-        );
+  const decidableFindings = activeFindings.filter(
+    (finding) => finding.kind !== 'praise' && !decisions.has(finding.id),
+  );
   const selectedFindings = decidableFindings.filter((finding) => selectedIds.has(finding.id));
   const selectedCount = selectedFindings.length;
   const filteredDecidable = findings.filter(
@@ -321,7 +330,7 @@ export function ReportPanel({
     );
   }
 
-  const counts = findingCounts(report);
+  const counts = findingCounts({ ...report, findings: activeFindings });
   const filtered = severity !== 'all' || category !== 'all';
   const reportRound = round ?? report.round;
 
@@ -379,6 +388,17 @@ export function ReportPanel({
         <p className="cr-report-copy" tabIndex={0}>
           {report.summary}
         </p>
+        {transferredCount > 0 ? (
+          <p className="cr-report-transferred" role="status">
+            <Badge tone="info">{transferredCount} accepted</Badge>{' '}
+            <span className="cr-meta">moved to comments</span>
+            {onOpenConversation !== undefined ? (
+              <button type="button" className="cr-link-button" onClick={onOpenConversation}>
+                Open Conversation
+              </button>
+            ) : null}
+          </p>
+        ) : null}
         <div className="cr-report-counts">
           {counts.blocker > 0 ? <Badge tone="danger">{counts.blocker} blocker</Badge> : null}
           {counts.major > 0 ? <Badge tone="warning">{counts.major} major</Badge> : null}
@@ -418,7 +438,7 @@ export function ReportPanel({
               label: (
                 <>
                   Issues
-                  <span className="cr-tab-count">{report.findings.length}</span>
+                  <span className="cr-tab-count">{activeFindings.length}</span>
                 </>
               ),
               content: (
@@ -447,7 +467,7 @@ export function ReportPanel({
                       }
                     />
                     <span className="cr-meta" aria-live="polite">
-                      {findings.length} of {report.findings.length} findings
+                      {findings.length} of {activeFindings.length} findings
                     </span>
                     {filtered ? (
                       <button
@@ -525,11 +545,19 @@ export function ReportPanel({
 
                   {findings.length === 0 ? (
                     <EmptyState
-                      title={filtered ? 'No findings match these filters' : 'No findings'}
-                      description={
+                      title={
                         filtered
-                          ? 'Clear the severity or category filter to see the reviewer report.'
-                          : 'The reviewer did not report any issues for this round.'
+                          ? 'No findings match these filters'
+                          : activeFindings.length === 0 && transferredCount > 0
+                            ? 'All findings accepted'
+                            : 'No findings'
+                      }
+                      description={
+                        activeFindings.length === 0 && transferredCount > 0
+                          ? 'Accepted findings are available in Conversation.'
+                          : filtered
+                            ? 'Clear the severity or category filter to see the reviewer report.'
+                            : 'The reviewer did not report any issues for this round.'
                       }
                     />
                   ) : (

@@ -108,6 +108,20 @@ export function fold(state: ReviewState, event: ReviewEvent): ReviewState {
     case 'finding/decision': {
       next.findingDecisions ??= [];
       next.findingDecisions.push(structuredClone(event.data.decision));
+      if (event.data.comment !== undefined) {
+        const comment = event.data.comment;
+        if (next.comments.some((candidate) => candidate.id === comment.id)) {
+          throw new ReviewFoldError(`duplicate comment: ${comment.id}`);
+        }
+        next.comments.push(structuredClone(comment));
+      }
+      if (event.data.deletedCommentId !== undefined) {
+        const comment = findComment(next, event.data.deletedCommentId);
+        if (comment.deletedAt === undefined) {
+          comment.deletedAt = event.at;
+          comment.deletedBy = structuredClone(event.actor);
+        }
+      }
       break;
     }
     case 'review/updated': {
