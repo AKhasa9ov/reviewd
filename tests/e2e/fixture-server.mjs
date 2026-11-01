@@ -86,6 +86,9 @@ async function main() {
     return `export const row${no} = 'line ${no}';`;
   });
   await writeFile(join(repo, 'src', 'long.ts'), `${longLines.join('\n')}\n`);
+  // A long unbroken line reproduces horizontal overflow in quoted-code threads.
+  const longLine = `export const longLine = '${'x'.repeat(600)}';`;
+  await writeFile(join(repo, 'src', 'long-line.ts'), `${longLine}\n`);
   await git('add', '-A');
   await git('commit', '-m', 'feature work');
 

@@ -489,3 +489,37 @@ test('edits and deletes its own review and comment from the browser', async ({ p
   await expect(page.getByRole('link', { name: /E2E edited review/ })).toHaveCount(0);
   await expect(page.getByText('E2E edited review')).toHaveCount(0);
 });
+
+test('keeps a long quoted line inside the conversation column', async ({ page }) => {
+  const fx = await login(page);
+  const headers = {
+    authorization: `Bearer ${fx.token}`,
+    'content-type': 'application/json',
+  };
+  const response = await page.request.post(
+    `${fx.baseUrl}/api/reviews/${encodeURIComponent(fx.reviewId)}/comments`,
+    {
+      headers,
+      data: {
+        path: 'src/long-line.ts',
+        lineStart: 1,
+        body: 'E2E: long quoted line',
+      },
+    },
+  );
+  expect(response.status()).toBe(201);
+
+  await page.goto(`${fx.baseUrl}/review/${encodeURIComponent(fx.reviewId)}`);
+  await expect(page.getByTestId('review-detail')).toBeVisible();
+  await page.getByRole('tab', { name: /Conversation/ }).click();
+  const thread = page.locator('.cr-thread').filter({ hasText: 'E2E: long quoted line' }).first();
+  await expect(thread).toBeVisible();
+  const quote = thread.locator('.cr-quote');
+  await expect(quote).toBeVisible();
+  const geometry = await quote.evaluate((element) => ({
+    clientWidth: element.clientWidth,
+    scrollWidth: element.scrollWidth,
+  }));
+  expect(geometry.scrollWidth).toBeGreaterThan(geometry.clientWidth);
+  await expectNoPageOverflow(page);
+});

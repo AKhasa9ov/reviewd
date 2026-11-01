@@ -1871,6 +1871,11 @@ body.cr-selecting-lines {
   list-style: none;
 }
 
+/* Quoted code scrolls inside its own block; it must not widen the grid track. */
+.cr-thread-list > li {
+  min-width: 0;
+}
+
 .cr-thread {
   min-width: 0;
   padding: var(--cr-space-3);
