@@ -286,8 +286,7 @@ embedded mode through `/api/code-review/gc`; an external daemon additionally sup
 
 The package name is `@dsh-code-review/dsh` (version `0.1.0`, MIT, public access). The
 manifest's repository, homepage and bugs URLs currently point at
-`https://github.com/dsh-code-review/dsh-code-review`; **confirm those final public URLs
-before npm publish** and update all three fields together if the repository moves. The
+`https://github.com/AKhasa9ov/reviewd`; update all three fields together if the repository moves. The
 package has not been published to npm and has not been submitted to dsh.so. The dsh.so
 submit form asks for the public source repository URL (GitHub/Gitee/GitLab), not a local
 tarball or ZIP; provide the npm package URL as supporting metadata where the form allows

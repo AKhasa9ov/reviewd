@@ -5,11 +5,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dsh-code-review/dsh-code-review.git"
+    "url": "git+https://github.com/AKhasa9ov/reviewd.git"
   },
-  "homepage": "https://github.com/dsh-code-review/dsh-code-review#readme",
+  "homepage": "https://github.com/AKhasa9ov/reviewd#readme",
   "bugs": {
-    "url": "https://github.com/dsh-code-review/dsh-code-review/issues"
+    "url": "https://github.com/AKhasa9ov/reviewd/issues"
   },
   "engines": {
     "node": ">=22"

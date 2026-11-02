@@ -42,10 +42,10 @@ describe('publishable DSH package manifest', () => {
   });
 
   it('has public repository metadata for the registry', () => {
-    expect(pkg.repository?.url).toContain('github.com');
+    expect(pkg.repository?.url).toContain('github.com/AKhasa9ov/reviewd');
     expect(pkg.repository?.directory).toBe('packages/dsh');
-    expect(pkg.homepage).toMatch(/^https:\/\/github\.com\//);
-    expect(pkg.bugs?.url).toMatch(/^https:\/\/github\.com\//);
+    expect(pkg.homepage).toContain('github.com/AKhasa9ov/reviewd');
+    expect(pkg.bugs?.url).toContain('github.com/AKhasa9ov/reviewd');
   });
 });
 

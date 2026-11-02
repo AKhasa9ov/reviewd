@@ -25,7 +25,7 @@ LABEL org.opencontainers.image.title="reviewd" \
       org.opencontainers.image.description="Harness-agnostic code review control plane" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.source="https://github.com/dsh-code-review/dsh-code-review"
+      org.opencontainers.image.source="https://github.com/AKhasa9ov/reviewd"
 
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends ca-certificates git tini \
