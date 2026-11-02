@@ -73,6 +73,13 @@ versions may contain breaking changes.
   and CI jobs for browser/accessibility and Docker builds.
 - Top-level quickstart, screenshots, security model, limitations and a local demo script.
 
+## [0.1.1] - 2026-11-02
+
+### Fixed
+
+- `@sir_yami/reviewd-server@0.1.1` pins `@sir_yami/reviewd-core@0.1.0`. The 0.1.0
+  server tarball shipped pnpm's `workspace:*` protocol, which npm consumers cannot resolve.
+
 ## [0.1.0] - 2026-11-02
 
 ### Added

@@ -219,7 +219,7 @@ See [SECURITY.md](SECURITY.md) for the full threat model and reporting process.
 
 ## Status and limitations
 
-- **0.1.0 release candidate.** API/schema version 1; no automatic event-schema migrations.
+- **0.1.x release.** API/schema version 1; no automatic event-schema migrations.
 - Single-tenant by design: one token, no accounts, no hosted control plane.
 - No bundled model or agent CLI; bring a DSH worker, command backend or your own reviewer.
 - Native adapters exist for DSH only. Claude Code, Codex, pi and other harnesses use the

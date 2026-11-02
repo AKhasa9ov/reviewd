@@ -83,6 +83,10 @@ pnpm --filter @sir_yami/reviewd-server publish --access public
 pnpm --filter @sir_yami/reviewd publish --access public
 ```
 
+Use `pnpm publish`, not `npm publish`: pnpm rewrites `workspace:*` dependencies to the
+published core version before packing. Publishing a pnpm workspace package with npm ships
+the workspace protocol and makes the tarball uninstallable.
+
 npm requires either an interactive one-time password or a **granular access token with
 Bypass 2FA** and read/write access to the package scope. A token that can authenticate but
 cannot bypass 2FA fails with `E403` even when its account owns the scope.

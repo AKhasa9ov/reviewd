@@ -74,7 +74,14 @@ review submit "$REVIEW_ID" --request-changes --summary 'Address the blocker'
 The CLI has no `comments resolve` subcommand. Fixer agents resolve a comment through the
 HTTP route shown in [Run a fix agent](run-a-fix-agent.md#option-b-cli-http).
 
-Installation from npm is pending the `0.1.0` registry publication. In a source checkout:
+Install the published package from npm:
+
+```bash
+npm install -g @sir_yami/reviewd-server
+review version
+```
+
+In a source checkout:
 
 ```bash
 pnpm install
