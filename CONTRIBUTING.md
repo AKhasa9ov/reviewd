@@ -73,14 +73,14 @@ One logical change per commit. Do not mix formatting-only churn with behavior ch
 
 ## Publishing
 
-The canonical registry is [npmjs.com](https://www.npmjs.com/). The public packages keep the
-`@dsh-code-review/*` scope for continuity with the existing package names. The release
-order is `core` → `server` → `dsh`; the DSH package depends on the other two.
+The canonical registry is [npmjs.com](https://www.npmjs.com/). The public packages use the
+`@sir_yami/*` scope. The release order is `core` → `server` → `dsh`; the DSH package
+depends on the other two.
 
 ```bash
-pnpm --filter @dsh-code-review/core publish --access public
-pnpm --filter @dsh-code-review/server publish --access public
-pnpm --filter @dsh-code-review/dsh publish --access public
+pnpm --filter @sir_yami/reviewd-core publish --access public
+pnpm --filter @sir_yami/reviewd-server publish --access public
+pnpm --filter @sir_yami/reviewd publish --access public
 ```
 
 npm requires either an interactive one-time password or a **granular access token with

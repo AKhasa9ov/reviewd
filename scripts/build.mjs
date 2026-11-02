@@ -82,7 +82,7 @@ await build({
   target: 'node22',
   sourcemap: true,
   logLevel: 'info',
-  alias: { '@dsh-code-review/core': coreEntry },
+  alias: { '@sir_yami/reviewd-core': coreEntry },
 });
 
 await chmod(cliOut, 0o755);
@@ -97,7 +97,7 @@ await build({
   target: 'node22',
   sourcemap: true,
   logLevel: 'info',
-  alias: { '@dsh-code-review/core': coreEntry },
+  alias: { '@sir_yami/reviewd-core': coreEntry },
 });
 
 await chmod(reviewdOut, 0o755);
@@ -111,5 +111,5 @@ await build({
   target: 'node22',
   sourcemap: false,
   logLevel: 'info',
-  alias: { '@dsh-code-review/core': coreEntry },
+  alias: { '@sir_yami/reviewd-core': coreEntry },
 });

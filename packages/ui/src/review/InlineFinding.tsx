@@ -1,5 +1,5 @@
 import { useId, useState } from 'react';
-import type { Finding, FindingDecision } from '@dsh-code-review/core';
+import type { Finding, FindingDecision } from '@sir_yami/reviewd-core';
 import { Badge } from '../primitives/Feedback.js';
 import { FindingDecisionControls } from './FindingDecisionControls.js';
 import type { FindingDecisionControlsProps } from './FindingDecisionControls.js';

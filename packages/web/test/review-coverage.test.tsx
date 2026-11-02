@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ReviewCoverage } from '@dsh-code-review/core';
-import type { ApiClient, ReviewView } from '@dsh-code-review/ui';
+import type { ReviewCoverage } from '@sir_yami/reviewd-core';
+import type { ApiClient, ReviewView } from '@sir_yami/reviewd-ui';
 import { App } from '../src/App.js';
 import { reviewView, snapshotR1, snapshotR2 } from './reviewFixtures.js';
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Anchor, Comment, FileDiff, ReviewState, Snapshot } from '@dsh-code-review/core';
+import type { Anchor, Comment, FileDiff, ReviewState, Snapshot } from '@sir_yami/reviewd-core';
 import {
   anchorForRound,
   anchorHistory,

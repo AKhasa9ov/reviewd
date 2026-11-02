@@ -14,7 +14,7 @@ import {
   ThemeProvider,
   Tooltip,
   useTheme,
-} from '@dsh-code-review/ui';
+} from '@sir_yami/reviewd-ui';
 import { BASE_PATH, normalizeBase } from './base.js';
 import { Link, useCloseOnNavigate, useLocation } from './router.js';
 

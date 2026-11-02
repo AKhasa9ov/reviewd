@@ -10,8 +10,8 @@ import {
   buildSnapshot,
   resolveDefaultBase,
   resolveRepoRoot,
-} from '@dsh-code-review/core';
-import type { DiffScope, FileDiff, FileStatus, Snapshot } from '@dsh-code-review/core';
+} from '@sir_yami/reviewd-core';
+import type { DiffScope, FileDiff, FileStatus, Snapshot } from '@sir_yami/reviewd-core';
 
 export interface CliIO {
   stdout: { write: (text: string) => unknown };

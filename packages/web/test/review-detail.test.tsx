@@ -2,8 +2,8 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ApiClient } from '@dsh-code-review/ui';
-import { ApiError } from '@dsh-code-review/ui';
+import type { ApiClient } from '@sir_yami/reviewd-ui';
+import { ApiError } from '@sir_yami/reviewd-ui';
 import { App } from '../src/App.js';
 import {
   comment,

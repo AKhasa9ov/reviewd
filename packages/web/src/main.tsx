@@ -1,6 +1,6 @@
 import { createRoot } from 'react-dom/client';
 import { StrictMode } from 'react';
-import '@dsh-code-review/ui/styles.css';
+import '@sir_yami/reviewd-ui/styles.css';
 import { App } from './App.js';
 
 const container = document.getElementById('root');

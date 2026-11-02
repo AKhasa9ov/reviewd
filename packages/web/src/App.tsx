@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react';
-import { createApiClient, ToastProvider, ThemeProvider } from '@dsh-code-review/ui';
-import type { ApiClient } from '@dsh-code-review/ui';
+import { createApiClient, ToastProvider, ThemeProvider } from '@sir_yami/reviewd-ui';
+import type { ApiClient } from '@sir_yami/reviewd-ui';
 import { AUTH_MODE, BASE_PATH } from './base.js';
 import { Shell } from './Shell.js';
 import { navigate, parseRoute, useLocation } from './router.js';

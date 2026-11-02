@@ -82,7 +82,7 @@ harness environment.
 ## Worker loop
 
 If you are implementing the transport half, use
-[`@dsh-code-review/worker`](../reference/worker-protocol.md). The loop:
+[`@sir_yami/reviewd-worker`](../reference/worker-protocol.md). The loop:
 
 1. registers with `POST /api/workers/register`;
 2. long-polls `GET /api/jobs/next`;

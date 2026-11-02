@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { open, readFile, rename, unlink } from 'node:fs/promises';
 import type { ServerResponse } from 'node:http';
-import type { ReviewEvent, ReviewService } from '@dsh-code-review/core';
+import type { ReviewEvent, ReviewService } from '@sir_yami/reviewd-core';
 import type { IncomingMessage } from 'node:http';
 import { dirname } from 'node:path';
 

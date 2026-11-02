@@ -1,5 +1,5 @@
 {
-  "name": "@dsh-code-review/ui",
+  "name": "@sir_yami/reviewd-ui",
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
@@ -36,6 +36,6 @@
     "react-dom": "18.3.1"
   },
   "dependencies": {
-    "@dsh-code-review/core": "workspace:*"
+    "@sir_yami/reviewd-core": "workspace:*"
   }
 }

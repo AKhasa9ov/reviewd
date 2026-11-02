@@ -1,4 +1,4 @@
-import { Button } from '@dsh-code-review/ui';
+import { Button } from '@sir_yami/reviewd-ui';
 import { PageHeader } from '../components.js';
 import { navigate } from '../router.js';
 

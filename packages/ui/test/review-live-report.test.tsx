@@ -9,7 +9,7 @@ import type {
   ReviewEvent,
   ReviewView,
   Snapshot,
-} from '@dsh-code-review/core';
+} from '@sir_yami/reviewd-core';
 import type { ApiClient } from '../src/api/client.js';
 import { ToastProvider } from '../src/primitives/Toast.js';
 import { ReviewDetail } from '../src/review/ReviewDetail.js';

@@ -6,7 +6,7 @@ import type {
   Finding,
   FindingDecision,
   FindingDecisionState,
-} from '@dsh-code-review/core';
+} from '@sir_yami/reviewd-core';
 import { Badge, EmptyState } from '../primitives/Feedback.js';
 import { Select } from '../primitives/Field.js';
 import { Tabs } from '../primitives/Tabs.js';

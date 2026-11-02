@@ -1,4 +1,4 @@
-import type { FileDiff } from '@dsh-code-review/core';
+import type { FileDiff } from '@sir_yami/reviewd-core';
 
 /** Diff budget for a reviewer prompt; the rest of the prompt is metadata. */
 export const DIFF_PROMPT_LIMIT = 60_000;

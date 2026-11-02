@@ -13,7 +13,7 @@ export CODE_REVIEW_TOKEN="$(cat /run/secrets/code-review-token)"
 ```
 
 In a source checkout the binary is `node packages/server/dist/cli.js`; after publication it
-is `review` from `@dsh-code-review/server`.
+is `review` from `@sir_yami/reviewd-server`.
 
 The repository must be visible to the daemon at the same absolute path.
 

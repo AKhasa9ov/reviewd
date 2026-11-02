@@ -1,4 +1,4 @@
-import type { Side } from '@dsh-code-review/core';
+import type { Side } from '@sir_yami/reviewd-core';
 
 const PREFIX = 'dsh-code-review:comment-draft:';
 const VERSION = 1;

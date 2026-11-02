@@ -1,6 +1,6 @@
 # Review state
 
-Review state is owned by `@dsh-code-review/core`. It has no daemon, network, UI or DSH
+Review state is owned by `@sir_yami/reviewd-core`. It has no daemon, network, UI or DSH
 imports. The daemon and CLI are adapters over this library.
 
 ## Store layout

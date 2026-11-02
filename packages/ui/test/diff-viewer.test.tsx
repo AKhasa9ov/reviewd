@@ -2,7 +2,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import type { Anchor, Comment, FileDiff, ReviewQuestion, Snapshot } from '@dsh-code-review/core';
+import type { Anchor, Comment, FileDiff, ReviewQuestion, Snapshot } from '@sir_yami/reviewd-core';
 import { DiffViewer } from '../src/review/DiffViewer.js';
 
 function snapshot(): Snapshot {

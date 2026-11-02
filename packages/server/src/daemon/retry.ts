@@ -1,4 +1,4 @@
-import type { ReviewCoverage, ReviewPlan } from '@dsh-code-review/core';
+import type { ReviewCoverage, ReviewPlan } from '@sir_yami/reviewd-core';
 
 export interface RetryJobState {
   round: number;

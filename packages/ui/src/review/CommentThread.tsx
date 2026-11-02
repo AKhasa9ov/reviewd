@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Comment, CommentState } from '@dsh-code-review/core';
+import type { Comment, CommentState } from '@sir_yami/reviewd-core';
 import { Badge } from '../primitives/Feedback.js';
 import { Button } from '../primitives/Button.js';
 import { Textarea } from '../primitives/Field.js';

@@ -17,7 +17,7 @@ versions may contain breaking changes.
   `/code-review` base path. The embedded SPA authenticates with the DSH session and has no
   review-token form or browser-visible daemon token; external mode (`embedded: false`)
   keeps the daemon-origin UI and token login. Install and upgrade with
-  `dsh plugin --profile web add @dsh-code-review/dsh@latest`.
+  `dsh plugin --profile web add @sir_yami/reviewd@latest`.
 
 ### Fixed
 
@@ -55,7 +55,7 @@ versions may contain breaking changes.
 - The DSH reviewer gets a scoped `review_report` tool with a typed JSON schema for its final
   report. The worker accepts the captured tool call, normalizes a missing `schemaVersion`, and
   still falls back to the fenced-JSON parser for older harnesses and command reviewers.
-- Fat DSH package `@dsh-code-review/dsh`: one installable Cordis bundle now ships the Host,
+- Fat DSH package `@sir_yami/reviewd`: one installable Cordis bundle now ships the Host,
   reviewer worker and review daemon/SPA, so embedded mode (the default) needs no separate
   server. It starts `reviewd` in-process on an ephemeral loopback port and serves the full
   review UI at `/code-review` on the DSH origin. `/code-review` and `/api/code-review` use
@@ -73,11 +73,13 @@ versions may contain breaking changes.
   and CI jobs for browser/accessibility and Docker builds.
 - Top-level quickstart, screenshots, security model, limitations and a local demo script.
 
-## [0.1.0] - unreleased
+## [0.1.0] - 2026-11-02
 
 ### Added
 
-- `@dsh-code-review/core`: safe git runner, unified-diff parser, immutable diff snapshots
+- Public npm packages: `@sir_yami/reviewd` (DSH bundle), `@sir_yami/reviewd-server`
+  (daemon and `review` CLI) and `@sir_yami/reviewd-core` (contracts and event store).
+- `@sir_yami/reviewd-core`: safe git runner, unified-diff parser, immutable diff snapshots
   for range/worktree/commit scopes, anchors, rounds, deterministic outcomes, versioned
   event store and review lifecycle.
 - `ReviewServiceImpl`, feedback package and reviewer contract with `harness-worker`,

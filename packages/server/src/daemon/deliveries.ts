@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { mkdir, open, readFile, rename, unlink } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import type { FeedbackPackage, Initiator } from '@dsh-code-review/core';
+import type { FeedbackPackage, Initiator } from '@sir_yami/reviewd-core';
 
 export interface DeliveryRecord {
   id: string;

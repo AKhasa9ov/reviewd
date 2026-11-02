@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ApiClient, RepositorySetting } from '@dsh-code-review/ui';
-import { Button, FolderIcon, IconButton, Tooltip } from '@dsh-code-review/ui';
+import type { ApiClient, RepositorySetting } from '@sir_yami/reviewd-ui';
+import { Button, FolderIcon, IconButton, Tooltip } from '@sir_yami/reviewd-ui';
 import { ErrorPanel, PageHeader } from '../components.js';
 import { FolderPickerDialog } from './FolderPickerDialog.js';
 import { RepositoryBranchSelect } from './RepositoryBranchSelect.js';

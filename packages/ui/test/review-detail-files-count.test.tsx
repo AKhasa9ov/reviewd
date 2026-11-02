@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { FileDiff, ReviewView, Snapshot } from '@dsh-code-review/core';
+import type { FileDiff, ReviewView, Snapshot } from '@sir_yami/reviewd-core';
 import type { ApiClient } from '../src/api/client.js';
 import { ToastProvider } from '../src/primitives/Toast.js';
 import { ReviewDetail } from '../src/review/ReviewDetail.js';

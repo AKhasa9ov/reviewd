@@ -1,4 +1,4 @@
-# @dsh-code-review/dsh
+# @sir_yami/reviewd
 
 Code review for DeepSeek Harness in one package: a sidebar panel, `review_*` tools,
 `/review`, a reviewer worker, feedback delivery, and the full review daemon and UI in the
@@ -16,17 +16,16 @@ the MIT license.
 Requires Node.js 22+ and DSH 0.2.x. `git` must be on `PATH` for diffing.
 
 ```bash
-dsh plugin --profile web add @dsh-code-review/dsh
+dsh plugin --profile web add @sir_yami/reviewd
 ```
 
 This adds the package to the `web` profile. Restart the profile so the Host routes and
-loops load; DSH HMR can reload only the client half. The 0.1.0 npm publication is pending
-registry credentials. From a local checkout, build and pack, then install the tarball with
-the same command:
+loops load; DSH HMR can reload only the client half. From a local checkout, build and
+pack, then install the tarball with the same command:
 
 ```bash
 pnpm fat:verify
-dsh plugin --profile web add /absolute/path/to/dsh-code-review-dsh-0.1.0.tgz
+dsh plugin --profile web add /absolute/path/to/sir_yami-reviewd-0.1.0.tgz
 ```
 
 ## Modes
@@ -156,12 +155,12 @@ pre-review, or `command` when the daemon is configured for a command reviewer.
 
 ## Upgrade, uninstall and data retention
 
-Upgrade with `dsh plugin --profile web add @dsh-code-review/dsh@latest`, then restart the
+Upgrade with `dsh plugin --profile web add @sir_yami/reviewd@latest`, then restart the
 profile. Back up `storeDir` before upgrading; the event store is preserved. This release
 does not perform automatic event-schema migrations, so restore the backup if a future
 version changes the on-disk format.
 
-Uninstall with `dsh plugin --profile web remove @dsh-code-review/dsh`. Stopping the Host
+Uninstall with `dsh plugin --profile web remove @sir_yami/reviewd`. Stopping the Host
 closes the embedded daemon and discards its in-memory token. Uninstalling does **not**
 delete review data: remove `storeDir` (by default `$HOME/.local/share/dsh-code-review`)
 manually to erase it.

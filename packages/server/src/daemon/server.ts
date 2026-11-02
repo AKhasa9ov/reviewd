@@ -6,7 +6,7 @@ import {
   ReviewServiceImpl,
   ReviewStore,
   buildSnapshot,
-} from '@dsh-code-review/core';
+} from '@sir_yami/reviewd-core';
 import { ApiError, writeError } from './errors.js';
 import {
   bearerToken,

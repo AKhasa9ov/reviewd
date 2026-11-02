@@ -19,7 +19,7 @@ import {
   resolveRepoRoot,
   validateFindingItem,
   validateReport,
-} from '@dsh-code-review/core';
+} from '@sir_yami/reviewd-core';
 import type {
   Actor,
   AddCommentInput,
@@ -34,7 +34,7 @@ import type {
   ReviewStore,
   Snapshot,
   SubmitInput,
-} from '@dsh-code-review/core';
+} from '@sir_yami/reviewd-core';
 import { ApiError } from './errors.js';
 import { parsePositiveInt, readForm, readJson, requestId, sendJson } from './http.js';
 import type { DeliveryQueue } from './deliveries.js';

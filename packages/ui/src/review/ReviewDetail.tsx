@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { fold, isFinalReviewReport } from '@dsh-code-review/core/browser';
+import { fold, isFinalReviewReport } from '@sir_yami/reviewd-core/browser';
 import type {
   Comment,
   CommentState,
@@ -13,7 +13,7 @@ import type {
   Side,
   Snapshot,
   SubmitInput,
-} from '@dsh-code-review/core';
+} from '@sir_yami/reviewd-core';
 import { ApiError } from '../api/client.js';
 import type { ApiClient } from '../api/client.js';
 import type { LatestFeedbackView, SubmissionDelivery } from '../api/types.js';

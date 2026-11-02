@@ -1,6 +1,6 @@
 # HTTP API
 
-`reviewd` exposes `@dsh-code-review/core` over authenticated HTTP. The daemon and the
+`reviewd` exposes `@sir_yami/reviewd-core` over authenticated HTTP. The daemon and the
 `review` CLI are intentionally harness-agnostic: DSH, pi, Claude Code and Codex use the
 same bearer-token API and worker lease loop.
 

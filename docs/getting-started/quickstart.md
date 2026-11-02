@@ -101,7 +101,7 @@ stop it. See [Demo](demo.md) for the walkthrough.
 Install the bundle into the DSH web profile:
 
 ```bash
-dsh plugin --profile web add @dsh-code-review/dsh
+dsh plugin --profile web add @sir_yami/reviewd
 ```
 
 Restart the profile so the Host routes, tools and loops load. Embedded mode starts
@@ -113,7 +113,7 @@ From a local checkout, pack and install the tarball:
 
 ```bash
 pnpm fat:verify
-dsh plugin --profile web add /absolute/path/to/dsh-code-review-dsh-0.1.0.tgz
+dsh plugin --profile web add /absolute/path/to/sir_yami-reviewd-0.1.0.tgz
 ```
 
 ## Your first review

@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { ReviewManifest } from '@dsh-code-review/core';
+import type { ReviewManifest } from '@sir_yami/reviewd-core';
 import { makeRepo } from '../../../core/test/helpers/repo.js';
 import { JobQueue } from '../../src/daemon/jobs.js';
 import { startDaemon } from '../../src/daemon/server.js';

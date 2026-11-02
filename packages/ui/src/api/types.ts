@@ -18,7 +18,7 @@ import type {
   ServiceSnapshotView,
   SubmissionView,
   SubmitInput,
-} from '@dsh-code-review/core';
+} from '@sir_yami/reviewd-core';
 
 export type {
   AddCommentInput,

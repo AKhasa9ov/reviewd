@@ -59,8 +59,8 @@ reviewd is a **single-tenant, self-hosted review service**. It is not a code hos
 merge bot, and not a multi-user account system. It stores review state locally and exposes
 one authenticated HTTP service to the UI, CLI, DSH and workers.
 
-The canonical package scope is `@dsh-code-review/*`; the project name is reviewd. The scope
-is kept for continuity with the existing DSH integration and published package names.
+The canonical package scope is `@sir_yami/*`; the project name is reviewd. The scope is
+the maintainer's npm scope for the published package set.
 
 ## Conventions
 

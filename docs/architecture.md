@@ -38,13 +38,13 @@ flowchart TB
 
 ## Components
 
-| Component                 | Responsibility                                                                                        |
-| ------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `@dsh-code-review/core`   | Review state, lifecycle, anchors, outcomes, feedback package, reviewer contracts and validation.      |
-| `@dsh-code-review/server` | `reviewd` HTTP daemon, SSE/long-poll, jobs, workers, deliveries and the `review` CLI.                 |
-| `@dsh-code-review/web`    | Vite/React review SPA served by `reviewd`.                                                            |
-| `@dsh-code-review/worker` | Harness-agnostic lease loop: register, heartbeat, poll, post findings/report/ack and map failures.    |
-| `@dsh-code-review/dsh`    | Cordis bundle: sidebar panel, `review_*` tools, `/review`, embedded/external daemon and DSH delivery. |
+| Component                  | Responsibility                                                                                        |
+| -------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `@sir_yami/reviewd-core`   | Review state, lifecycle, anchors, outcomes, feedback package, reviewer contracts and validation.      |
+| `@sir_yami/reviewd-server` | `reviewd` HTTP daemon, SSE/long-poll, jobs, workers, deliveries and the `review` CLI.                 |
+| `@sir_yami/reviewd-web`    | Vite/React review SPA served by `reviewd`.                                                            |
+| `@sir_yami/reviewd-worker` | Harness-agnostic lease loop: register, heartbeat, poll, post findings/report/ack and map failures.    |
+| `@sir_yami/reviewd`        | Cordis bundle: sidebar panel, `review_*` tools, `/review`, embedded/external daemon and DSH delivery. |
 
 The core package has no HTTP, React, Cordis or DSH imports. Transports map requests to
 `ReviewServiceImpl`; the UI never talks to the event store directly.

@@ -8,15 +8,15 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: '@dsh-code-review/ui/styles.css',
+        find: '@sir_yami/reviewd-ui/styles.css',
         replacement: fileURLToPath(new URL('../ui/src/styles.css', import.meta.url)),
       },
       {
-        find: '@dsh-code-review/ui/tokens.css',
+        find: '@sir_yami/reviewd-ui/tokens.css',
         replacement: fileURLToPath(new URL('../ui/src/tokens.css', import.meta.url)),
       },
       {
-        find: '@dsh-code-review/ui',
+        find: '@sir_yami/reviewd-ui',
         replacement: fileURLToPath(new URL('../ui/src/index.ts', import.meta.url)),
       },
     ],

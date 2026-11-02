@@ -1,6 +1,6 @@
 /* DSH Client half: sidebar entry + Code Review main panel. */
 window.__ModuleLoader__.load({
-  id: '@dsh-code-review/dsh',
+  id: '@sir_yami/reviewd',
   factory(require) {
     const React = require('react');
     const h = React.createElement;

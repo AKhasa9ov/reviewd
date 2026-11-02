@@ -1,4 +1,4 @@
-import type { FileDiff } from '@dsh-code-review/core';
+import type { FileDiff } from '@sir_yami/reviewd-core';
 import { describe, expect, it } from 'vitest';
 import { buildReviewPrompt, renderBoundedDiff } from '../../src/daemon/prompt.js';
 

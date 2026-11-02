@@ -2,7 +2,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ApiClient, ReviewSummary } from '@dsh-code-review/ui';
+import type { ApiClient, ReviewSummary } from '@sir_yami/reviewd-ui';
 import { App } from '../src/App.js';
 import { repoName } from '../src/pages/ReviewListPage.js';
 import { latestFeedback, reviewView, snapshotR1, snapshotR2 } from './reviewFixtures.js';

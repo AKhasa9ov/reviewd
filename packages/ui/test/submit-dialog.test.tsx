@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { Comment, ReviewState } from '@dsh-code-review/core';
+import type { Comment, ReviewState } from '@sir_yami/reviewd-core';
 import { SubmitDialog } from '../src/review/SubmitDialog.js';
 
 const at = '2026-10-31T12:00:00.000Z';

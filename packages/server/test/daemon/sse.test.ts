@@ -2,8 +2,8 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { createEvent } from '@dsh-code-review/core';
-import type { Page, ReviewEvent, ReviewSummary } from '@dsh-code-review/core';
+import { createEvent } from '@sir_yami/reviewd-core';
+import type { Page, ReviewEvent, ReviewSummary } from '@sir_yami/reviewd-core';
 import { EventHub } from '../../src/daemon/sse.js';
 
 class FakeService {

@@ -1,4 +1,4 @@
-# @dsh-code-review/server
+# @sir_yami/reviewd-server
 
 The `reviewd` HTTP daemon, worker/lease service and `review` CLI for
 [reviewd](../../README.md).
@@ -9,13 +9,12 @@ self-hosted service: one shared token, no account system.
 ## Install
 
 ```bash
-npm install -g @dsh-code-review/server
+npm install -g @sir_yami/reviewd-server
 review version
 ```
 
-The package is part of the `reviewd` 0.1.0 release candidate. npm publication is pending
-registry credentials; from a source checkout use `node packages/server/dist/cli.js` after
-`pnpm build`.
+The package is part of the published `reviewd` 0.1.0 release. From a source checkout use
+`node packages/server/dist/cli.js` after `pnpm build`.
 
 Requires Node.js 22+ and `git`. The daemon is ESM.
 

@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { makeRepo } from '../../../core/test/helpers/repo.js';
 import type { TestRepo } from '../../../core/test/helpers/repo.js';
-import type { Snapshot } from '@dsh-code-review/core';
+import type { Snapshot } from '@sir_yami/reviewd-core';
 import { coverageForSnapshot } from '../../src/daemon/routes.js';
 import { startDaemon } from '../../src/daemon/server.js';
 import type { ReviewDaemon } from '../../src/daemon/types.js';

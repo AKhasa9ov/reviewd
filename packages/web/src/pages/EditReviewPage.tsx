@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { ApiClient, DiffScope, ReviewView } from '@dsh-code-review/ui';
-import { Button, Input, Select, useToast } from '@dsh-code-review/ui';
+import type { ApiClient, DiffScope, ReviewView } from '@sir_yami/reviewd-ui';
+import { Button, Input, Select, useToast } from '@sir_yami/reviewd-ui';
 import { ErrorPanel, PageHeader } from '../components.js';
 import { navigate } from '../router.js';
 

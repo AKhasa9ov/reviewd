@@ -5,19 +5,19 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: '@dsh-code-review/core/browser',
+        find: '@sir_yami/reviewd-core/browser',
         replacement: fileURLToPath(new URL('./packages/core/src/browser.ts', import.meta.url)),
       },
       {
-        find: '@dsh-code-review/core',
+        find: '@sir_yami/reviewd-core',
         replacement: fileURLToPath(new URL('./packages/core/src/index.ts', import.meta.url)),
       },
       {
-        find: '@dsh-code-review/worker',
+        find: '@sir_yami/reviewd-worker',
         replacement: fileURLToPath(new URL('./packages/worker/src/index.ts', import.meta.url)),
       },
       {
-        find: '@dsh-code-review/ui',
+        find: '@sir_yami/reviewd-ui',
         replacement: fileURLToPath(new URL('./packages/ui/src/index.ts', import.meta.url)),
       },
     ],

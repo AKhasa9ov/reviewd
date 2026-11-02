@@ -1,4 +1,4 @@
-import { mergeShardReports } from '@dsh-code-review/core/browser';
+import { mergeShardReports } from '@sir_yami/reviewd-core/browser';
 import type {
   Anchor,
   ActorKind,
@@ -13,7 +13,7 @@ import type {
   ReviewState,
   Side,
   Snapshot,
-} from '@dsh-code-review/core';
+} from '@sir_yami/reviewd-core';
 
 export interface LiveReport {
   report: AgentReport;

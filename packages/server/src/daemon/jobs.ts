@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import type { ReviewManifest, ReviewPlan } from '@dsh-code-review/core';
+import type { ReviewManifest, ReviewPlan } from '@sir_yami/reviewd-core';
 import { ApiError } from './errors.js';
 import { PROMPT_VERSION, PROTOCOL_VERSION } from './types.js';
 import type { LeaseView } from './types.js';

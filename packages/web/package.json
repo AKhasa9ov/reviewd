@@ -1,5 +1,5 @@
 {
-  "name": "@dsh-code-review/web",
+  "name": "@sir_yami/reviewd-web",
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
@@ -20,12 +20,12 @@
     "build": "vite build"
   },
   "dependencies": {
-    "@dsh-code-review/ui": "workspace:*",
+    "@sir_yami/reviewd-ui": "workspace:*",
     "react": "18.3.1",
     "react-dom": "18.3.1"
   },
   "devDependencies": {
-    "@dsh-code-review/core": "workspace:*",
+    "@sir_yami/reviewd-core": "workspace:*",
     "@rolldown/plugin-babel": "0.2.4",
     "@testing-library/dom": "10.4.1",
     "@testing-library/jest-dom": "7.0.1",

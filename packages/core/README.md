@@ -1,4 +1,4 @@
-# @dsh-code-review/core
+# @sir_yami/reviewd-core
 
 Review state, lifecycle and reviewer contracts for [reviewd](../../README.md).
 
@@ -8,24 +8,24 @@ harness integrations are adapters over it.
 ## Install
 
 ```bash
-npm install @dsh-code-review/core
+npm install @sir_yami/reviewd-core
 ```
 
-The package is part of the `reviewd` 0.1.0 release candidate. npm publication is pending
-registry credentials; use the workspace build or a local tarball until then.
+The package is part of the published `reviewd` 0.1.0 release. Use the npm package or a
+local tarball from the same commit.
 
 ```bash
-pnpm --filter @dsh-code-review/core pack --pack-destination /tmp
+pnpm --filter @sir_yami/reviewd-core pack --pack-destination /tmp
 ```
 
 Requires Node.js 22+ and ESM.
 
 ## Exports
 
-| Entry                           | Contents                                                                                         |
-| ------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `@dsh-code-review/core`         | `ReviewStore`, `ReviewLifecycle`, `ReviewServiceImpl`, snapshots, diff types, feedback contracts |
-| `@dsh-code-review/core/browser` | Browser-safe types and helpers without Node-only imports                                         |
+| Entry                            | Contents                                                                                         |
+| -------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `@sir_yami/reviewd-core`         | `ReviewStore`, `ReviewLifecycle`, `ReviewServiceImpl`, snapshots, diff types, feedback contracts |
+| `@sir_yami/reviewd-core/browser` | Browser-safe types and helpers without Node-only imports                                         |
 
 The exact public surface is defined in [`src/index.ts`](src/index.ts). Internal files are
 not a stable API; use the package entrypoints.
@@ -38,7 +38,7 @@ import {
   ReviewServiceImpl,
   ReviewStore,
   buildSnapshot,
-} from '@dsh-code-review/core';
+} from '@sir_yami/reviewd-core';
 
 const store = await ReviewStore.open('/var/lib/code-review');
 const lifecycle = new ReviewLifecycle(store);
@@ -65,9 +65,9 @@ once.
 
 ## Related packages
 
-- [`@dsh-code-review/server`](../server/README.md) — daemon and CLI
-- [`@dsh-code-review/dsh`](../dsh/README.md) — DSH bundle
-- [`@dsh-code-review/worker`](../worker/README.md) — worker lease loop
+- [`@sir_yami/reviewd-server`](../server/README.md) — daemon and CLI
+- [`@sir_yami/reviewd`](../dsh/README.md) — DSH bundle
+- [`@sir_yami/reviewd-worker`](../worker/README.md) — worker lease loop
 
 ## Documentation
 

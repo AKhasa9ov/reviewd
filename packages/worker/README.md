@@ -1,4 +1,4 @@
-# @dsh-code-review/worker
+# @sir_yami/reviewd-worker
 
 Harness-agnostic lease loop for reviewd jobs.
 
@@ -9,8 +9,8 @@ not choose a model, build a prompt, spawn a harness, or write the review store.
 ## Adapter contract
 
 ```ts
-import { runWorkerLoop } from '@dsh-code-review/worker';
-import type { HarnessRunner } from '@dsh-code-review/worker';
+import { runWorkerLoop } from '@sir_yami/reviewd-worker';
+import type { HarnessRunner } from '@sir_yami/reviewd-worker';
 
 const runner: HarnessRunner = {
   async run(lease, signal) {
@@ -94,7 +94,7 @@ runner is invoked:
   message naming the supported version and never runs the runner.
 
 `bundle.manifest` carries reviewd's complete `ReviewManifest` when available.
-The manifest shape is owned by `@dsh-code-review/core`; this package transports
+The manifest shape is owned by `@sir_yami/reviewd-core`; this package transports
 it and does not model it. The bundle deliberately carries no model or token
 policy.
 

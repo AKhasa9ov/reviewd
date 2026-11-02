@@ -1,13 +1,13 @@
 # Worker protocol
 
-`@dsh-code-review/worker` is a harness-agnostic lease loop for reviewd jobs. It owns
+`@sir_yami/reviewd-worker` is a harness-agnostic lease loop for reviewd jobs. It owns
 registration, heartbeat, long-polling, findings/report/ack transport, stale-registration
 recovery and generic failure reporting. It does not choose a model, build a prompt, spawn a
 harness or write the review store.
 
 A worker has two halves:
 
-1. the transport loop in `@dsh-code-review/worker`;
+1. the transport loop in `@sir_yami/reviewd-worker`;
 2. a `HarnessRunner` that executes the job's prompt and returns structured findings.
 
 ## Lease flow
@@ -106,8 +106,8 @@ successful poll stops the loop.
 ## Package contract
 
 ```ts
-import { runWorkerLoop } from '@dsh-code-review/worker';
-import type { HarnessRunner } from '@dsh-code-review/worker';
+import { runWorkerLoop } from '@sir_yami/reviewd-worker';
+import type { HarnessRunner } from '@sir_yami/reviewd-worker';
 
 const runner: HarnessRunner = {
   async run(lease, signal) {

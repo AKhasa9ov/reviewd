@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { ApiClient, HealthResponse } from '@dsh-code-review/ui';
-import { Badge, Button, Skeleton } from '@dsh-code-review/ui';
+import type { ApiClient, HealthResponse } from '@sir_yami/reviewd-ui';
+import { Badge, Button, Skeleton } from '@sir_yami/reviewd-ui';
 import { ErrorPanel, PageHeader } from '../components.js';
 
 export interface HealthPageProps {

@@ -5,13 +5,13 @@ This section is for agents that use reviewd. For contributor rules, use
 
 ## Choose an interface
 
-| Harness                | Interface                            | Native? |
-| ---------------------- | ------------------------------------ | ------- |
-| DSH 0.2.x              | `@dsh-code-review/dsh` bundle        | Yes     |
-| Claude Code, Codex, pi | `review` CLI (shell)                 | No      |
-| Custom service         | HTTP API                             | No      |
-| Custom reviewer        | `@dsh-code-review/worker` lease loop | Library |
-| CI / shell             | CLI or `curl`                        | No      |
+| Harness                | Interface                             | Native? |
+| ---------------------- | ------------------------------------- | ------- |
+| DSH 0.2.x              | `@sir_yami/reviewd` bundle            | Yes     |
+| Claude Code, Codex, pi | `review` CLI (shell)                  | No      |
+| Custom service         | HTTP API                              | No      |
+| Custom reviewer        | `@sir_yami/reviewd-worker` lease loop | Library |
+| CI / shell             | CLI or `curl`                         | No      |
 
 No MCP server and no native Claude Code/Codex/pi plugin are shipped in this release.
 

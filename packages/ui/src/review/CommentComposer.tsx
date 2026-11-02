@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { FileDiff, Side } from '@dsh-code-review/core';
+import type { FileDiff, Side } from '@sir_yami/reviewd-core';
 import { Button } from '../primitives/Button.js';
 import { Input, Textarea } from '../primitives/Field.js';
 import {

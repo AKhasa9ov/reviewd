@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ApiClient, DirectoryListing } from '@dsh-code-review/ui';
-import { Button, Dialog, Input } from '@dsh-code-review/ui';
+import type { ApiClient, DirectoryListing } from '@sir_yami/reviewd-ui';
+import { Button, Dialog, Input } from '@sir_yami/reviewd-ui';
 import { ErrorPanel } from '../components.js';
 
 export interface FolderPickerDialogProps {

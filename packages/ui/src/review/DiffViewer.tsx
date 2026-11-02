@@ -9,7 +9,7 @@ import type {
   ReviewQuestion,
   Side,
   Snapshot,
-} from '@dsh-code-review/core';
+} from '@sir_yami/reviewd-core';
 import { Badge, EmptyState, Skeleton } from '../primitives/Feedback.js';
 import { Button } from '../primitives/Button.js';
 import { Input } from '../primitives/Field.js';

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useState } from 'react';
-import type { ApiClient, ReviewSummary } from '@dsh-code-review/ui';
+import type { ApiClient, ReviewSummary } from '@sir_yami/reviewd-ui';
 import {
   Badge,
   Button,
@@ -10,7 +10,7 @@ import {
   Select,
   Skeleton,
   formatAge,
-} from '@dsh-code-review/ui';
+} from '@sir_yami/reviewd-ui';
 import { ErrorPanel, PageHeader } from '../components.js';
 import { Link, navigate } from '../router.js';
 

@@ -2,7 +2,7 @@
 import { render, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import type { ReviewState, ReviewView, Snapshot } from '@dsh-code-review/core';
+import type { ReviewState, ReviewView, Snapshot } from '@sir_yami/reviewd-core';
 import type { ApiClient } from '../src/api/client.js';
 import { ToastProvider } from '../src/primitives/Toast.js';
 import { ReviewDetail } from '../src/review/ReviewDetail.js';

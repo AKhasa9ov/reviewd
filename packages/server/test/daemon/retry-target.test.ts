@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { CoverageStatus, ReviewCoverage, ReviewPlan } from '@dsh-code-review/core';
+import type { CoverageStatus, ReviewCoverage, ReviewPlan } from '@sir_yami/reviewd-core';
 import { retryTargetShardIds } from '../../src/daemon/retry.js';
 import type { RetryJobState } from '../../src/daemon/retry.js';
 

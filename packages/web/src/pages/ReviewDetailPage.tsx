@@ -1,5 +1,5 @@
-import type { ApiClient } from '@dsh-code-review/ui';
-import { ReviewDetail } from '@dsh-code-review/ui';
+import type { ApiClient } from '@sir_yami/reviewd-ui';
+import { ReviewDetail } from '@sir_yami/reviewd-ui';
 import { navigate, useLocation } from '../router.js';
 
 export interface ReviewDetailPageProps {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { ReviewState, SubmitInput } from '@dsh-code-review/core';
+import type { ReviewState, SubmitInput } from '@sir_yami/reviewd-core';
 import { Badge } from '../primitives/Feedback.js';
 import { actorSource, latestAnchor } from './model.js';
 import { Button } from '../primitives/Button.js';

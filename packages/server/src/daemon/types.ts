@@ -1,4 +1,4 @@
-import type { Actor, ReviewManifest, ReviewService } from '@dsh-code-review/core';
+import type { Actor, ReviewManifest, ReviewService } from '@sir_yami/reviewd-core';
 
 /** Wire protocol version reviewd emits on every worker lease. v1 is the first explicit version. */
 export const PROTOCOL_VERSION = 1;

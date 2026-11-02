@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import type { ApiClient, DiffScope, RepoCommit, RepositorySetting } from '@dsh-code-review/ui';
-import { Button, Select } from '@dsh-code-review/ui';
+import type { ApiClient, DiffScope, RepoCommit, RepositorySetting } from '@sir_yami/reviewd-ui';
+import { Button, Select } from '@sir_yami/reviewd-ui';
 import { ErrorPanel, PageHeader } from '../components.js';
 import { Link, navigate } from '../router.js';
 

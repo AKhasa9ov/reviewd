@@ -1,5 +1,5 @@
 {
-  "name": "@dsh-code-review/server",
+  "name": "@sir_yami/reviewd-server",
   "version": "0.1.0",
   "license": "MIT",
   "publishConfig": {
@@ -22,7 +22,7 @@
     "reviewd": "./dist/reviewd.js"
   },
   "dependencies": {
-    "@dsh-code-review/core": "workspace:*"
+    "@sir_yami/reviewd-core": "workspace:*"
   },
   "files": [
     "dist"

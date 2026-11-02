@@ -1,5 +1,5 @@
 import { useId, useState } from 'react';
-import type { Comment, CommentState, ReviewQuestion } from '@dsh-code-review/core';
+import type { Comment, CommentState, ReviewQuestion } from '@sir_yami/reviewd-core';
 import { Badge } from '../primitives/Feedback.js';
 import { ThreadConversation } from './ThreadConversation.js';
 

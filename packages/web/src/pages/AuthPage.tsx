@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import type { ApiClient } from '@dsh-code-review/ui';
-import { Button, Input } from '@dsh-code-review/ui';
+import type { ApiClient } from '@sir_yami/reviewd-ui';
+import { Button, Input } from '@sir_yami/reviewd-ui';
 import { PageHeader } from '../components.js';
 import { navigate } from '../router.js';
 

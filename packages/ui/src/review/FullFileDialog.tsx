@@ -12,7 +12,7 @@ import type {
   FindingDecision,
   ReviewQuestion,
   Side,
-} from '@dsh-code-review/core';
+} from '@sir_yami/reviewd-core';
 import { Button } from '../primitives/Button.js';
 import { Dialog } from '../primitives/Dialog.js';
 import { CommentThread } from './CommentThread.js';

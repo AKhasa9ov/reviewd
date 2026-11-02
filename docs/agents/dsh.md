@@ -3,7 +3,7 @@
 > Audience: users and agents running the native DeepSeek Harness bundle.
 > For installation alternatives, see [Connect an agent](../guides/connect-an-agent.md).
 
-`@dsh-code-review/dsh` is one Cordis bundle for DeepSeek Harness 0.2.x. It ships both
+`@sir_yami/reviewd` is one Cordis bundle for DeepSeek Harness 0.2.x. It ships both
 halves of the integration plus the review daemon and SPA, so the default install needs no
 separate server process:
 
@@ -66,7 +66,7 @@ browser links.
 Requires Node.js 22+, DSH 0.2.x and `git` on `PATH`.
 
 ```bash
-dsh plugin --profile web add @dsh-code-review/dsh
+dsh plugin --profile web add @sir_yami/reviewd
 ```
 
 This forwards `add` to pnpm in the `web` profile directory. Restart the profile after a
@@ -76,10 +76,10 @@ command:
 
 ```bash
 pnpm fat:verify
-dsh plugin --profile web add /absolute/path/to/dsh-code-review-dsh-0.1.0.tgz
+dsh plugin --profile web add /absolute/path/to/sir_yami-reviewd-0.1.0.tgz
 ```
 
-A successful install adds `@dsh-code-review/dsh` to the profile bundle list and activates
+A successful install adds `@sir_yami/reviewd` to the profile bundle list and activates
 the inserted `code-review` row. The older `plugin_manager install_bundle target=...` flow
 still works for an unpacked directory, but the npm package/tarball path above is the
 release path. The package id in the manifest is the last segment of the npm name (`dsh`).
@@ -253,11 +253,11 @@ also creates missing directories). Set `storeDir` to an absolute path to use ano
 directory. The store holds the append-only event log, replay caches, snapshots, deliveries,
 settings and the single-writer lock; it survives restarts, upgrades and package removal.
 
-Upgrade with `dsh plugin --profile web add @dsh-code-review/dsh@latest`, then restart the
+Upgrade with `dsh plugin --profile web add @sir_yami/reviewd@latest`, then restart the
 profile. Back up `storeDir` first; the event store is preserved, but this release does not
 perform automatic event-schema migrations. Keep the backup if a future version changes the
 on-disk format. Uninstall with
-`dsh plugin --profile web remove @dsh-code-review/dsh`. Stopping the Host closes the
+`dsh plugin --profile web remove @sir_yami/reviewd`. Stopping the Host closes the
 embedded daemon and discards its in-memory token. Uninstalling does **not** delete review
 data; remove `storeDir` manually to erase it.
 
@@ -287,7 +287,7 @@ embedded mode through `/api/code-review/gc`; an external daemon additionally sup
 
 ## Release status
 
-The package name is `@dsh-code-review/dsh` (version `0.1.0`, MIT, public access). The
+The package name is `@sir_yami/reviewd` (version `0.1.0`, MIT, public access). The
 manifest's repository, homepage and bugs URLs currently point at
 `https://github.com/AKhasa9ov/reviewd`; update all three fields together if the repository moves. The
 package has not been published to npm and has not been submitted to dsh.so. The dsh.so
@@ -310,6 +310,6 @@ it. A listing may stay "Declared/unverified" until it is independently install-t
   profile: panel without a token, review creation, `/code-review/review/<id>` in a new tab,
   comments and deep-link reload, findings in the report and inline view, proxy SSE, and
   cleanup of both DSH and daemon ports on shutdown.
-- After install, `dsh plugin --profile web why @dsh-code-review/dsh` should show the
+- After install, `dsh plugin --profile web why @sir_yami/reviewd` should show the
   package in the profile, and the Host should expose `review_start` in
   `cordis_inspect_query`.

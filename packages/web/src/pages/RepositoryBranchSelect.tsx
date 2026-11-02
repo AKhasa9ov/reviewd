@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import type { ApiClient, SelectOption } from '@dsh-code-review/ui';
-import { Button } from '@dsh-code-review/ui';
+import type { ApiClient, SelectOption } from '@sir_yami/reviewd-ui';
+import { Button } from '@sir_yami/reviewd-ui';
 
 const BRANCH_DEBOUNCE_MS = 300;
 

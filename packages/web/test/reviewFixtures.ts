@@ -1,5 +1,5 @@
-import type { Anchor, Comment, FileDiff, Snapshot } from '@dsh-code-review/core';
-import type { ReviewView, ServiceSnapshotView, LatestFeedbackView } from '@dsh-code-review/ui';
+import type { Anchor, Comment, FileDiff, Snapshot } from '@sir_yami/reviewd-core';
+import type { ReviewView, ServiceSnapshotView, LatestFeedbackView } from '@sir_yami/reviewd-ui';
 
 const now = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
 

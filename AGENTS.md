@@ -58,7 +58,7 @@ blindly.
 ## CLI
 
 In a source checkout the entrypoint is `node packages/server/dist/cli.js`; after
-publication it is `review` from `@dsh-code-review/server`.
+publication it is `review` from `@sir_yami/reviewd-server`.
 
 ```bash
 review start --repo /srv/repo --base main --reviewer worker --json

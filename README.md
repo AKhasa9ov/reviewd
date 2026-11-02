@@ -138,7 +138,7 @@ daemon on a random port, creates a `base..feature` review and prints the URL.
 ### DSH
 
 ```bash
-dsh plugin --profile web add @dsh-code-review/dsh
+dsh plugin --profile web add @sir_yami/reviewd
 ```
 
 Restart the profile so Host routes and loops load. Embedded mode is the default: the bundle
@@ -146,14 +146,13 @@ starts `reviewd` in-process and serves the review UI at `/code-review` behind DS
 auth. See [DSH integration](docs/agents/dsh.md) for configuration, tools, worker and data
 retention.
 
-> **Release status:** `0.1.0` is a release candidate. Docker and source checkouts are ready.
-> npm publication is pending registry credentials; the DSH package can still be installed
-> from a local tarball with `pnpm fat:verify`.
+> **Release status:** `0.1.0` is published under the `@sir_yami` scope. Install the DSH
+> package from npm; Docker and source checkouts remain available.
 
 ### CLI
 
-After `pnpm build`, the CLI is at `packages/server/dist/cli.js`; once the npm packages are
-published it will be available as `review` from `@dsh-code-review/server`.
+After `pnpm build`, the CLI is at `packages/server/dist/cli.js`; the published package is
+`review` from `@sir_yami/reviewd-server`.
 
 ```bash
 review start --repo /srv/repo --base main --reviewer worker --json
@@ -227,7 +226,7 @@ See [SECURITY.md](SECURITY.md) for the full threat model and reporting process.
   CLI/HTTP contract; MCP is not shipped.
 - The event store is a single-writer local filesystem store; there is no HA/clustering.
 - The image is Linux/amd64-oriented; multi-arch manifests are not published.
-- npm publication of `@dsh-code-review/*` is pending registry credentials.
+- npm packages are published under `@sir_yami/*`; the DSH package is `@sir_yami/reviewd`.
 
 ## License
 

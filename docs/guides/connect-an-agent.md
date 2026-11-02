@@ -5,15 +5,15 @@ HTTP contract; DSH has a native bundle, and every other harness can use the CLI 
 
 ## Choose an integration
 
-| Harness                | Recommended integration              | Native adapters?                     |
-| ---------------------- | ------------------------------------ | ------------------------------------ |
-| DSH 0.2.x              | `@dsh-code-review/dsh`               | Yes: panel, tools, `/review`, worker |
-| Claude Code            | Shell out to `review` CLI            | No                                   |
-| Codex                  | Shell out to `review` CLI            | No                                   |
-| pi                     | Shell out to `review` CLI            | No                                   |
-| Custom agent / service | Authenticated HTTP API               | No; use the documented API           |
-| Custom worker          | `@dsh-code-review/worker` lease loop | Library, bring your own runner       |
-| Plain shell / CI       | `review` CLI or `curl`               | No                                   |
+| Harness                | Recommended integration               | Native adapters?                     |
+| ---------------------- | ------------------------------------- | ------------------------------------ |
+| DSH 0.2.x              | `@sir_yami/reviewd`                   | Yes: panel, tools, `/review`, worker |
+| Claude Code            | Shell out to `review` CLI             | No                                   |
+| Codex                  | Shell out to `review` CLI             | No                                   |
+| pi                     | Shell out to `review` CLI             | No                                   |
+| Custom agent / service | Authenticated HTTP API                | No; use the documented API           |
+| Custom worker          | `@sir_yami/reviewd-worker` lease loop | Library, bring your own runner       |
+| Plain shell / CI       | `review` CLI or `curl`                | No                                   |
 
 There is **no MCP server** and no Claude Code/Codex/pi plugin in this release. The stable
 integration surface is the CLI and HTTP API. Do not build a dependency on internal package
@@ -35,7 +35,7 @@ process owns transport authentication; the reviewer gets a read-only snapshot.
 Install the bundle:
 
 ```bash
-dsh plugin --profile web add @dsh-code-review/dsh
+dsh plugin --profile web add @sir_yami/reviewd
 ```
 
 Restart the profile. Embedded mode starts the daemon in-process and exposes:
@@ -126,7 +126,7 @@ session for an agent.
 
 ## Option 4: Custom worker
 
-`@dsh-code-review/worker` provides the lease loop but deliberately does not choose a model,
+`@sir_yami/reviewd-worker` provides the lease loop but deliberately does not choose a model,
 build a prompt or spawn a harness. Implement `HarnessRunner.run(lease, signal)` and return a
 `schemaVersion: 1` report. See the
 [worker contract](../agents/reviewer.md#worker-loop) and

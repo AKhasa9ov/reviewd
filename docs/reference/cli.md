@@ -8,7 +8,7 @@ The `review` CLI has two modes:
 Once the npm packages are published, install the CLI with:
 
 ```bash
-npm install -g @dsh-code-review/server
+npm install -g @sir_yami/reviewd-server
 review version
 ```
 

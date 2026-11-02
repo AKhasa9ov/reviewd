@@ -23,7 +23,7 @@ const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
 
 describe('publishable DSH package manifest', () => {
   it('declares the public package identity and license', () => {
-    expect(pkg.name).toBe('@dsh-code-review/dsh');
+    expect(pkg.name).toBe('@sir_yami/reviewd');
     expect(pkg.version).toMatch(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/);
     expect(pkg.private).not.toBe(true);
     expect(pkg.license).toBe('MIT');
@@ -51,7 +51,7 @@ describe('publishable DSH package manifest', () => {
 
 describe('package README install and operation contract', () => {
   it('documents the one-command DSH install', () => {
-    expect(readme).toContain('dsh plugin --profile web add @dsh-code-review/dsh');
+    expect(readme).toContain('dsh plugin --profile web add @sir_yami/reviewd');
   });
 
   it('documents embedded mode, the first-run store and the storeDir override', () => {

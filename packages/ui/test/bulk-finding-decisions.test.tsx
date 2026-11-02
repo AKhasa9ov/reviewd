@@ -2,7 +2,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import type { AgentReport, Finding, FindingDecision } from '@dsh-code-review/core';
+import type { AgentReport, Finding, FindingDecision } from '@sir_yami/reviewd-core';
 import { ReportPanel } from '../src/review/ReportPanel.js';
 
 function finding(index: number, overrides: Partial<Finding> = {}): Finding {

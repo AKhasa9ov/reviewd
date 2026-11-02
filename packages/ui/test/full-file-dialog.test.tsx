@@ -8,7 +8,7 @@ import type {
   Finding,
   FindingDecision,
   ReviewQuestion,
-} from '@dsh-code-review/core';
+} from '@sir_yami/reviewd-core';
 import { FullFileDialog } from '../src/review/FullFileDialog.js';
 
 function file(overrides: Partial<FileDiff> = {}): FileDiff {

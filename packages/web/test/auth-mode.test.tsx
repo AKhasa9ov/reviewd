@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen, waitFor } from '@testing-library/react';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ApiClient, ReviewSummary } from '@dsh-code-review/ui';
+import type { ApiClient, ReviewSummary } from '@sir_yami/reviewd-ui';
 
 vi.hoisted(() => {
   vi.stubEnv('BASE_URL', '/code-review/');

@@ -1,7 +1,7 @@
 # DSH half of dsh-code-review. The profile may override this row's config.
 - insert:
     - id: code-review
-      name: '@dsh-code-review/dsh'
+      name: '@sir_yami/reviewd'
       config:
         # Embedded mode starts the daemon in-process on an ephemeral loopback
         # port and serves the review UI under uiBase. Set embedded: false to

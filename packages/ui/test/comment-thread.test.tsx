@@ -2,7 +2,7 @@
 import { render, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import type { Comment } from '@dsh-code-review/core';
+import type { Comment } from '@sir_yami/reviewd-core';
 import { CommentThread } from '../src/review/CommentThread.js';
 
 const at = '2026-10-27T12:00:00.000Z';

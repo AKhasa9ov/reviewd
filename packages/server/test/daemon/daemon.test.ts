@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { startDaemon } from '../../src/daemon/server.js';
 import type { DaemonDeps, ReviewDaemon } from '../../src/daemon/types.js';
-import type { ReviewService } from '@dsh-code-review/core';
+import type { ReviewService } from '@sir_yami/reviewd-core';
 import { makeRepo } from '../../../core/test/helpers/repo.js';
 
 const TOKEN = 'test-token-0123456789abcdef0123456789';
