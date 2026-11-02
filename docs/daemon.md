@@ -65,6 +65,7 @@ Codes: `unauthorized`, `forbidden`, `not-found`, `validation`, `conflict`, `stal
 | GET    | `/api/reviews/:id/snapshot?round=&file=`    | round diff; `file` lazily selects one file                                  |
 | POST   | `/api/reviews/:id/comments`                 | body, path, side, lineStart/lineEnd, optional suggestion                    |
 | POST   | `/api/reviews/:id/comments/:cid/replies`    | `{body}`                                                                    |
+| POST   | `/api/reviews/:id/comments/:cid/resolve`    | agent-only convenience: resolve one comment as `{name, kind:'agent'}`       |
 | PATCH  | `/api/reviews/:id/comments/:cid`            | exactly one of `{body}` or `{state: open\|resolved\|dismissed}`             |
 | DELETE | `/api/reviews/:id/comments/:cid`            | soft-deletes; replies stay as a tombstone                                   |
 | POST   | `/api/reviews/:id/comments/:cid/suggestion` | `{action: accept\|decline\|apply}`                                          |
@@ -120,6 +121,9 @@ a reviewer is queued or running. The repository path is immutable.
 and `GET /api/reviews/:id` returns `404`, an active or queued reviewer is cancelled, and
 the append-only event log is retained for audit. Deleting an already deleted review is
 idempotent. Closed reviews may be deleted.
+
+`POST /api/reviews/:id/comments/:cid/resolve` is the DSH fixer path: it writes the same
+`comment/state` event as a human PATCH, but attributes the actor as an agent.
 
 `PATCH /api/reviews/:id/comments/:cid` with `{body}` edits the text only; anchors and
 suggestions are unchanged. Edits are rejected on closed reviews and on deleted comments.

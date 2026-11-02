@@ -73,7 +73,7 @@ function contentFor(record: DeliveryRecord): string {
     return `${header}The review was approved. No fix round is required.`;
   }
   const action =
-    'Start the fix round now: apply the requested changes, run the tests, then call review_refresh and report the result with evidence.';
+    'Start the fix round now: apply the requested changes, run the tests, then call review_refresh, resolve addressed comments with review_resolve_comment, and report the result with evidence.';
   const markdown = record.feedback.markdown ?? '';
   return `${header}${action}\n\n${markdown}`.slice(0, MAX_FEEDBACK_CHARS);
 }

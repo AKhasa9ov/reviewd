@@ -211,8 +211,14 @@ export function buildFeedback(input: BuildFeedbackInput): FeedbackPackage {
     const decision = latestDecision(review, finding.id, round);
     if (decision !== undefined) decisions.set(finding.id, decision);
   }
-  const findings = reportFindings.filter((finding) =>
-    actionableFinding(finding, decisions.get(finding.id)),
+  const addressedFindingIds = new Set(
+    activeComments
+      .filter((comment) => comment.state === 'resolved' && comment.sourceFindingId !== undefined)
+      .map((comment) => comment.sourceFindingId),
+  );
+  const findings = reportFindings.filter(
+    (finding) =>
+      !addressedFindingIds.has(finding.id) && actionableFinding(finding, decisions.get(finding.id)),
   );
   const dismissed = reportFindings.filter(
     (finding) => decisions.get(finding.id)?.state === 'dismissed',
@@ -328,7 +334,8 @@ export function buildFeedback(input: BuildFeedbackInput): FeedbackPackage {
   lines.push(
     '### Инструкция',
     'Правь только перечисленное, не переписывай несвязанный код, прогони тесты,',
-    'затем вызови review_refresh(reviewId) и review_fix_status(...) с evidence.',
+    'затем вызови review_refresh(reviewId), посмотри открытые комментарии через',
+    'review_comments_list(reviewId) и закрой исправленные review_resolve_comment(reviewId, commentId).',
     'Если сообщение повторное — не применяй правки дважды.',
   );
 

@@ -1817,3 +1817,38 @@ describe('bulk review finding decisions', () => {
     expect(called).toBe(false);
   });
 });
+
+describe('agent comment resolution', () => {
+  it('resolves a comment as an AI fixer and records that actor', async () => {
+    const { daemonUrl } = await running();
+    const checkout = await repo();
+    const created = await createReview(daemonUrl, { backend: 'none' }, checkout.root);
+    const reviewId = created.body.review.review.id;
+
+    const comment = await read(
+      await fetch(`${daemonUrl}/api/reviews/${reviewId}/comments`, {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ path: 'src/a.ts', lineStart: 2, body: 'Please fix this' }),
+      }),
+    );
+    const commentId = comment.comment.id as string;
+
+    const resolved = await fetch(
+      `${daemonUrl}/api/reviews/${reviewId}/comments/${commentId}/resolve`,
+      { method: 'POST', headers: headers() },
+    );
+    expect(resolved.status).toBe(200);
+    expect((await read(resolved)).comment.state).toBe('resolved');
+
+    const events = await read(
+      await fetch(`${daemonUrl}/api/reviews/${reviewId}/events?after=0&wait=0`, {
+        headers: headers(),
+      }),
+    );
+    const stateEvent = events.events.find(
+      (event: { type: string }) => event.type === 'comment/state',
+    );
+    expect(stateEvent.actor).toEqual({ name: 'AI fixer', kind: 'agent' });
+  });
+});

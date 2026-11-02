@@ -94,7 +94,8 @@ DSH process
 │  ├─ same-origin proxy /api/code-review/* → reviewd
 │  ├─ worker: poll jobs → reviewer subagent → findings/report
 │  ├─ delivery bridge: review.submitted → sessionController.prompt
-│  ├─ tools: review_start / review_status / review_refresh / review_feedback
+│  ├─ tools: review_start / review_status / review_refresh / review_feedback /
+│  │         review_comments_list / review_resolve_comment
 │  └─ slash command /review
 └─ Client plugin: sidebar icon + main panel "code-review"
 
@@ -720,7 +721,8 @@ Scope: <base>..<head> (<sha>)
 
 ### Инструкция
 Правь только перечисленное, не переписывай несвязанный код, прогони тесты,
-затем вызови review_refresh(reviewId) и review_fix_status(...) с evidence.
+затем вызови review_refresh(reviewId), посмотри открытые комментарии через
+review_comments_list(reviewId) и закрой исправленные review_resolve_comment(reviewId, commentId).
 Если сообщение повторное — не применяй правки дважды.
 ```
 
@@ -774,6 +776,7 @@ Scope: <base>..<head> (<sha>)
 | POST | `/api/reviews/:id/comments` | комментарий/диапазон/suggestion |
 | POST | `/api/reviews/:id/comments/:cid/replies` | ответ в тред |
 | PATCH | `/api/reviews/:id/comments/:cid` | state open/resolved/dismissed |
+| POST | `/api/reviews/:id/comments/:cid/resolve` | agent resolve, actor kind `agent` |
 | POST | `/api/reviews/:id/comments/:cid/suggestion` | accept/decline/apply |
 | POST | `/api/reviews/:id/refresh` | новый раунд |
 | POST | `/api/reviews/:id/submit` | verdict + summary + delivery |
@@ -933,7 +936,8 @@ interface Config {
 `review_status` `{reviewId}` → статусы, счётчики unresolved/fixed/outdated, delivery state.
 `review_refresh` `{reviewId}` → новый раунд (409 при running job).
 `review_feedback` `{reviewId, wait?}` → markdown-пакет (для повторной доставки/чтения).
-`review_fix_status` `{reviewId, items:[{commentId,status,evidence}]}` → ack (агент после правок).
+`review_comments_list` `{reviewId}` → открытые комментарии с `commentId` для fixer-сессии.
+`review_resolve_comment` `{reviewId, commentId}` → resolved; событие пишется с actor kind `agent`.
 
 Команда `/review`:
 - `description`: «Start a code review for the current changes».

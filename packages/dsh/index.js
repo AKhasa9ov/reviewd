@@ -472,6 +472,94 @@ function createReviewTools(ctx, config, api) {
     ),
     ctx.tools.register(
       tool(
+        "review_comments_list",
+        "List open review comments with their ids. Call this after review_refresh, then use review_resolve_comment for comments you actually fixed.",
+        {
+          type: "object",
+          properties: { reviewId: { type: "string" } },
+          required: ["reviewId"],
+          additionalProperties: false
+        },
+        async (args, exec) => {
+          if (typeof args.reviewId !== "string" || args.reviewId === "") {
+            return { ok: false, error: { code: "validation", message: "reviewId is required" } };
+          }
+          const view = await api.get(
+            `/api/reviews/${encodeURIComponent(args.reviewId)}`,
+            exec.signal
+          );
+          const rawComments = Array.isArray(view.review.comments) ? view.review.comments : [];
+          const comments = rawComments.flatMap((raw) => {
+            if (typeof raw !== "object" || raw === null) return [];
+            const item = raw;
+            if (item.state !== "open" || item.deletedAt !== void 0 || typeof item.id !== "string") {
+              return [];
+            }
+            const anchors = Array.isArray(item.anchors) ? item.anchors : [];
+            const last = anchors.at(-1);
+            const anchor = typeof last === "object" && last !== null ? last : void 0;
+            const rawAuthor = typeof item.author === "object" && item.author !== null ? item.author : {};
+            return [
+              {
+                commentId: item.id,
+                state: "open",
+                author: {
+                  name: typeof rawAuthor.name === "string" ? rawAuthor.name : "unknown",
+                  kind: typeof rawAuthor.kind === "string" ? rawAuthor.kind : "agent"
+                },
+                ...typeof anchor?.path === "string" ? { path: anchor.path } : {},
+                ...typeof anchor?.lineStart === "number" ? { lineStart: anchor.lineStart } : {},
+                ...typeof anchor?.lineEnd === "number" ? { lineEnd: anchor.lineEnd } : {},
+                body: typeof item.body === "string" ? item.body : "",
+                ...typeof item.sourceFindingId === "string" ? { sourceFindingId: item.sourceFindingId } : {}
+              }
+            ];
+          });
+          return {
+            ok: true,
+            reviewId: args.reviewId,
+            total: comments.length,
+            comments
+          };
+        }
+      )
+    ),
+    ctx.tools.register(
+      tool(
+        "review_resolve_comment",
+        "Mark one review comment as resolved after you have fixed the reported issue. This records the action as an AI agent.",
+        {
+          type: "object",
+          properties: {
+            reviewId: { type: "string" },
+            commentId: { type: "string" }
+          },
+          required: ["reviewId", "commentId"],
+          additionalProperties: false
+        },
+        async (args, exec) => {
+          if (typeof args.reviewId !== "string" || args.reviewId === "") {
+            return { ok: false, error: { code: "validation", message: "reviewId is required" } };
+          }
+          if (typeof args.commentId !== "string" || args.commentId === "") {
+            return { ok: false, error: { code: "validation", message: "commentId is required" } };
+          }
+          const view = await api.post(
+            `/api/reviews/${encodeURIComponent(args.reviewId)}/comments/${encodeURIComponent(args.commentId)}/resolve`,
+            {},
+            exec.signal
+          );
+          return {
+            ok: true,
+            reviewId: args.reviewId,
+            commentId: view.comment?.id ?? args.commentId,
+            state: view.comment?.state ?? "resolved"
+          };
+        }
+      )
+    ),
+    ctx.tools.register(
+      tool(
         "review_feedback",
         "Read the latest submitted feedback for a review without delivering it again.",
         {
@@ -5725,8 +5813,11 @@ function buildFeedback(input) {
     const decision = latestDecision(review, finding.id, round);
     if (decision !== void 0) decisions.set(finding.id, decision);
   }
+  const addressedFindingIds = new Set(
+    activeComments.filter((comment) => comment.state === "resolved" && comment.sourceFindingId !== void 0).map((comment) => comment.sourceFindingId)
+  );
   const findings = reportFindings.filter(
-    (finding) => actionableFinding(finding, decisions.get(finding.id))
+    (finding) => !addressedFindingIds.has(finding.id) && actionableFinding(finding, decisions.get(finding.id))
   );
   const dismissed = reportFindings.filter(
     (finding) => decisions.get(finding.id)?.state === "dismissed"
@@ -5832,7 +5923,8 @@ function buildFeedback(input) {
   lines.push(
     "### \u0418\u043D\u0441\u0442\u0440\u0443\u043A\u0446\u0438\u044F",
     "\u041F\u0440\u0430\u0432\u044C \u0442\u043E\u043B\u044C\u043A\u043E \u043F\u0435\u0440\u0435\u0447\u0438\u0441\u043B\u0435\u043D\u043D\u043E\u0435, \u043D\u0435 \u043F\u0435\u0440\u0435\u043F\u0438\u0441\u044B\u0432\u0430\u0439 \u043D\u0435\u0441\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0439 \u043A\u043E\u0434, \u043F\u0440\u043E\u0433\u043E\u043D\u0438 \u0442\u0435\u0441\u0442\u044B,",
-    "\u0437\u0430\u0442\u0435\u043C \u0432\u044B\u0437\u043E\u0432\u0438 review_refresh(reviewId) \u0438 review_fix_status(...) \u0441 evidence.",
+    "\u0437\u0430\u0442\u0435\u043C \u0432\u044B\u0437\u043E\u0432\u0438 review_refresh(reviewId), \u043F\u043E\u0441\u043C\u043E\u0442\u0440\u0438 \u043E\u0442\u043A\u0440\u044B\u0442\u044B\u0435 \u043A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0438 \u0447\u0435\u0440\u0435\u0437",
+    "review_comments_list(reviewId) \u0438 \u0437\u0430\u043A\u0440\u043E\u0439 \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043D\u044B\u0435 review_resolve_comment(reviewId, commentId).",
     "\u0415\u0441\u043B\u0438 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435 \u043F\u043E\u0432\u0442\u043E\u0440\u043D\u043E\u0435 \u2014 \u043D\u0435 \u043F\u0440\u0438\u043C\u0435\u043D\u044F\u0439 \u043F\u0440\u0430\u0432\u043A\u0438 \u0434\u0432\u0430\u0436\u0434\u044B."
   );
   let markdown = lines.join("\n");
@@ -8972,6 +9064,23 @@ async function handle(req, res, ctx, options) {
       sendJson(res, 201, view);
       return;
     }
+    if (rest[0] === "comments" && rest[1] !== void 0 && rest[2] === "resolve" && rest.length === 3 && method === "POST") {
+      const rawName = req.headers["x-review-actor"];
+      const name2 = typeof rawName === "string" && rawName.trim() !== "" ? rawName.trim().slice(0, 100) : "AI fixer";
+      const header = req.headers["idempotency-key"];
+      const view = await ctx.service.setCommentState(
+        reviewId,
+        decodeURIComponent(rest[1]),
+        "resolved",
+        {
+          actor: { name: name2, kind: "agent" },
+          ...typeof header === "string" && header !== "" ? { requestId: header } : {}
+        }
+      );
+      await ctx.hub.sync(reviewId);
+      sendJson(res, 200, view);
+      return;
+    }
     if (rest[0] === "comments" && rest[1] !== void 0 && rest[2] === "suggestion" && method === "POST") {
       const body = await readJson(req, ctx.config.maxBodyBytes);
       const action = body.action;
@@ -9993,7 +10102,7 @@ function contentFor(record) {
   if (verdict === "approve") {
     return `${header}The review was approved. No fix round is required.`;
   }
-  const action = "Start the fix round now: apply the requested changes, run the tests, then call review_refresh and report the result with evidence.";
+  const action = "Start the fix round now: apply the requested changes, run the tests, then call review_refresh, resolve addressed comments with review_resolve_comment, and report the result with evidence.";
   const markdown = record.feedback.markdown ?? "";
   return `${header}${action}
 

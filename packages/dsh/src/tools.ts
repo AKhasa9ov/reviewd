@@ -245,6 +245,106 @@ export function createReviewTools(
     ),
     ctx.tools.register(
       tool(
+        'review_comments_list',
+        'List open review comments with their ids. Call this after review_refresh, then use review_resolve_comment for comments you actually fixed.',
+        {
+          type: 'object',
+          properties: { reviewId: { type: 'string' } },
+          required: ['reviewId'],
+          additionalProperties: false,
+        },
+        async (args, exec) => {
+          if (typeof args.reviewId !== 'string' || args.reviewId === '') {
+            return { ok: false, error: { code: 'validation', message: 'reviewId is required' } };
+          }
+          const view = await api.get<{ review: Record<string, unknown> }>(
+            `/api/reviews/${encodeURIComponent(args.reviewId)}`,
+            exec.signal,
+          );
+          const rawComments = Array.isArray(view.review.comments) ? view.review.comments : [];
+          const comments = rawComments.flatMap((raw) => {
+            if (typeof raw !== 'object' || raw === null) return [];
+            const item = raw as Record<string, unknown>;
+            if (
+              item.state !== 'open' ||
+              item.deletedAt !== undefined ||
+              typeof item.id !== 'string'
+            ) {
+              return [];
+            }
+            const anchors = Array.isArray(item.anchors) ? item.anchors : [];
+            const last = anchors.at(-1);
+            const anchor =
+              typeof last === 'object' && last !== null
+                ? (last as Record<string, unknown>)
+                : undefined;
+            const rawAuthor =
+              typeof item.author === 'object' && item.author !== null
+                ? (item.author as Record<string, unknown>)
+                : {};
+            return [
+              {
+                commentId: item.id,
+                state: 'open',
+                author: {
+                  name: typeof rawAuthor.name === 'string' ? rawAuthor.name : 'unknown',
+                  kind: typeof rawAuthor.kind === 'string' ? rawAuthor.kind : 'agent',
+                },
+                ...(typeof anchor?.path === 'string' ? { path: anchor.path } : {}),
+                ...(typeof anchor?.lineStart === 'number' ? { lineStart: anchor.lineStart } : {}),
+                ...(typeof anchor?.lineEnd === 'number' ? { lineEnd: anchor.lineEnd } : {}),
+                body: typeof item.body === 'string' ? item.body : '',
+                ...(typeof item.sourceFindingId === 'string'
+                  ? { sourceFindingId: item.sourceFindingId }
+                  : {}),
+              },
+            ];
+          });
+          return {
+            ok: true,
+            reviewId: args.reviewId,
+            total: comments.length,
+            comments,
+          };
+        },
+      ),
+    ),
+    ctx.tools.register(
+      tool(
+        'review_resolve_comment',
+        'Mark one review comment as resolved after you have fixed the reported issue. This records the action as an AI agent.',
+        {
+          type: 'object',
+          properties: {
+            reviewId: { type: 'string' },
+            commentId: { type: 'string' },
+          },
+          required: ['reviewId', 'commentId'],
+          additionalProperties: false,
+        },
+        async (args, exec) => {
+          if (typeof args.reviewId !== 'string' || args.reviewId === '') {
+            return { ok: false, error: { code: 'validation', message: 'reviewId is required' } };
+          }
+          if (typeof args.commentId !== 'string' || args.commentId === '') {
+            return { ok: false, error: { code: 'validation', message: 'commentId is required' } };
+          }
+          const view = await api.post<{ comment?: { id?: string; state?: string } }>(
+            `/api/reviews/${encodeURIComponent(args.reviewId)}/comments/${encodeURIComponent(args.commentId)}/resolve`,
+            {},
+            exec.signal,
+          );
+          return {
+            ok: true,
+            reviewId: args.reviewId,
+            commentId: view.comment?.id ?? args.commentId,
+            state: view.comment?.state ?? 'resolved',
+          };
+        },
+      ),
+    ),
+    ctx.tools.register(
+      tool(
         'review_feedback',
         'Read the latest submitted feedback for a review without delivering it again.',
         {

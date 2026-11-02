@@ -158,6 +158,10 @@ no token to configure.
   the round has a coverage ledger, `agent.coverage` carries per-file statuses and totals.
 - `review_refresh` — create the next round, re-anchor comments and queue verification.
 - `review_feedback` — read the latest submitted feedback without delivering it again.
+- `review_comments_list` — open comments with ids, authors, anchors and text; the fixer
+  uses it after `review_refresh` to find what it should close.
+- `review_resolve_comment` — mark one fixed comment as resolved. The daemon records the
+  action as an AI agent, not as a human browser action.
 - `/review <title>` — create a worktree review for the current workspace and return the
   same browser-facing review URL as `review_start` (the title is the rest of the command
   input).

@@ -195,12 +195,33 @@ describe('buildFeedback', () => {
     expect(first.markdown).toContain('принято, но не применено');
     expect(first.markdown).toContain('### Вопросы к тебе');
     expect(first.markdown).toContain('### Уже исправлено в этом раунде');
+    expect(first.markdown).toContain('review_comments_list(reviewId)');
+    expect(first.markdown).toContain('review_resolve_comment(reviewId, commentId)');
     expect(first.json).toMatchObject({
       deliveryKey: 'rev_1:1:sub_1',
       resolved: { count: 1, commentIds: ['cmt_resolved'] },
     });
     expect(first.json.appliedSuggestions).toHaveLength(1);
     expect(first.json.acceptedSuggestions).toHaveLength(1);
+  });
+
+  it('does not repeat an accepted finding whose transferred comment is resolved', () => {
+    const feedback = buildFeedback(
+      input({
+        comments: [
+          comment({
+            id: 'cmt_ai_resolved',
+            author: { name: 'Reviewer', kind: 'agent' },
+            state: 'resolved',
+            sourceFindingId: 'f1',
+          }),
+        ],
+        decisions: [decision()],
+      }),
+    );
+
+    expect(feedback.json.findings).toEqual([]);
+    expect(feedback.markdown).not.toContain('[accepted]');
   });
 
   it('does not count transferred AI comments as human resolved feedback', () => {

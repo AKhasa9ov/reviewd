@@ -972,6 +972,32 @@ export async function handle(
     if (
       rest[0] === 'comments' &&
       rest[1] !== undefined &&
+      rest[2] === 'resolve' &&
+      rest.length === 3 &&
+      method === 'POST'
+    ) {
+      const rawName = req.headers['x-review-actor'];
+      const name =
+        typeof rawName === 'string' && rawName.trim() !== ''
+          ? rawName.trim().slice(0, 100)
+          : 'AI fixer';
+      const header = req.headers['idempotency-key'];
+      const view = await ctx.service.setCommentState(
+        reviewId,
+        decodeURIComponent(rest[1]),
+        'resolved',
+        {
+          actor: { name, kind: 'agent' },
+          ...(typeof header === 'string' && header !== '' ? { requestId: header } : {}),
+        },
+      );
+      await ctx.hub.sync(reviewId);
+      sendJson(res, 200, view);
+      return;
+    }
+    if (
+      rest[0] === 'comments' &&
+      rest[1] !== undefined &&
       rest[2] === 'suggestion' &&
       method === 'POST'
     ) {

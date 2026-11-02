@@ -97,6 +97,8 @@ Use the profile's own patch layer for these overrides; do not edit the package's
 - `review_status` — review, round count, comment count and agent report.
 - `review_refresh` — create the next round, re-anchor comments and queue verification.
 - `review_feedback` — read the latest submitted feedback without delivering it again.
+- `review_comments_list` — open comments with ids, authors, anchors and text.
+- `review_resolve_comment` — mark a fixed comment resolved; the event records an AI agent.
 - `/review <title>` — create a worktree review for the current workspace and return the
   same browser-facing URL as `review_start` (a `/code-review/review/<id>` path in embedded
   mode).
