@@ -32,6 +32,9 @@ versions may contain breaking changes.
 
 ### Added
 
+- Fixer agents can list open review comments with `review_comments_list` and mark addressed
+  comments resolved with `review_resolve_comment`; resolutions are attributed to the agent,
+  and accepted findings stop repeating once their transferred comment is resolved.
 - The report toolbar can select findings with per-card checkboxes, select all findings matching
   the current filter across pages, and accept or dismiss the selection in one confirmed request.
   Accepted/dismissed badges are visible on collapsed cards. Existing decisions and notes are
