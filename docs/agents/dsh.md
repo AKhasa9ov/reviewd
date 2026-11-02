@@ -1,5 +1,8 @@
 # DSH integration
 
+> Audience: users and agents running the native DeepSeek Harness bundle.
+> For installation alternatives, see [Connect an agent](../guides/connect-an-agent.md).
+
 `@dsh-code-review/dsh` is one Cordis bundle for DeepSeek Harness 0.2.x. It ships both
 halves of the integration plus the review daemon and SPA, so the default install needs no
 separate server process:
@@ -262,7 +265,7 @@ There is no automatic retention or GC in embedded mode. Reviews remain until the
 deleted or GC is run manually. The authenticated `POST /api/gc` endpoint is also exposed in
 embedded mode through `/api/code-review/gc`; an external daemon additionally supports the
 `review gc --older-than 90d` CLI. GC is irreversible, so take a backup first. See
-[docs/ops.md](ops.md) for the full retention, backup and upgrade procedure.
+[Deploy reviewd](../guides/deploy.md) for the full retention, backup and upgrade procedure.
 
 ## Security notes
 

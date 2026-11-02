@@ -32,4 +32,4 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-See [ops.md](ops.md) for repository mounts, TLS, backups and upgrades.
+See [Deploy reviewd](../guides/deploy.md) for repository mounts, TLS, backups and upgrades.

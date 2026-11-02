@@ -1,0 +1,44 @@
+# reviewd
+
+> reviewd is an agent-native code review control plane: independent AI pre-review,
+> line-anchored human comments, immutable rounds and deterministic feedback to the coding
+> agent that opened the change. Self-hosted; native DSH integration; CLI and HTTP for other
+> harnesses.
+
+Canonical repository: https://github.com/AKhasa9ov/reviewd
+
+## Start
+
+- [Product overview](https://github.com/AKhasa9ov/reviewd/blob/main/docs/features.md)
+- [Quick start](https://github.com/AKhasa9ov/reviewd/blob/main/docs/getting-started/quickstart.md)
+- [Documentation index](https://github.com/AKhasa9ov/reviewd/blob/main/docs/README.md)
+- [Agent entrypoint](https://github.com/AKhasa9ov/reviewd/blob/main/AGENTS.md)
+
+## Agent integration
+
+- [Agent integration matrix](https://github.com/AKhasa9ov/reviewd/blob/main/docs/guides/connect-an-agent.md)
+- [DSH native bundle](https://github.com/AKhasa9ov/reviewd/blob/main/docs/agents/dsh.md)
+- [CLI agent loop](https://github.com/AKhasa9ov/reviewd/blob/main/docs/agents/cli.md)
+- [Reviewer contract](https://github.com/AKhasa9ov/reviewd/blob/main/docs/agents/reviewer.md)
+- [Fixer contract](https://github.com/AKhasa9ov/reviewd/blob/main/docs/agents/fixer.md)
+- [Run a fix agent](https://github.com/AKhasa9ov/reviewd/blob/main/docs/guides/run-a-fix-agent.md)
+
+## Reference
+
+- [CLI](https://github.com/AKhasa9ov/reviewd/blob/main/docs/reference/cli.md)
+- [HTTP API](https://github.com/AKhasa9ov/reviewd/blob/main/docs/reference/http-api.md)
+- [Review state](https://github.com/AKhasa9ov/reviewd/blob/main/docs/reference/review-state.md)
+- [Worker protocol](https://github.com/AKhasa9ov/reviewd/blob/main/docs/reference/worker-protocol.md)
+- [Architecture](https://github.com/AKhasa9ov/reviewd/blob/main/docs/architecture.md)
+- [Security](https://github.com/AKhasa9ov/reviewd/blob/main/SECURITY.md)
+
+## Constraints
+
+- No MCP server is shipped.
+- Native adapters exist for DSH only; Claude Code, Codex, pi and custom agents use the CLI
+  or HTTP API.
+- The CLI has no `comments resolve` subcommand; use `review_resolve_comment` or
+  `POST /api/reviews/:id/comments/:cid/resolve`.
+- The daemon is single-tenant: one shared token, no user accounts.
+- npm publication of `@dsh-code-review/*` 0.1.0 is pending registry credentials.
+- Never put the daemon token in a model prompt or repository file.

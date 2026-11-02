@@ -1,4 +1,4 @@
-# Daemon and CLI contract (C5)
+# HTTP API
 
 `reviewd` exposes `@dsh-code-review/core` over authenticated HTTP. The daemon and the
 `review` CLI are intentionally harness-agnostic: DSH, pi, Claude Code and Codex use the
@@ -32,6 +32,8 @@ HTTPS) from `POST /api/auth` with either `{ "token": "..." }` or a browser
 `application/x-www-form-urlencoded` form (`token=...`), and clear it with
 `POST /api/auth/logout`. `GET /api/health` and `GET /api/version` need no token.
 Mutations are rejected when `Origin`/`Sec-Fetch-Site` is cross-origin. There is no CORS.
+
+## Errors
 
 Rate limits are fixed-window, per peer: 60 mutations/min and 600 reads/min. A limit
 response is `429` with `Retry-After`. All errors use:
@@ -190,42 +192,5 @@ one.
 
 ## CLI
 
-`review diff` remains local and unchanged. Remote commands accept `--daemon <url>` or
-`CODE_REVIEW_URL`, and the token from `CODE_REVIEW_TOKEN` (or
-`~/.config/code-review/config.json` with mode `0600`).
-
-```bash
-review start --repo /srv/repo --base main --reviewer worker --json
-review status <id> --json
-review feedback <id> --wait --format md
-review comments list <id> --json
-review comments add <id> --file src/a.ts --line 42 --body 'Please explain'
-review submit <id> --request-changes --summary 'Address the blocker'
-review refresh <id>
-review fix-status <id> --json @claims.json
-review health
-review gc --older-than 90d
-review serve --store /var/lib/code-review --public-url https://review.example
-```
-
-`start` without `--head` reviews the current worktree; `--head` selects a range and
-`--commit` selects one commit. If `--base` is omitted, the CLI resolves `origin/HEAD` →
-`main` → `master` → current branch through `resolveDefaultBase` (falling back to `main` when
-the repository is not local to the client).
-
-`start --json` returns the stable shape `{review,url,warnings}`. Other JSON commands return
-the corresponding daemon object. Exit codes:
-
-| code | meaning                               |
-| ---- | ------------------------------------- |
-| 0    | success                               |
-| 2    | timeout / not ready                   |
-| 3    | authentication or authorization       |
-| 4    | daemon unavailable                    |
-| 5    | validation or not found               |
-| 6    | conflict / stale round / rate limited |
-
-For a systemd unit, run `reviewd` with `EnvironmentFile=/etc/code-review/reviewd.env`
-containing `CODE_REVIEW_TOKEN` and `CODE_REVIEW_STORE`; point a reverse proxy at the
-listener and set `CODE_REVIEW_PUBLIC_URL` to the public HTTPS origin. Docker deployments
-should mount the store as a persistent volume and keep the token in a secret.
+The `review` CLI maps onto these routes. See the [CLI reference](cli.md) for commands,
+flags and exit codes.

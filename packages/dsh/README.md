@@ -4,6 +4,9 @@ Code review for DeepSeek Harness in one package: a sidebar panel, `review_*` too
 `/review`, a reviewer worker, feedback delivery, and the full review daemon and UI in the
 default embedded mode.
 
+See [DSH integration](../../docs/agents/dsh.md) for the user guide and
+[Architecture](../../docs/architecture.md) for how the bundle fits together.
+
 The package declares both DSH signals — `dsh.bundle.patch` (the `code-review` row) and
 `dsh.client` (the web client) — and ships the bundled Host, the built SPA, locale files and
 the MIT license.
@@ -17,10 +20,9 @@ dsh plugin --profile web add @dsh-code-review/dsh
 ```
 
 This adds the package to the `web` profile. Restart the profile so the Host routes and
-loops load; DSH HMR can reload only the client half. The package is not yet published to
-the public registry; use the local tarball path below until the release is published. From
-a local checkout, build and pack,
-then install the tarball with the same command:
+loops load; DSH HMR can reload only the client half. The 0.1.0 npm publication is pending
+registry credentials. From a local checkout, build and pack, then install the tarball with
+the same command:
 
 ```bash
 pnpm fat:verify

@@ -9,6 +9,10 @@ versions may contain breaking changes.
 
 ### Changed
 
+- Public documentation is now a task-oriented docs tree with a short landing README,
+  feature tour, how-to guides, agent integration guides and reference pages. Internal
+  plans, raw design documents and benchmark notes were removed from the public tree;
+  Git history retains them.
 - The DSH bundle defaults to embedded mode and serves the review SPA under the
   `/code-review` base path. The embedded SPA authenticates with the DSH session and has no
   review-token form or browser-visible daemon token; external mode (`embedded: false`)

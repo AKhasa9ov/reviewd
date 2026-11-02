@@ -71,6 +71,31 @@ One logical change per commit. Do not mix formatting-only churn with behavior ch
 - For UI changes, attach a screenshot or a short recording. For accessibility changes, run
   `pnpm test:a11y` and report serious/critical findings.
 
+## Publishing
+
+The canonical registry is [npmjs.com](https://www.npmjs.com/). The public packages keep the
+`@dsh-code-review/*` scope for continuity with the existing package names. The release
+order is `core` → `server` → `dsh`; the DSH package depends on the other two.
+
+```bash
+pnpm --filter @dsh-code-review/core publish --access public
+pnpm --filter @dsh-code-review/server publish --access public
+pnpm --filter @dsh-code-review/dsh publish --access public
+```
+
+npm requires either an interactive one-time password or a **granular access token with
+Bypass 2FA** and read/write access to the package scope. A token that can authenticate but
+cannot bypass 2FA fails with `E403` even when its account owns the scope.
+
+This project does not publish to GitHub Packages. GitHub Packages requires the npm package
+scope to match a GitHub user or organization, and consumers need registry authentication
+even for public packages. The current scope has no matching GitHub owner, so GitHub Packages
+would add a consumer setup step without replacing npmjs. See
+[Working with the npm registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-npm-registry).
+
+Never commit `.npmrc`, a token or a registry credential. Rotate a token immediately if it
+leaks.
+
 ## Security reports
 
 Do not open a public issue for a vulnerability. See [SECURITY.md](SECURITY.md).

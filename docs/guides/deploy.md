@@ -1,7 +1,7 @@
-# Operations
+# Deploy reviewd
 
 This guide covers a self-hosted `reviewd` deployment with Docker Compose. The same daemon
-can run directly on a host; see [daemon.md](daemon.md) for the process/CLI contract.
+can run directly on a host; see [HTTP API](../reference/http-api.md) for the process/CLI contract.
 
 ## 1. Prerequisites
 

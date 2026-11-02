@@ -20,13 +20,14 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "fat:verify": "node scripts/verify-fat-package.mjs",
+    "docs:check": "node scripts/check-docs.mjs",
     "format": "prettier --check .",
     "format:write": "prettier --write .",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "verify": "pnpm build && pnpm format && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "verify": "pnpm build && pnpm docs:check && pnpm format && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "build:web": "vite build --config packages/web/vite.config.ts",
     "test:e2e": "pnpm build && playwright test",
     "test:a11y": "pnpm build && playwright test --grep @a11y"
