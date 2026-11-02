@@ -63,7 +63,7 @@ hunk.
 
 ### 3. An independent pre-review
 
-<img src="docs/images/reviewd-report-light.png" alt="reviewd reviewer report with severity, findings, dismissed decision and fix status" width="100%">
+<img src="docs/images/reviewd-report-dark.png" alt="reviewd reviewer report with severity, findings, dismissed decision and fix status" width="100%">
 
 A reviewer worker posts structured findings with severity, evidence, questions and optional
 suggestions. A human accepts or dismisses each one with a note; accepted work stays
@@ -71,7 +71,7 @@ actionable for the next agent.
 
 ### 4. Submit is a handoff, not a comment
 
-<img src="docs/images/reviewd-submit-context-light.png" alt="reviewd submit review dialog with verdict, summary and pending comments" width="100%">
+<img src="docs/images/reviewd-submit-context-dark.png" alt="reviewd submit review dialog with verdict, summary and pending comments" width="100%">
 
 Submitting produces a deterministic feedback package: unresolved comments, accepted
 findings, dismissed reasons, suggestions, questions and verification. It is delivered to the
