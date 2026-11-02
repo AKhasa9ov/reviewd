@@ -1,8 +1,10 @@
 {
   "name": "@dsh-code-review/server",
   "version": "0.1.0",
-  "private": true,
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/AKhasa9ov/reviewd.git"
