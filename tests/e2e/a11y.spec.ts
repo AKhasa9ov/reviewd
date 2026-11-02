@@ -21,6 +21,11 @@ async function expectNoSeriousAxe(page: Page, label: string): Promise<void> {
 }
 
 test.describe('@a11y accessibility', () => {
+  // Axe samples colors synchronously; let the theme transition finish before checking contrast.
+  test.beforeEach(async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+  });
+
   test('auth page has no serious or critical axe findings in dark, light and mobile', async ({
     page,
   }) => {

@@ -14,7 +14,6 @@ concurrency:
 env:
   # Compose requires a token at config time. This is a CI-only dummy, never a secret.
   CODE_REVIEW_TOKEN: ci-placeholder-token-0123456789abcdef0123456789abcdef
-  CODE_REVIEW_PUBLIC_URL: http://127.0.0.1:3100
 
 jobs:
   verify:
