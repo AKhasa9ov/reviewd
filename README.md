@@ -46,40 +46,36 @@ It is not a GitHub/GitLab replacement — it is the review layer for agent-drive
 
 ## A tour of the review loop
 
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <img src="docs/images/reviewd-list-dark.png" alt="reviewd review queue grouped by repository with status and not-fixed counts" width="100%">
-      <h3>1. One queue for every change</h3>
-      <p>Reviews are grouped by repository and show status, rounds, open comments and the
-      count that still needs attention. Search and filters work on the same list a human
-      actually uses.</p>
-    </td>
-    <td width="50%" valign="top">
-      <img src="docs/images/reviewd-diff-dark.png" alt="reviewd unified diff with file tree, changed files and finding badges" width="100%">
-      <h3>2. The diff is the workspace</h3>
-      <p>Delta and full views, a file tree with change counts, inline suggestions and comment
-      or finding badges. Every thread keeps its file, side and line — including lines outside
-      the hunk.</p>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <img src="docs/images/reviewd-report-light.png" alt="reviewd reviewer report with severity, findings, dismissed decision and fix status" width="100%">
-      <h3>3. An independent pre-review</h3>
-      <p>A reviewer worker posts structured findings with severity, evidence, questions and
-      optional suggestions. A human accepts or dismisses each one with a note; accepted work
-      stays actionable for the next agent.</p>
-    </td>
-    <td width="50%" valign="top">
-      <img src="docs/images/reviewd-submit-light.png" alt="reviewd submit review dialog with verdict, summary and pending comments" width="100%">
-      <h3>4. Submit is a handoff, not a comment</h3>
-      <p>Submitting produces a deterministic feedback package: unresolved comments, accepted
-      findings, dismissed reasons, suggestions, questions and verification. It is delivered to
-      the initiating DSH session or read by CLI/HTTP clients.</p>
-    </td>
-  </tr>
-</table>
+### 1. One queue for every change
+
+<img src="docs/images/reviewd-list-dark.png" alt="reviewd review queue grouped by repository with status and not-fixed counts" width="100%">
+
+Reviews are grouped by repository and show status, rounds, open comments and the count that
+still needs attention. Search and filters work on the same list a human actually uses.
+
+### 2. The diff is the workspace
+
+<img src="docs/images/reviewd-diff-dark.png" alt="reviewd unified diff with file tree, changed files and finding badges" width="100%">
+
+Delta and full views, a file tree with change counts, inline suggestions and comment or
+finding badges. Every thread keeps its file, side and line — including lines outside the
+hunk.
+
+### 3. An independent pre-review
+
+<img src="docs/images/reviewd-report-light.png" alt="reviewd reviewer report with severity, findings, dismissed decision and fix status" width="100%">
+
+A reviewer worker posts structured findings with severity, evidence, questions and optional
+suggestions. A human accepts or dismisses each one with a note; accepted work stays
+actionable for the next agent.
+
+### 4. Submit is a handoff, not a comment
+
+<img src="docs/images/reviewd-submit-context-light.png" alt="reviewd submit review dialog with verdict, summary and pending comments" width="100%">
+
+Submitting produces a deterministic feedback package: unresolved comments, accepted
+findings, dismissed reasons, suggestions, questions and verification. It is delivered to the
+initiating DSH session or read by CLI/HTTP clients.
 
 <p align="center">
   <img src="docs/images/reviewd-mobile-dark.png" alt="reviewd review detail reflowed for a narrow viewport" width="300">
