@@ -10,8 +10,9 @@ feedback loop back to the coding agent that opened the review.
 [![CI](https://github.com/AKhasa9ov/reviewd/actions/workflows/ci.yml/badge.svg)](https://github.com/AKhasa9ov/reviewd/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-22%2B-5FA04E.svg)](https://nodejs.org/)
+[![npm](https://img.shields.io/npm/v/@sir_yami/reviewd?label=npm&logo=npm&color=cb3837)](https://www.npmjs.com/package/@sir_yami/reviewd)
 
-[Quick start](#quick-start) · [Features](docs/features.md) · [Documentation](docs/README.md) · [Agents](AGENTS.md)
+[Quick start](#quick-start) · [npm packages](#npm-packages) · [Features](docs/features.md) · [Documentation](docs/README.md) · [Agents](AGENTS.md)
 
 <img src="docs/images/reviewd-conversation-dark.png" alt="reviewd review detail: re-anchored comments, suggestions and fix status after a round" width="100%">
 
@@ -43,6 +44,19 @@ gives the change a durable review surface:
 reviewd is **self-hosted** and **harness-agnostic**. DSH gets a native panel and tools;
 Claude Code, Codex, pi and a plain shell use the same authenticated CLI/HTTP contract.
 It is not a GitHub/GitLab replacement — it is the review layer for agent-driven work.
+
+## npm packages
+
+The public packages are published on npm under the `@sir_yami` scope:
+
+| Package                                                                              | Latest                                                                                                                                        | Install                                          | Role                    |
+| ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | ----------------------- |
+| [`@sir_yami/reviewd`](https://www.npmjs.com/package/@sir_yami/reviewd)               | [![npm](https://img.shields.io/npm/v/@sir_yami/reviewd?logo=npm&color=cb3837)](https://www.npmjs.com/package/@sir_yami/reviewd)               | `dsh plugin --profile web add @sir_yami/reviewd` | DSH bundle              |
+| [`@sir_yami/reviewd-server`](https://www.npmjs.com/package/@sir_yami/reviewd-server) | [![npm](https://img.shields.io/npm/v/@sir_yami/reviewd-server?logo=npm&color=cb3837)](https://www.npmjs.com/package/@sir_yami/reviewd-server) | `npm install -g @sir_yami/reviewd-server`        | daemon and `review` CLI |
+| [`@sir_yami/reviewd-core`](https://www.npmjs.com/package/@sir_yami/reviewd-core)     | [![npm](https://img.shields.io/npm/v/@sir_yami/reviewd-core?logo=npm&color=cb3837)](https://www.npmjs.com/package/@sir_yami/reviewd-core)     | `npm install @sir_yami/reviewd-core`             | contracts and store     |
+
+The DSH bundle is the primary install. The server and core packages are for standalone
+daemons, CI, custom adapters and the `review` CLI.
 
 ## A tour of the review loop
 
@@ -146,13 +160,20 @@ starts `reviewd` in-process and serves the review UI at `/code-review` behind DS
 auth. See [DSH integration](docs/agents/dsh.md) for configuration, tools, worker and data
 retention.
 
-> **Release status:** `0.1.0` is published under the `@sir_yami` scope. Install the DSH
-> package from npm; Docker and source checkouts remain available.
+> **Release status:** the `0.1.x` npm release is live under `@sir_yami`: DSH bundle and
+> core `0.1.0`, server and CLI `0.1.1`. Docker and source checkouts remain available.
 
 ### CLI
 
-After `pnpm build`, the CLI is at `packages/server/dist/cli.js`; the published package is
-`review` from `@sir_yami/reviewd-server`.
+Install the published CLI:
+
+```bash
+npm install -g @sir_yami/reviewd-server
+review version
+```
+
+The package exposes `review` and `reviewd`. From a source checkout, build and run
+`node packages/server/dist/cli.js`.
 
 ```bash
 review start --repo /srv/repo --base main --reviewer worker --json
@@ -226,7 +247,8 @@ See [SECURITY.md](SECURITY.md) for the full threat model and reporting process.
   CLI/HTTP contract; MCP is not shipped.
 - The event store is a single-writer local filesystem store; there is no HA/clustering.
 - The image is Linux/amd64-oriented; multi-arch manifests are not published.
-- npm packages are published under `@sir_yami/*`; the DSH package is `@sir_yami/reviewd`.
+- npm packages are published under `@sir_yami/*`: DSH bundle and core `0.1.0`, server and
+  CLI `0.1.1`.
 
 ## License
 

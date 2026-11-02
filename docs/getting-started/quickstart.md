@@ -79,8 +79,8 @@ node packages/server/dist/cli.js serve \
   --public-url https://review.example
 ```
 
-The `review` command becomes directly available after the npm packages are published; in a
-source checkout use `node packages/server/dist/cli.js`.
+Install the published CLI with `npm install -g @sir_yami/reviewd-server`, then run
+`review version`. In a source checkout use `node packages/server/dist/cli.js`.
 
 ### Disposable demo
 

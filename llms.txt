@@ -40,5 +40,5 @@ Canonical repository: https://github.com/AKhasa9ov/reviewd
 - The CLI has no `comments resolve` subcommand; use `review_resolve_comment` or
   `POST /api/reviews/:id/comments/:cid/resolve`.
 - The daemon is single-tenant: one shared token, no user accounts.
-- The 0.1.x npm packages are published under `@sir_yami/*`.
+- The npm packages are published under `@sir_yami/*`: `@sir_yami/reviewd@0.1.0`, `@sir_yami/reviewd-server@0.1.1` and `@sir_yami/reviewd-core@0.1.0`.
 - Never put the daemon token in a model prompt or repository file.
