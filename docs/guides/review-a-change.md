@@ -3,13 +3,13 @@
 This guide follows the human review loop in the browser. For the command-line equivalents,
 see the [CLI reference](../reference/cli.md).
 
-![Review detail with inline comments](../images/review-detail-light.png)
+![reviewd conversation with re-anchored comments, suggestions and fix status](../images/reviewd-conversation-dark.png)
 
 ## 1. Open the review list
 
 Sign in with the daemon token. The landing page lists reviews by status and repository:
 
-![Review list with repository groups](../images/review-list-dark.png)
+![Review queue grouped by repository with status and not-fixed counts](../images/reviewd-list-dark.png)
 
 Use the search and status filters to find a review. Reviews are grouped by repository when
 more than one checkout is configured. Each row shows the review status, round count and
@@ -74,7 +74,7 @@ The decision is stored as an event, so the audit trail survives later edits.
 
 Open **Submit** when the review is ready:
 
-![Submit dialog with verdict and summary](../images/review-submit-dark.png)
+![Submit review dialog with verdict, summary and pending comments](../images/reviewd-submit-context-light.png)
 
 Choose one verdict:
 

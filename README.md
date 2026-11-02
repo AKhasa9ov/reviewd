@@ -11,11 +11,24 @@ feedback loop back to the coding agent that opened the review.
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-22%2B-5FA04E.svg)](https://nodejs.org/)
 
-[Quick start](#quick-start) · [Documentation](docs/README.md) · [Agent guide](AGENTS.md) · [Architecture](docs/architecture.md)
+[Quick start](#quick-start) · [Features](docs/features.md) · [Documentation](docs/README.md) · [Agents](AGENTS.md)
 
-<img src="docs/images/review-detail-light.png" alt="reviewd review detail: grouped files, inline comments and round navigation" width="100%">
+<img src="docs/images/reviewd-conversation-dark.png" alt="reviewd review detail: re-anchored comments, suggestions and fix status after a round" width="100%">
+
+<sub>A real review after a fix round: one thread addressed, three decisions still open, and every
+comment still attached to its line.</sub>
 
 </div>
+
+## See it in motion
+
+<p align="center">
+  <img src="docs/images/reviewd-demo.gif" alt="reviewd walkthrough: review queue, comment thread, diff, reviewer report and submit dialog" width="100%">
+</p>
+
+<p align="center">
+  <sub><a href="docs/images/reviewd-walkthrough.webm">Open the 13-second WebM walkthrough</a> · the flow from queue to handoff, recorded on the real UI.</sub>
+</p>
 
 ## Why reviewd
 
@@ -31,53 +44,65 @@ reviewd is **self-hosted** and **harness-agnostic**. DSH gets a native panel and
 Claude Code, Codex, pi and a plain shell use the same authenticated CLI/HTTP contract.
 It is not a GitHub/GitLab replacement — it is the review layer for agent-driven work.
 
-## What it does
+## A tour of the review loop
 
-### Independent pre-review
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/images/reviewd-list-dark.png" alt="reviewd review queue grouped by repository with status and not-fixed counts" width="100%">
+      <h3>1. One queue for every change</h3>
+      <p>Reviews are grouped by repository and show status, rounds, open comments and the
+      count that still needs attention. Search and filters work on the same list a human
+      actually uses.</p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/images/reviewd-diff-dark.png" alt="reviewd unified diff with file tree, changed files and finding badges" width="100%">
+      <h3>2. The diff is the workspace</h3>
+      <p>Delta and full views, a file tree with change counts, inline suggestions and comment
+      or finding badges. Every thread keeps its file, side and line — including lines outside
+      the hunk.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/images/reviewd-report-light.png" alt="reviewd reviewer report with severity, findings, dismissed decision and fix status" width="100%">
+      <h3>3. An independent pre-review</h3>
+      <p>A reviewer worker posts structured findings with severity, evidence, questions and
+      optional suggestions. A human accepts or dismisses each one with a note; accepted work
+      stays actionable for the next agent.</p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/images/reviewd-submit-light.png" alt="reviewd submit review dialog with verdict, summary and pending comments" width="100%">
+      <h3>4. Submit is a handoff, not a comment</h3>
+      <p>Submitting produces a deterministic feedback package: unresolved comments, accepted
+      findings, dismissed reasons, suggestions, questions and verification. It is delivered to
+      the initiating DSH session or read by CLI/HTTP clients.</p>
+    </td>
+  </tr>
+</table>
 
-A reviewer worker reads the diff and surrounding code, then posts structured findings with
-severity, evidence, questions and optional suggestions. The reviewer is read-only: it
-cannot edit the repository or write review state outside its defined events.
+<p align="center">
+  <img src="docs/images/reviewd-mobile-dark.png" alt="reviewd review detail reflowed for a narrow viewport" width="300">
+</p>
 
-### Review that survives force-pushes
+<p align="center">
+  <sub>The same review surface down to 320px, with keyboard navigation and light/dark themes.</sub>
+</p>
 
-Comments are anchored to a file, side, line or range, with a quote and content hash. When
-the source changes, the next round re-anchors them by rename, hunk mapping and quoted
-context. Previous and current locations are both visible. Comments are never physically
-deleted; `resolved` and `dismissed` are states, not destructive actions.
+The same review survives a force-push: comments are re-anchored across renames and moved
+hunks, old and new locations are visible, and outcomes are explicit (`applied`, `addressed`,
+`unchanged`, `outdated`, `moved`). Nothing is silently rewritten.
 
-### Close the loop with a fix agent
+## What stays true
 
-Submit a review and reviewd produces a deterministic feedback package: open human
-comments, accepted findings, dismissed findings with notes, suggestions, questions and
-verification entries. A DSH fixer can call `review_feedback`, then `review_refresh`, then
-`review_resolve_comment` after the fix. CLI and HTTP clients get the same contract.
-
-### Harness-agnostic by design
-
-The daemon owns review state and the HTTP contract. The DSH bundle adds a sidebar panel,
-`review_*` tools, `/review`, a reviewer worker and feedback delivery. Other harnesses call
-the `review` CLI or the documented HTTP API. No MCP adapter is required — or shipped yet.
-
-### Auditable, self-hosted state
-
-Reviews live in an append-only `events.jsonl` per review. Rounds are immutable snapshots;
-replay is authoritative and `snapshot.json` is a cache. One token protects the deployment;
-review data is never sent to a hosted service.
-
-## See it
-
-| Review list                                                              | Review detail                                                               |
-| ------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| ![Repository groups and review status](docs/images/review-list-dark.png) | ![Diff, inline comments and decisions](docs/images/review-detail-light.png) |
-
-| Submit and hand off                                                                  |
-| ------------------------------------------------------------------------------------ |
-| ![Submit review dialog with verdict and summary](docs/images/review-submit-dark.png) |
-
-The UI supports real git diffs, file and line comments, drag-selected ranges, suggestions,
-round switching, delta/full views, finding decisions, deep links, keyboard navigation,
-320px layouts and light/dark themes. The browser suite runs axe WCAG 2.1 A/AA checks.
+- **Independent pre-review.** A read-only reviewer reads the diff, manifest and surrounding
+  code, then posts findings as events — never as an unstructured chat log.
+- **Review that survives the change.** Immutable rounds, quoted context, content hashes and
+  deterministic re-anchoring keep the conversation attached to the code.
+- **A real handoff.** The feedback package has a stable key and no timestamps or random
+  values, so repeated reads and deliveries are idempotent.
+- **Self-hosted state.** Append-only `events.jsonl` per review, local store, one token, no
+  hosted service. The UI, CLI, DSH bundle and workers are adapters over the same service.
 
 ## Quick start
 
@@ -96,10 +121,9 @@ curl -fsS http://127.0.0.1:3100/api/health
 Open <http://127.0.0.1:3100>, sign in with `$TOKEN`, and create a review. Keep the token
 across restarts by copying `.env.example` to `.env`; `.env` is gitignored.
 
-The image only sees repositories you mount. See
-[Deploy reviewd](docs/guides/deploy.md) for repository mounts, TLS, token rotation,
-backups, retention and upgrades. **Do not expose port 3100 directly to the public
-internet:** there is one shared token and no account system.
+The image only sees repositories you mount. See [Deploy reviewd](docs/guides/deploy.md) for
+repository mounts, TLS, token rotation, backups, retention and upgrades. **Do not expose port
+3100 directly to the public internet:** there is one shared token and no account system.
 
 ### Local (Node 22)
 
@@ -121,10 +145,10 @@ daemon on a random port, creates a `base..feature` review and prints the URL.
 dsh plugin --profile web add @dsh-code-review/dsh
 ```
 
-Restart the profile so Host routes and loops load. Embedded mode is the default: the
-bundle starts `reviewd` in-process and serves the review UI at `/code-review` behind DSH
-session auth. See [DSH integration](docs/agents/dsh.md) for configuration, tools, worker
-and data retention.
+Restart the profile so Host routes and loops load. Embedded mode is the default: the bundle
+starts `reviewd` in-process and serves the review UI at `/code-review` behind DSH session
+auth. See [DSH integration](docs/agents/dsh.md) for configuration, tools, worker and data
+retention.
 
 > **Release status:** `0.1.0` is a release candidate. Docker and source checkouts are ready.
 > npm publication is pending registry credentials; the DSH package can still be installed
@@ -153,7 +177,7 @@ command surface and exit codes.
 
 | I want to…                                  | Start here                                                                            |
 | ------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Understand the product                      | [Features](docs/features.md)                                                          |
+| See the full feature tour                   | [Features](docs/features.md)                                                          |
 | Install and create my first review          | [Quick start](docs/getting-started/quickstart.md)                                     |
 | Review a change as a human                  | [Review a change](docs/guides/review-a-change.md)                                     |
 | Run a fix agent against review feedback     | [Run a fix agent](docs/guides/run-a-fix-agent.md)                                     |
@@ -164,8 +188,7 @@ command surface and exit codes.
 | Work on the code                            | [CONTRIBUTING.md](CONTRIBUTING.md)                                                    |
 
 The complete documentation index is [docs/README.md](docs/README.md). Agents that use
-reviewd should start at [AGENTS.md](AGENTS.md); a machine-readable index is at
-[llms.txt](llms.txt).
+reviewd should start at [AGENTS.md](AGENTS.md); a machine-readable index is at [llms.txt](llms.txt).
 
 ## How it works
 
@@ -191,8 +214,8 @@ the same service. See [Architecture](docs/architecture.md) for components and da
 - Health and version are public; all review data is authenticated. Mutations reject
   cross-origin requests; there is no CORS. Rate limits and body/diff/snapshot caps bound
   resource use.
-- `reviewd` is plain HTTP. Terminate TLS at a reverse proxy and keep the listener on
-  loopback or a private network. There are no per-user accounts or token revocation lists.
+- `reviewd` is plain HTTP. Terminate TLS at a reverse proxy and keep the listener on loopback
+  or a private network. There are no per-user accounts or token revocation lists.
 - Reviewer output and comments are untrusted data. Rendering is safe text/code; reviewer
   tools use a read-only allowlist; command backends run without a shell, with a minimal
   environment and bounded output.

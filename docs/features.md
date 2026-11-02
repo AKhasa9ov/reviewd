@@ -3,7 +3,7 @@
 reviewd is built around one loop: **an agent opens a change, a reviewer finds problems, a
 human decides what matters, and the next agent pass gets precise instructions**.
 
-![Review detail with inline comments, findings and round navigation](images/review-detail-light.png)
+![reviewd conversation with re-anchored comments, suggestions and fix status](images/reviewd-conversation-dark.png)
 
 ## At a glance
 
@@ -50,9 +50,9 @@ Comments are never physically deleted. `resolved` and `dismissed` are soft state
 event log keeps the audit trail. Review metadata and comment text can be corrected while a
 review is open; changing the scope starts a new round.
 
-| Review list                                                         | Submit and hand off                                                             |
-| ------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| ![Repository groups and review status](images/review-list-dark.png) | ![Submit review dialog with verdict and summary](images/review-submit-dark.png) |
+| Review list                                                                                          | Submit and hand off                                                                                 |
+| ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| ![Review queue grouped by repository with status and not-fixed counts](images/reviewd-list-dark.png) | ![Submit review dialog with verdict, summary and pending comments](images/reviewd-submit-light.png) |
 
 ## Agent findings and human decisions
 
