@@ -49,14 +49,51 @@ It is not a GitHub/GitLab replacement — it is the review layer for agent-drive
 
 The public packages are published on npm under the `@sir_yami` scope:
 
-| Package                                                                              | Latest                                                                                                                                        | Install                                          | Role                    |
-| ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | ----------------------- |
-| [`@sir_yami/reviewd`](https://www.npmjs.com/package/@sir_yami/reviewd)               | [![npm](https://img.shields.io/npm/v/@sir_yami/reviewd?logo=npm&color=cb3837)](https://www.npmjs.com/package/@sir_yami/reviewd)               | `dsh plugin --profile web add @sir_yami/reviewd` | DSH bundle              |
-| [`@sir_yami/reviewd-server`](https://www.npmjs.com/package/@sir_yami/reviewd-server) | [![npm](https://img.shields.io/npm/v/@sir_yami/reviewd-server?logo=npm&color=cb3837)](https://www.npmjs.com/package/@sir_yami/reviewd-server) | `npm install -g @sir_yami/reviewd-server`        | daemon and `review` CLI |
-| [`@sir_yami/reviewd-core`](https://www.npmjs.com/package/@sir_yami/reviewd-core)     | [![npm](https://img.shields.io/npm/v/@sir_yami/reviewd-core?logo=npm&color=cb3837)](https://www.npmjs.com/package/@sir_yami/reviewd-core)     | `npm install @sir_yami/reviewd-core`             | contracts and store     |
+| Package                                                                              | Latest                                                                                                                                        | Install                                          | Role                         |
+| ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | ---------------------------- |
+| [`@sir_yami/reviewd`](https://www.npmjs.com/package/@sir_yami/reviewd)               | [![npm](https://img.shields.io/npm/v/@sir_yami/reviewd?logo=npm&color=cb3837)](https://www.npmjs.com/package/@sir_yami/reviewd)               | `dsh plugin --profile web add @sir_yami/reviewd` | DSH bundle                   |
+| [`@sir_yami/reviewd-server`](https://www.npmjs.com/package/@sir_yami/reviewd-server) | [![npm](https://img.shields.io/npm/v/@sir_yami/reviewd-server?logo=npm&color=cb3837)](https://www.npmjs.com/package/@sir_yami/reviewd-server) | `npm install -g @sir_yami/reviewd-server`        | daemon, API and `review` CLI |
+| [`@sir_yami/reviewd-core`](https://www.npmjs.com/package/@sir_yami/reviewd-core)     | [![npm](https://img.shields.io/npm/v/@sir_yami/reviewd-core?logo=npm&color=cb3837)](https://www.npmjs.com/package/@sir_yami/reviewd-core)     | `npm install @sir_yami/reviewd-core`             | TypeScript library           |
 
-The DSH bundle is the primary install. The server and core packages are for standalone
-daemons, CI, custom adapters and the `review` CLI.
+These are layers, not three alternatives. Install the one that matches where the review
+should live.
+
+### What should I install?
+
+| Situation                                                               | Install                                                                                             |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Review inside DSH, with no separate service                             | `@sir_yami/reviewd`                                                                                 |
+| DSH panel backed by a shared daemon                                     | `@sir_yami/reviewd-server` on the daemon host and `@sir_yami/reviewd` in DSH with `embedded: false` |
+| Standalone browser UI                                                   | Docker Compose, which includes the web build; the npm server package is API/CLI-first               |
+| CLI or HTTP API for agents, CI and remote machines                      | `@sir_yami/reviewd-server`                                                                          |
+| Custom TypeScript adapter, or embedding review state in another process | `@sir_yami/reviewd-core`                                                                            |
+
+### What each package contains
+
+**`@sir_yami/reviewd` — DSH integration.** Start here if you use DeepSeek Harness. The
+bundle brings the sidebar panel, the `review_*` tools, a reviewer worker, feedback delivery
+and its own SPA at `/code-review`. It starts the daemon in-process, so there is no separate
+`reviewd` process to install or supervise. The bundle already contains the server and core
+code it needs; installing those separately adds nothing.
+
+**`@sir_yami/reviewd-server` — standalone service and CLI.** Use it when the review service
+must outlive DSH, be shared by several agents or machines, or be called from scripts. It
+provides the `reviewd` daemon, the authenticated HTTP/SSE API, worker leases, deliveries and
+the `review` CLI. It depends on `@sir_yami/reviewd-core`, so a single `npm install` brings
+the library with it.
+
+> The npm server tarball ships the daemon and CLI, not the built browser SPA. The API and
+> `review` CLI work without it. For the standalone UI use the Docker Compose stack, point
+> `CODE_REVIEW_WEB_DIR` at a built `packages/web/dist`, or use the DSH bundle's panel.
+
+**`@sir_yami/reviewd-core` — TypeScript library.** Use it only when you are writing an
+adapter, a custom service or tests that need review state directly. It exposes the store,
+lifecycle, snapshots, diff anchoring, reviewer contracts and feedback types. It has no
+`review` binary, HTTP server, SPA or worker process.
+
+Do not install all three "to be safe". DSH users need only `@sir_yami/reviewd`; standalone
+services and agents need only `@sir_yami/reviewd-server`; custom integrations need
+`@sir_yami/reviewd-core` in addition to their own runtime.
 
 ## A tour of the review loop
 

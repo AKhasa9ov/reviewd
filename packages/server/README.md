@@ -3,8 +3,9 @@
 The `reviewd` HTTP daemon, worker/lease service and `review` CLI for
 [reviewd](../../README.md).
 
-The server serves the authenticated API and the built review SPA. It is a single-tenant,
-self-hosted service: one shared token, no account system.
+The server exposes the authenticated API, the worker/lease service and the `review` CLI.
+In a source checkout and the Docker image it also serves the built review SPA. It is a
+single-tenant, self-hosted service: one shared token, no account system.
 
 ## Install
 
@@ -28,9 +29,13 @@ reviewd
 review serve --store /var/lib/code-review --host 127.0.0.1 --port 3100
 ```
 
-The default listener is `127.0.0.1:3100`. The daemon serves the SPA at `/` and the API under
-`/api`. Keep the listener on loopback or a private network and terminate TLS at a reverse
-proxy.
+> The npm tarball ships the daemon and CLI, not the built SPA. `reviewd` still serves the
+> API and a fallback page. Use the Docker Compose stack for the full standalone UI, set
+> `CODE_REVIEW_WEB_DIR` to a built `packages/web/dist`, or use the DSH bundle's panel.
+
+The default listener is `127.0.0.1:3100`. In a source checkout or Docker image the daemon
+serves the SPA at `/` and the API under `/api`. Keep the listener on loopback or a private
+network and terminate TLS at a reverse proxy.
 
 ### Environment
 
