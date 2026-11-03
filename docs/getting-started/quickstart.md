@@ -113,7 +113,7 @@ From a local checkout, pack and install the tarball:
 
 ```bash
 pnpm fat:verify
-dsh plugin --profile web add /absolute/path/to/sir_yami-reviewd-0.1.0.tgz
+dsh plugin --profile web add /absolute/path/to/sir_yami-reviewd-0.2.0.tgz
 ```
 
 ## Your first review

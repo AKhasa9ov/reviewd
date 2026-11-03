@@ -82,17 +82,18 @@ The package has no timestamps or random values, so repeated reads and deliveries
 idempotent. DSH receives the package through the initiating session; CLI and HTTP clients
 read the same content.
 
-## Fix agents can resolve comments
+## Fix agents can reply and resolve comments
 
-A fix agent can mark a comment resolved after it has actually fixed the issue. The event is
-attributed to an **agent actor**, not silently rewritten as a human action. The DSH tool is
-`review_resolve_comment`; the HTTP route is
+A fix agent can reply to a comment and mark it resolved after it has actually fixed the
+issue. Both events are attributed to an **agent actor**, not silently rewritten as a human
+action. The DSH tools are `review_reply_comment` and `review_resolve_comment`; the HTTP
+routes are `POST /api/reviews/:id/comments/:cid/replies` and
 `POST /api/reviews/:id/comments/:cid/resolve` with an optional `x-review-actor` header.
 
 The fix loop is:
 
 ```text
-feedback → edit code → run tests → refresh → review comments → resolve what changed
+feedback → edit code → run tests → refresh → review comments → reply → resolve what changed
 ```
 
 Comment resolution does not replace human verification. Outcomes and fix claims are

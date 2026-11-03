@@ -7,6 +7,8 @@ versions may contain breaking changes.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-03
+
 ### Changed
 
 - Public documentation is now a task-oriented docs tree with a short landing README,
@@ -49,9 +51,12 @@ versions may contain breaking changes.
   committed conflict markers are ordinary content.
 - The report toolbar filters findings by several severities and categories at once: values
   inside one filter are ORed, the two filters are ANDed, and an empty filter means all.
-- Fixer agents can list open review comments with `review_comments_list` and mark addressed
-  comments resolved with `review_resolve_comment`; resolutions are attributed to the agent,
-  and accepted findings stop repeating once their transferred comment is resolved.
+- Fixer agents have an explicit review path: list open comments with
+  `review_comments_list`, answer or report evidence with `review_reply_comment`, and mark
+  addressed comments resolved with `review_resolve_comment`. Replies and resolutions are
+  attributed to the agent, and accepted findings stop repeating once their transferred
+  comment is resolved. The CLI adds `review comments reply <id> --comment <cid> --body`;
+  `comments resolve` remains HTTP/DSH-only.
 - The report toolbar can select findings with per-card checkboxes, select all findings matching
   the current filter across pages, and accept or dismiss the selection in one confirmed request.
   Accepted/dismissed badges are visible on collapsed cards. Existing decisions and notes are

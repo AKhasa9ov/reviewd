@@ -54,12 +54,44 @@ sequenceDiagram
   F->>F: edit + run tests
   F->>D: POST /refresh (new round)
   F->>D: GET comments / list open
+  F->>D: POST /comments/:id/replies (question or progress)
   F->>D: POST /comments/:id/resolve (verified only)
   F-->>F: report evidence
 ```
 
-Refreshing creates a new immutable round and re-anchors comments. Resolving changes one
-comment's state. Never resolve before the refreshed round contains the fix.
+Refreshing creates a new immutable round and re-anchors comments. Replying adds a message
+without changing state; resolving changes one comment's state. Never resolve before the
+refreshed round contains the fix.
+
+## Reply
+
+Use a reply when the human asked a question, when you need to report intermediate
+evidence, or when the fix needs an explanation. A reply does **not** resolve the comment.
+
+### DSH
+
+`review_reply_comment` with `{reviewId, commentId, body}`. The event actor is an AI agent.
+
+### CLI
+
+```bash
+review comments reply "$REVIEW_ID" --comment "$COMMENT_ID" \
+  --body 'Fixed the retry guard; the focused test passes.'
+```
+
+The command prints the new reply id; pass `--json` for the full parent comment.
+
+### HTTP
+
+```bash
+curl -fsS -X POST \
+  "$CODE_REVIEW_URL/api/reviews/$REVIEW_ID/comments/$COMMENT_ID/replies" \
+  -H "Authorization: Bearer $CODE_REVIEW_TOKEN" \
+  -H "x-review-actor: fixer-agent" \
+  -H "idempotency-key: reply-$COMMENT_ID" \
+  -H 'content-type: application/json' \
+  -d '{"body":"Fixed the retry guard; the focused test passes."}'
+```
 
 ## Resolve
 
@@ -86,7 +118,7 @@ curl -fsS -X POST \
 
 ### CLI
 
-There is **no** `review comments resolve` subcommand in 0.1.0. Use the HTTP route or DSH.
+There is **no** `review comments resolve` subcommand in 0.2.0. Use the HTTP route or DSH.
 
 ## Resolve only when
 

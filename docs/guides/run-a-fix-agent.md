@@ -14,6 +14,7 @@ read feedback
   → run tests
   → refresh review
   → list open comments
+  → reply with progress or evidence when useful
   → resolve comments that are actually fixed
   → report evidence to the human
 ```
@@ -31,7 +32,9 @@ In a DSH session with the review bundle installed:
 2. Apply the requested changes and run the tests.
 3. `review_refresh` creates the next round.
 4. `review_comments_list` returns open comments and their ids.
-5. `review_resolve_comment` marks each fixed comment resolved. The event actor is an AI
+5. `review_reply_comment` with `{reviewId, commentId, body}` answers a question or records
+   a progress/evidence note. It adds a reply but keeps the comment open.
+6. `review_resolve_comment` marks each fixed comment resolved. The event actor is an AI
    agent, not the human who submitted the review.
 
 Tool failures return `{ok:false, error:{code,message}}` rather than throwing. Follow the
@@ -63,6 +66,15 @@ Make the changes and run the repository's tests. Then create the next round:
 ```bash
 review refresh "$REVIEW_ID"
 review status "$REVIEW_ID" --json
+```
+
+Reply in the channel when the human asked a question or needs progress evidence. The CLI
+prints the new reply id:
+
+```bash
+review comments reply "$REVIEW_ID" \
+  --comment "$COMMENT_ID" \
+  --body 'Fixed the retry guard; pnpm test tests/retry.test.ts passes.'
 ```
 
 Resolve a fixed comment through the HTTP endpoint. The CLI intentionally has **no**

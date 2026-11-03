@@ -37,11 +37,12 @@ review_feedback / review feedback
   → run tests
   → review_refresh / review refresh
   → review_comments_list / review comments list
+  → review_reply_comment / review comments reply
   → review_resolve_comment / HTTP resolve
 ```
 
-Refreshing creates a new round; resolving changes one comment's state. They are not the
-same action.
+Refreshing creates a new round, replying adds a message without changing state, and
+resolving changes one comment's state. They are not the same action.
 
 ## DSH tools
 
@@ -50,6 +51,8 @@ same action.
 - `review_feedback` — read the latest submitted feedback.
 - `review_comments_list` — open comments with ids and anchors.
 - `review_refresh` — create the next round and re-anchor comments.
+- `review_reply_comment` — reply to an open comment as an agent; use it for questions or
+  progress notes before resolving.
 - `review_resolve_comment` — resolve a comment you verified, recorded as an agent action.
 
 Tool failures return `{ok:false, error:{code,message}}`; do not retry a validation error
@@ -65,11 +68,12 @@ review start --repo /srv/repo --base main --reviewer worker --json
 review status "$REVIEW_ID" --json
 review feedback "$REVIEW_ID" --wait --format json
 review comments list "$REVIEW_ID" --json
+review comments reply "$REVIEW_ID" --comment "$COMMENT_ID" --body 'Fixed; see tests'
 review refresh "$REVIEW_ID"
 ```
 
-The CLI has **no `comments resolve`** command in this release. Resolve through the DSH tool
-or:
+The CLI has `comments reply` but **no `comments resolve`** command in this release.
+Resolve through the DSH tool or:
 
 ```bash
 curl -fsS -X POST \

@@ -78,6 +78,8 @@ describe('delivery bridge', () => {
     expect(header).toContain('Start the fix round');
     expect(header).toContain('call review_refresh');
     expect(header).not.toContain('review_fix_status');
+    expect(header).toContain('review_comments_list');
+    expect(header).toContain('review_reply_comment');
     expect(header).toContain('review_resolve_comment');
     expect(acks[0]).toBe('/api/deliveries/dlv_1/ack');
   });

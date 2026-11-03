@@ -217,6 +217,52 @@ describe('remote CLI', () => {
     expect(submit.out.join('')).toContain('submitted');
   });
 
+  it('replies to an open comment as an agent', async () => {
+    const { fetch, calls } = fakeFetch((call) => {
+      if (call.method === 'POST' && call.url.endsWith('/replies')) {
+        return {
+          status: 201,
+          body: {
+            comment: {
+              id: 'cmt_1',
+              replies: [
+                {
+                  id: 'cmt_2',
+                  body: 'Fixed in abc123',
+                  author: { name: 'review', kind: 'agent' },
+                },
+              ],
+            },
+          },
+        };
+      }
+      return { body: {} };
+    });
+    const output = capture();
+    const config = deps(fetch, {
+      CODE_REVIEW_URL: 'http://reviewd:3100',
+      CODE_REVIEW_TOKEN: 't'.repeat(32),
+    });
+    const code = await runCli(
+      ['comments', 'reply', 'rev_1', '--comment', 'cmt_1', '--body', 'Fixed in abc123'],
+      output.io,
+      config,
+    );
+
+    expect(code).toBe(0);
+    expect(output.out.join('')).toBe('cmt_2\n');
+    expect(calls).toContainEqual({
+      method: 'POST',
+      url: 'http://reviewd:3100/api/reviews/rev_1/comments/cmt_1/replies',
+      headers: {
+        authorization: `Bearer ${'t'.repeat(32)}`,
+        accept: 'application/json',
+        'content-type': 'application/json',
+      },
+      body: { body: 'Fixed in abc123' },
+    });
+  });
+
   it('maps HTTP and network failures to documented exit codes', async () => {
     const cases: Array<[number, number]> = [
       [401, 3],

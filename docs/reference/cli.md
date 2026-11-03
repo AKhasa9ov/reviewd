@@ -80,9 +80,12 @@ review round; reading it does not acknowledge a delivery.
 review comments list <id> --json
 review comments add <id> --file src/a.ts --line 42 --body 'Please explain'
 review comments add <id> --file src/a.ts --line 42 --end-line 48 --side new --body 'Range'
+review comments reply <id> --comment <comment-id> --body 'Fixed; tests pass'
 ```
 
-`--side` is `new` (default) or `old`. `--end-line` creates a range.
+`--side` is `new` (default) or `old`. `--end-line` creates a range. `comments reply` prints
+the new reply id (or the full response with `--json`); it keeps the comment open. The
+bearer-token CLI request is attributed to an agent.
 
 The CLI has **no** `comments resolve` subcommand in this release. A fixer agent resolves a
 comment with the HTTP route:
@@ -97,7 +100,8 @@ curl -fsS -X POST \
   -d '{}'
 ```
 
-The DSH equivalent is `review_resolve_comment`.
+The DSH equivalents are `review_reply_comment` for a reply and `review_resolve_comment`
+for resolution.
 
 ### Submit, refresh and findings
 

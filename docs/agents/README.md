@@ -41,7 +41,8 @@ curl -fsS -X POST \
   -d '{}'
 ```
 
-The CLI has no `comments resolve` subcommand; the DSH tool is `review_resolve_comment`.
+The CLI has `review comments reply` but no `comments resolve` subcommand; the DSH tools
+are `review_reply_comment` and `review_resolve_comment`.
 
 ## Rules
 

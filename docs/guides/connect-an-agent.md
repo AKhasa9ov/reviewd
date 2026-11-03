@@ -42,7 +42,7 @@ Restart the profile. Embedded mode starts the daemon in-process and exposes:
 
 - a **Code Review** sidebar panel and SPA at `/code-review`;
 - `review_start`, `review_status`, `review_refresh`, `review_feedback`,
-  `review_comments_list` and `review_resolve_comment`;
+  `review_comments_list`, `review_reply_comment` and `review_resolve_comment`;
 - `/review <title>` for the current workspace;
 - a reviewer worker when `worker: true`;
 - feedback delivery into the initiating session.
@@ -71,8 +71,9 @@ review refresh "$REVIEW_ID"
 review submit "$REVIEW_ID" --request-changes --summary 'Address the blocker'
 ```
 
-The CLI has no `comments resolve` subcommand. Fixer agents resolve a comment through the
-HTTP route shown in [Run a fix agent](run-a-fix-agent.md#option-b-cli-http).
+The CLI has no `comments resolve` subcommand. Fixer agents reply with
+`review comments reply`, and resolve a comment through the HTTP route shown in
+[Run a fix agent](run-a-fix-agent.md#option-b-cli-http).
 
 Install the published package from npm:
 

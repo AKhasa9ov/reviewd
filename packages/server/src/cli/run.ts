@@ -213,7 +213,7 @@ function help(): string {
     '  review start --repo <path> [--base <ref>] [--head <ref>|--worktree|--commit <sha>]',
     '               [--session-id <id> [--harness <name>] [--cwd <path>]]',
     '  review status <id> | review feedback <id> [--wait] [--format md|json]',
-    '  review comments list|add ... | review submit ... | review refresh <id>',
+    '  review comments list|add|reply ... | review submit ... | review refresh <id>',
     '  review transfer-findings <id>',
     '  review fix-status <id> --json @file.json | review health | review gc',
     '  review serve --host <h> --port <p> --store <dir> [--public-url <url>]',
@@ -595,7 +595,22 @@ async function runRemote(
       );
       return 0;
     }
-    throw new UsageError('comments requires list|add');
+    if (action === 'reply') {
+      const commentId = remove('--comment');
+      const body = remove('--body');
+      if (commentId === undefined || body === undefined || body.trim() === '') {
+        throw new UsageError('comments reply requires --comment and --body');
+      }
+      const created = await client.post(
+        `/api/reviews/${encodeURIComponent(id)}/comments/${encodeURIComponent(commentId)}/replies`,
+        { body },
+      );
+      const comment = created.comment as { replies?: Array<{ id?: string }> } | undefined;
+      const replyId = comment?.replies?.at(-1)?.id;
+      io.stdout.write(json ? `${JSON.stringify(created, null, 2)}\n` : `${replyId ?? 'reply'}\n`);
+      return 0;
+    }
+    throw new UsageError('comments requires list|add|reply');
   }
 
   if (command === 'submit') {

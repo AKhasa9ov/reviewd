@@ -332,6 +332,66 @@ export function createReviewTools(
     ),
     ctx.tools.register(
       tool(
+        'review_reply_comment',
+        'Reply to an open review comment as an AI agent. Use this to answer a human question or report a fix, then use review_resolve_comment after the issue is verified.',
+        {
+          type: 'object',
+          properties: {
+            reviewId: { type: 'string' },
+            commentId: { type: 'string' },
+            body: { type: 'string' },
+          },
+          required: ['reviewId', 'commentId', 'body'],
+          additionalProperties: false,
+        },
+        async (args, exec) => {
+          if (typeof args.reviewId !== 'string' || args.reviewId === '') {
+            return { ok: false, error: { code: 'validation', message: 'reviewId is required' } };
+          }
+          if (typeof args.commentId !== 'string' || args.commentId === '') {
+            return { ok: false, error: { code: 'validation', message: 'commentId is required' } };
+          }
+          if (typeof args.body !== 'string' || args.body.trim() === '') {
+            return { ok: false, error: { code: 'validation', message: 'body is required' } };
+          }
+          const view = await api.post<{
+            comment?: {
+              id?: string;
+              replies?: Array<{
+                id?: string;
+                body?: string;
+                author?: { name?: string; kind?: string };
+                createdAt?: string;
+              }>;
+            };
+          }>(
+            `/api/reviews/${encodeURIComponent(args.reviewId)}/comments/${encodeURIComponent(args.commentId)}/replies`,
+            { body: args.body },
+            exec.signal,
+          );
+          const replies = Array.isArray(view.comment?.replies) ? view.comment.replies : [];
+          const reply = replies.at(-1);
+          return {
+            ok: true,
+            reviewId: args.reviewId,
+            commentId: view.comment?.id ?? args.commentId,
+            ...(reply?.id === undefined ? {} : { replyId: reply.id }),
+            ...(reply?.body === undefined ? { body: args.body } : { body: reply.body }),
+            ...(reply?.author === undefined
+              ? {}
+              : {
+                  author: {
+                    name: reply.author.name ?? 'unknown',
+                    kind: reply.author.kind ?? 'agent',
+                  },
+                }),
+            ...(reply?.createdAt === undefined ? {} : { createdAt: reply.createdAt }),
+          };
+        },
+      ),
+    ),
+    ctx.tools.register(
+      tool(
         'review_resolve_comment',
         'Mark one review comment as resolved after you have fixed the reported issue. This records the action as an AI agent.',
         {

@@ -40,7 +40,7 @@ function fakeClient(overrides: Partial<Record<keyof ApiClient, unknown>> = {}): 
       status: 'ok',
       store: { writable: true },
       git: { ok: true },
-      version: '0.1.0',
+      version: '0.2.0',
     })),
     listRepositories: vi.fn(async () => ({ repositories: [] })),
     listDirectories: vi.fn(async () => ({

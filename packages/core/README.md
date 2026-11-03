@@ -11,7 +11,7 @@ harness integrations are adapters over it.
 npm install @sir_yami/reviewd-core
 ```
 
-The package is part of the published `reviewd` 0.1.0 release. Use the npm package or a
+The package is part of the published `reviewd` 0.2.0 release. Use the npm package or a
 local tarball from the same commit.
 
 ```bash

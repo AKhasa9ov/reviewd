@@ -25,7 +25,7 @@ pack, then install the tarball with the same command:
 
 ```bash
 pnpm fat:verify
-dsh plugin --profile web add /absolute/path/to/sir_yami-reviewd-0.1.0.tgz
+dsh plugin --profile web add /absolute/path/to/sir_yami-reviewd-0.2.0.tgz
 ```
 
 ## Modes
@@ -101,6 +101,7 @@ Use the profile's own patch layer for these overrides; do not edit the package's
 - `review_refresh` — create the next round, re-anchor comments and queue verification.
 - `review_feedback` — read the latest submitted feedback without delivering it again.
 - `review_comments_list` — open comments with ids, authors, anchors and text.
+- `review_reply_comment` — reply to an open comment as an agent without changing its state.
 - `review_resolve_comment` — mark a fixed comment resolved; the event records an AI agent.
 - `/review <title>` — create a worktree review for the current workspace and return the
   same browser-facing URL as `review_start` (a `/code-review/review/<id>` path in embedded

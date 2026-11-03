@@ -78,7 +78,7 @@ command:
 
 ```bash
 pnpm fat:verify
-dsh plugin --profile web add /absolute/path/to/sir_yami-reviewd-0.1.0.tgz
+dsh plugin --profile web add /absolute/path/to/sir_yami-reviewd-0.2.0.tgz
 ```
 
 A successful install adds `@sir_yami/reviewd` to the profile bundle list and activates
@@ -167,7 +167,10 @@ no token to configure.
 - `review_refresh` — create the next round, re-anchor comments and queue verification.
 - `review_feedback` — read the latest submitted feedback without delivering it again.
 - `review_comments_list` — open comments with ids, authors, anchors and text; the fixer
-  uses it after `review_refresh` to find what it should close.
+  uses it after `review_refresh` to find what it should address.
+- `review_reply_comment` — reply to one open comment as an AI agent. The reply is visible
+  in the thread and does not change the comment state; use it for a question, a status
+  note or evidence before resolving.
 - `review_resolve_comment` — mark one fixed comment as resolved. The daemon records the
   action as an AI agent, not as a human browser action.
 - `/review <title>` — create a worktree review for the current workspace and return the
@@ -292,13 +295,16 @@ embedded mode through `/api/code-review/gc`; an external daemon additionally sup
 
 ## Release status
 
-The package name is `@sir_yami/reviewd` (version `0.1.0`, MIT, public access). The
-manifest's repository, homepage and bugs URLs currently point at
-`https://github.com/AKhasa9ov/reviewd`; update all three fields together if the repository moves. The
-package has not been published to npm and has not been submitted to dsh.so. The dsh.so
-submit form asks for the public source repository URL (GitHub/Gitee/GitLab), not a local
-tarball or ZIP; provide the npm package URL as supporting metadata where the form allows
-it. A listing may stay "Declared/unverified" until it is independently install-tested.
+The package name is `@sir_yami/reviewd` (version `0.2.0`, MIT, public access). The
+manifest's repository, homepage and bugs URLs point at
+`https://github.com/AKhasa9ov/reviewd`; update all three fields together if the repository
+moves. The npm packages are published under `@sir_yami`: `reviewd`, `reviewd-server` and
+`reviewd-core` at `0.2.0`. The public listing is at
+[`dsh.so/artifact/reviewd`](https://www.dsh.so/artifact/reviewd/); it currently installs
+from GitHub and may lag the npm version until its scan refreshes. The dsh.so submit form
+asks for the public source repository URL (GitHub/Gitee/GitLab), not a local tarball or
+ZIP; provide the npm package URL as supporting metadata where the form allows it. A
+listing may stay "Declared/unverified" until it is independently install-tested.
 
 ## Verification
 

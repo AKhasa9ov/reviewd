@@ -1,4 +1,4 @@
-export const CORE_VERSION = '0.1.0';
+export const CORE_VERSION = '0.2.0';
 export { safeJoin, PathEscapeError } from './paths.js';
 export { buildSnapshot } from './diff/snapshot.js';
 export {

@@ -124,6 +124,8 @@ and `GET /api/reviews/:id` returns `404`, an active or queued reviewer is cancel
 the append-only event log is retained for audit. Deleting an already deleted review is
 idempotent. Closed reviews may be deleted.
 
+`POST /api/reviews/:id/comments/:cid/replies` with `{body}` adds an agent-attributed reply
+without changing comment state; the response is the parent comment including the new reply.
 `POST /api/reviews/:id/comments/:cid/resolve` is the DSH fixer path: it writes the same
 `comment/state` event as a human PATCH, but attributes the actor as an agent.
 

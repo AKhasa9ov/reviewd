@@ -14,7 +14,7 @@ npm install -g @sir_yami/reviewd-server
 review version
 ```
 
-The package is part of the published `reviewd` 0.1.x release (`0.1.1`). From a source checkout use
+The package is part of the published `reviewd` 0.2.0 release. From a source checkout use
 `node packages/server/dist/cli.js` after `pnpm build`.
 
 Requires Node.js 22+ and `git`. The daemon is ESM.

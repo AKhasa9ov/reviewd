@@ -305,6 +305,23 @@ function failure(error) {
   const message = error instanceof Error ? error.message : "review tool failed";
   return { ok: false, error: { code, message } };
 }
+function reviewVerdict(review) {
+  if (review.closeVerdict === "approved") return "approve";
+  if (typeof review.closeVerdict === "string") return review.closeVerdict;
+  const submissions = Array.isArray(review.submissions) ? review.submissions : [];
+  let latest;
+  for (const raw of submissions) {
+    if (typeof raw !== "object" || raw === null) continue;
+    const item = raw;
+    if (typeof item.verdict !== "string") continue;
+    const round = typeof item.round === "number" ? item.round : 0;
+    if (latest === void 0 || round >= latest.round) {
+      latest = { round, verdict: item.verdict };
+    }
+  }
+  if (latest !== void 0) return latest.verdict;
+  return review.status === "closed" ? "closed" : "open";
+}
 function tool(name2, description, parameters, run) {
   return {
     name: name2,
@@ -430,11 +447,14 @@ function createReviewTools(ctx, config, api) {
             exec.signal
           );
           const review = view.review;
+          const verdict = reviewVerdict(review);
           return {
             ok: true,
             reviewId: review.id,
             title: review.title,
             status: review.status,
+            verdict,
+            approved: verdict === "approve" || verdict === "approved",
             rounds: Array.isArray(review.rounds) ? review.rounds.length : 0,
             comments: Array.isArray(review.comments) ? review.comments.length : 0,
             agent: review.agent ?? null,
@@ -520,6 +540,54 @@ function createReviewTools(ctx, config, api) {
             reviewId: args.reviewId,
             total: comments.length,
             comments
+          };
+        }
+      )
+    ),
+    ctx.tools.register(
+      tool(
+        "review_reply_comment",
+        "Reply to an open review comment as an AI agent. Use this to answer a human question or report a fix, then use review_resolve_comment after the issue is verified.",
+        {
+          type: "object",
+          properties: {
+            reviewId: { type: "string" },
+            commentId: { type: "string" },
+            body: { type: "string" }
+          },
+          required: ["reviewId", "commentId", "body"],
+          additionalProperties: false
+        },
+        async (args, exec) => {
+          if (typeof args.reviewId !== "string" || args.reviewId === "") {
+            return { ok: false, error: { code: "validation", message: "reviewId is required" } };
+          }
+          if (typeof args.commentId !== "string" || args.commentId === "") {
+            return { ok: false, error: { code: "validation", message: "commentId is required" } };
+          }
+          if (typeof args.body !== "string" || args.body.trim() === "") {
+            return { ok: false, error: { code: "validation", message: "body is required" } };
+          }
+          const view = await api.post(
+            `/api/reviews/${encodeURIComponent(args.reviewId)}/comments/${encodeURIComponent(args.commentId)}/replies`,
+            { body: args.body },
+            exec.signal
+          );
+          const replies = Array.isArray(view.comment?.replies) ? view.comment.replies : [];
+          const reply = replies.at(-1);
+          return {
+            ok: true,
+            reviewId: args.reviewId,
+            commentId: view.comment?.id ?? args.commentId,
+            ...reply?.id === void 0 ? {} : { replyId: reply.id },
+            ...reply?.body === void 0 ? { body: args.body } : { body: reply.body },
+            ...reply?.author === void 0 ? {} : {
+              author: {
+                name: reply.author.name ?? "unknown",
+                kind: reply.author.kind ?? "agent"
+              }
+            },
+            ...reply?.createdAt === void 0 ? {} : { createdAt: reply.createdAt }
           };
         }
       )
@@ -1281,6 +1349,7 @@ function manifestFileFromDiff(file) {
     binary: file.binary,
     ignored: file.ignored === true,
     oversized: file.oversized,
+    ...file.conflicted === true ? { conflicted: true } : {},
     added: file.added,
     deleted: file.deleted,
     hunkCount: file.hunks.length,
@@ -1757,6 +1826,7 @@ function manifestEntry(input) {
   const ignored = input.seed.ignored || mapped?.ignored === true;
   const oversized = input.seed.oversized || mapped?.oversized === true;
   const binary = input.seed.binary || mapped?.binary === true;
+  const conflicted = input.seed.conflicted === true || mapped?.conflicted === true;
   let reason = mapped?.reason ?? input.seed.reason;
   if (reason === "diff-truncated" && binary && !ignored) reason = "binary";
   if (reason === void 0) {
@@ -1771,6 +1841,7 @@ function manifestEntry(input) {
     binary,
     ignored,
     oversized,
+    ...conflicted ? { conflicted: true } : {},
     added: input.seed.fromNumstat ? input.seed.added : mapped?.added ?? input.seed.added,
     deleted: input.seed.fromNumstat ? input.seed.deleted : mapped?.deleted ?? input.seed.deleted,
     hunkCount: mapped?.hunkCount ?? 0,
@@ -1906,6 +1977,19 @@ async function untrackedFile(repoRoot, path, maxFileLines, maxContentBytes, incl
   if (includeContent && !truncated) file.newLines = read.lines;
   return file;
 }
+async function listUnmerged(repoRoot, signal) {
+  const result = await runGit(repoRoot, ["ls-files", "-u", "-z"], {
+    signal,
+    maxBytes: 8 * 1024 * 1024,
+    truncateOnOverflow: true
+  });
+  const paths = /* @__PURE__ */ new Set();
+  for (const record of splitNulPaths(result.stdout)) {
+    const tab = record.indexOf("	");
+    if (tab >= 0) paths.add(record.slice(tab + 1));
+  }
+  return { paths, truncated: result.truncated === true };
+}
 async function buildSnapshot(options) {
   const includeContent = options.includeContent ?? DEFAULTS.includeContent;
   const includeUntracked = options.includeUntracked ?? DEFAULTS.includeUntracked;
@@ -1928,6 +2012,33 @@ async function buildSnapshot(options) {
   const listingTruncated = rawListing.truncated || numstatListing.truncated;
   if (listingTruncated) warnings.push("manifest-listing-truncated");
   const seeds = rawSeeds(rawListing.entries, numstatListing.entries, ignore);
+  const unmerged = /* @__PURE__ */ new Set();
+  if (scope.kind === "worktree") {
+    const listing = await listUnmerged(scope.repoRoot, options.signal);
+    if (listing.truncated) warnings.push("merge-conflict-list-truncated");
+    for (const path of listing.paths) {
+      if (paths !== void 0 && !paths.includes(path)) continue;
+      unmerged.add(path);
+      const seed = seeds.get(path);
+      if (seed === void 0) {
+        seeds.set(path, {
+          path,
+          status: "modified",
+          binary: false,
+          added: 0,
+          deleted: 0,
+          ignored: isIgnored(path, ignore),
+          oversized: false,
+          conflicted: true,
+          fromNumstat: false
+        });
+      } else {
+        seed.conflicted = true;
+      }
+      const warning = `merge-conflict:${path}`;
+      if (!warnings.includes(warning)) warnings.push(warning);
+    }
+  }
   const diff = await runGit(scope.repoRoot, diffArgs(scope, "patch", paths), {
     signal: options.signal,
     maxBytes: Math.max(maxDiffBytes * 8, 16 * 1024 * 1024),
@@ -2109,6 +2220,11 @@ async function buildSnapshot(options) {
     if (oldLines !== void 0) file.oldLines = oldLines;
     if (newLines !== void 0) file.newLines = newLines;
     files.push(file);
+  }
+  if (unmerged.size > 0) {
+    for (const file of files) {
+      if (unmerged.has(file.path)) file.conflicted = true;
+    }
   }
   if (scope.kind === "worktree" && includeUntracked) {
     const listing = await listUntracked(scope.repoRoot, options.signal);
@@ -3467,6 +3583,7 @@ function fold(state, event) {
     case "review/closed": {
       next.status = "closed";
       next.closedAt ??= event.at;
+      next.closeVerdict = event.data.verdict;
       break;
     }
     case "review/submitted": {
@@ -3479,6 +3596,7 @@ function fold(state, event) {
       if (submission.verdict === "approve") {
         next.status = "closed";
         next.closedAt ??= event.at;
+        next.closeVerdict ??= "approved";
       }
       break;
     }
@@ -6996,7 +7114,7 @@ var ReviewServiceImpl = class {
 };
 
 // packages/core/src/index.ts
-var CORE_VERSION = "0.1.0";
+var CORE_VERSION = "0.2.0";
 
 // packages/server/src/daemon/errors.ts
 var STATUS = {
@@ -8349,7 +8467,9 @@ var systemActor = { name: "reviewd", kind: "system" };
 function actorFor(req, auth) {
   const raw = req.headers["x-review-actor"];
   const name2 = typeof raw === "string" && raw.trim() !== "" ? raw.trim().slice(0, 100) : auth === "cookie" ? "browser" : "api";
-  return { name: name2, kind: "human" };
+  const rawKind = req.headers["x-review-actor-kind"];
+  const kind = rawKind === "human" || rawKind === "agent" ? rawKind : auth === "cookie" ? "human" : "agent";
+  return { name: name2, kind };
 }
 function ctxFor(req, auth) {
   const header = req.headers["idempotency-key"];
@@ -9986,10 +10106,11 @@ function createProxyHandler(deps) {
         const lastEventId = req.headers["last-event-id"];
         if (typeof lastEventId === "string") headers["last-event-id"] = lastEventId;
       }
-      for (const name2 of ["idempotency-key", "x-review-actor"]) {
+      for (const name2 of ["idempotency-key", "x-review-actor", "x-review-actor-kind"]) {
         const value = req.headers[name2];
         if (typeof value === "string" && value !== "") headers[name2] = value;
       }
+      if (headers["x-review-actor-kind"] === void 0) headers["x-review-actor-kind"] = "human";
       const controller = new AbortController();
       res.on("close", () => controller.abort());
       const daemonPath = path === "/" ? "/api" : `/api${path}`;
@@ -10102,7 +10223,7 @@ function contentFor(record) {
   if (verdict === "approve") {
     return `${header}The review was approved. No fix round is required.`;
   }
-  const action = "Start the fix round now: apply the requested changes, run the tests, then call review_refresh, resolve addressed comments with review_resolve_comment, and report the result with evidence.";
+  const action = "Start the fix round now: apply the requested changes, run the tests, then call review_refresh. List open comments with review_comments_list, reply with review_reply_comment when you need to answer a question or report progress, resolve addressed comments with review_resolve_comment, and report the result with evidence.";
   const markdown = record.feedback.markdown ?? "";
   return `${header}${action}
 

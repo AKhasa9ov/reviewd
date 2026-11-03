@@ -38,6 +38,22 @@ function setup(
       if (path.endsWith('/resolve')) {
         return { comment: { id: 'cmt_1', state: 'resolved' } };
       }
+      if (path.endsWith('/replies')) {
+        return {
+          comment: {
+            id: 'cmt_1',
+            state: 'open',
+            replies: [
+              {
+                id: 'cmt_2',
+                body: 'Fixed in abc123',
+                author: { name: 'dsh-agent', kind: 'agent' },
+                createdAt: '2026-11-03T21:00:00.000Z',
+              },
+            ],
+          },
+        };
+      }
       return { review: { review: { id: 'rev_1' } }, url: 'http://review/review/rev_1' };
     },
   } as any;
@@ -194,6 +210,29 @@ it('lists open comments with the ids a fixer needs', async () => {
         body: 'Fix the retry path',
       },
     ],
+  });
+});
+
+it('replies to one comment through the agent endpoint', async () => {
+  const { definitions, calls } = setup();
+  const reply = definitions.find((definition) => definition.name === 'review_reply_comment');
+  expect(reply).toBeDefined();
+  const value = await reply!.execute(
+    { reviewId: 'rev_1', commentId: 'cmt_1', body: 'Fixed in abc123' },
+    { signal: new AbortController().signal },
+  );
+  expect(value).toMatchObject({
+    ok: true,
+    reviewId: 'rev_1',
+    commentId: 'cmt_1',
+    replyId: 'cmt_2',
+    body: 'Fixed in abc123',
+    author: { name: 'dsh-agent', kind: 'agent' },
+  });
+  expect(calls).toContainEqual({
+    method: 'POST',
+    path: '/api/reviews/rev_1/comments/cmt_1/replies',
+    body: { body: 'Fixed in abc123' },
   });
 });
 

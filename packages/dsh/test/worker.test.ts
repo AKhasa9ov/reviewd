@@ -221,6 +221,7 @@ describe('worker loop', () => {
     expect(guardFn?.({ name: 'write' })).toContain('read-only');
     expect(guardFn?.({ name: 'bash' })).toContain('read-only');
     expect(guardFn?.({ name: 'review_comments_list' })).toContain('read-only');
+    expect(guardFn?.({ name: 'review_reply_comment' })).toContain('read-only');
     expect(guardFn?.({ name: 'review_resolve_comment' })).toContain('read-only');
     expect(calls.some((call) => call.path.endsWith('/findings'))).toBe(true);
     expect(calls.some((call) => call.path.endsWith('/report'))).toBe(true);

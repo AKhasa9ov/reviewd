@@ -5,7 +5,7 @@ services:
     build:
       context: .
       args:
-        VERSION: ${CODE_REVIEW_VERSION:-0.1.0}
+        VERSION: ${CODE_REVIEW_VERSION:-0.2.0}
     image: ${CODE_REVIEW_IMAGE:-dsh-code-review:local}
     restart: unless-stopped
     stop_grace_period: 15s

@@ -20,7 +20,7 @@ RUN pnpm install --frozen-lockfile --prefer-offline
 RUN pnpm build
 
 FROM ${NODE_IMAGE} AS runtime
-ARG VERSION=0.1.0
+ARG VERSION=0.2.0
 LABEL org.opencontainers.image.title="reviewd" \
       org.opencontainers.image.description="Harness-agnostic code review control plane" \
       org.opencontainers.image.version="${VERSION}" \
