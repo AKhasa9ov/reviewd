@@ -7,6 +7,8 @@ export interface E2EFixture {
   token: string;
   repoRoot: string;
   reviewId: string;
+  conflictRepo: string;
+  conflictReviewId: string;
   screensDir: string;
 }
 

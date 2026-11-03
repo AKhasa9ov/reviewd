@@ -117,6 +117,7 @@ contract; see [Connect an agent](guides/connect-an-agent.md).
 The standalone SPA supports:
 
 - real git diffs, delta/full views and round switching;
+- an explicit merge-conflict banner and per-file badge for unresolved worktree conflicts;
 - file, line, range and full-file comments, including lines outside the diff;
 - draggable selection for a range and inline suggestions;
 - collapsible repository groups and search/status filters;

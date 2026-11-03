@@ -20,6 +20,11 @@ async function git(...args) {
   return result.stdout;
 }
 
+async function gitIn(cwd, ...args) {
+  const result = await run('git', ['-C', cwd, ...args]);
+  return result.stdout;
+}
+
 async function stop(code = 0) {
   if (stopping) return;
   stopping = true;
@@ -190,9 +195,45 @@ async function main() {
   await git('add', '-A');
   await git('commit', '-m', 'third feature commit');
 
+  // A second, isolated repository leaves a real merge conflict in its worktree
+  // so the UI can be verified against the same state a user sees.
+  const conflictRepo = join(root, 'conflict-repo');
+  await mkdir(conflictRepo, { recursive: true });
+  await gitIn(conflictRepo, 'init', '-b', 'main');
+  await gitIn(conflictRepo, 'config', 'user.email', 'e2e@example.test');
+  await gitIn(conflictRepo, 'config', 'user.name', 'E2E');
+  await writeFile(join(conflictRepo, 'a.txt'), 'one\ntwo\nthree\n');
+  await gitIn(conflictRepo, 'add', '-A');
+  await gitIn(conflictRepo, 'commit', '-m', 'base');
+  await gitIn(conflictRepo, 'checkout', '-b', 'side');
+  await writeFile(join(conflictRepo, 'a.txt'), 'one\nside\nthree\n');
+  await gitIn(conflictRepo, 'add', '-A');
+  await gitIn(conflictRepo, 'commit', '-m', 'side');
+  await gitIn(conflictRepo, 'checkout', 'main');
+  await writeFile(join(conflictRepo, 'a.txt'), 'one\nmain\nthree\n');
+  await gitIn(conflictRepo, 'add', '-A');
+  await gitIn(conflictRepo, 'commit', '-m', 'main');
+  await gitIn(conflictRepo, 'merge', 'side').catch(() => undefined);
+
+  const conflictCreated = await fetch(`${baseUrl}/api/reviews`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      repoRoot: conflictRepo,
+      title: 'E2E conflict review',
+      scope: { kind: 'worktree', baseRef: 'main' },
+      reviewer: { backend: 'none' },
+    }),
+  });
+  const conflictBody = await conflictCreated.json();
+  if (!conflictCreated.ok) {
+    throw new Error(`conflict review creation failed: ${JSON.stringify(conflictBody)}`);
+  }
+  const conflictReviewId = conflictBody.review.review.id;
+
   await writeFile(
     fixturePath,
-    `${JSON.stringify({ baseUrl, token: TOKEN, repoRoot: repo, reviewId, screensDir }, null, 2)}\n`,
+    `${JSON.stringify({ baseUrl, token: TOKEN, repoRoot: repo, reviewId, conflictRepo, conflictReviewId, screensDir }, null, 2)}\n`,
   );
   process.stdout.write(`E2E_READY url=${baseUrl}\n`);
 
