@@ -437,7 +437,23 @@ describe('latest verdict', () => {
       comments: [],
       version: 1,
     } as ReviewState;
-    expect(latestVerdict({ ...base, status: 'closed', closeVerdict: 'approved' })).toBe('approved');
+    expect(latestVerdict({ ...base, status: 'closed', closeVerdict: 'approved' })).toBe('approve');
     expect(latestVerdict({ ...base, status: 'closed', closeVerdict: 'closed' })).toBe('closed');
+    expect(
+      latestVerdict({
+        ...base,
+        status: 'closed',
+        closeVerdict: 'approved',
+        submissions: [
+          {
+            submissionId: 'sub_1',
+            round: 1,
+            verdict: 'request-changes',
+            deliveryKey: 'k',
+            createdAt: '2026-10-28T12:00:00.000Z',
+          },
+        ],
+      }),
+    ).toBe('approve');
   });
 });

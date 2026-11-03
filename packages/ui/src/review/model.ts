@@ -304,9 +304,10 @@ export function unresolvedComments(review: ReviewState): Comment[] {
 }
 
 export function latestVerdict(review: ReviewState): string {
+  if (review.closeVerdict === 'approved') return 'approve';
+  if (review.closeVerdict !== undefined) return review.closeVerdict;
   const submission = [...(review.submissions ?? [])].sort((a, b) => a.round - b.round).at(-1);
   if (submission !== undefined) return submission.verdict;
-  if (review.closeVerdict !== undefined) return review.closeVerdict;
   return review.status === 'closed' ? 'closed' : 'open';
 }
 

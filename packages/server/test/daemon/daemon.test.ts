@@ -293,7 +293,13 @@ describe('review routes and events', () => {
       body: JSON.stringify({ verdict: 'approved' }),
     });
     expect(close.status).toBe(200);
-    expect((await read(close)).review.status).toBe('closed');
+    const closed = await read(close);
+    expect(closed.review.status).toBe('closed');
+    expect(closed.review.closeVerdict).toBe('approved');
+
+    const detail = await fetch(`${daemonUrl}/api/reviews/${reviewId}`, { headers: headers() });
+    expect(detail.status).toBe(200);
+    expect((await read(detail)).review.closeVerdict).toBe('approved');
   });
 
   it('returns events immediately and long-polls without hanging', async () => {

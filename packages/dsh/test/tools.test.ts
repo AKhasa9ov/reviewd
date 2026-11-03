@@ -108,7 +108,7 @@ describe('review tools', () => {
     expect(value).toMatchObject({
       ok: true,
       status: 'closed',
-      verdict: 'approved',
+      verdict: 'approve',
       approved: true,
     });
   });
@@ -124,6 +124,20 @@ describe('review tools', () => {
       { signal: new AbortController().signal },
     );
     expect(value).toMatchObject({ ok: true, status: 'closed', verdict: 'approve', approved: true });
+  });
+
+  it('prefers an explicit approved close over an earlier submission verdict', async () => {
+    const { definitions } = setup({}, [], {
+      status: 'closed',
+      closeVerdict: 'approved',
+      submissions: [{ round: 1, verdict: 'request-changes', submissionId: 'sub_1' }],
+    });
+    const status = definitions.find((definition) => definition.name === 'review_status');
+    const value = await status!.execute(
+      { reviewId: 'rev_1' },
+      { signal: new AbortController().signal },
+    );
+    expect(value).toMatchObject({ ok: true, verdict: 'approve', approved: true });
   });
 
   it('returns typed errors instead of throwing', async () => {

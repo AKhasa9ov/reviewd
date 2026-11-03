@@ -48,6 +48,8 @@ function failure(error: unknown): ToolFailure {
 }
 
 function reviewVerdict(review: Record<string, unknown>): string {
+  if (review.closeVerdict === 'approved') return 'approve';
+  if (typeof review.closeVerdict === 'string') return review.closeVerdict;
   const submissions = Array.isArray(review.submissions) ? review.submissions : [];
   let latest: { round: number; verdict: string } | undefined;
   for (const raw of submissions) {
@@ -60,7 +62,6 @@ function reviewVerdict(review: Record<string, unknown>): string {
     }
   }
   if (latest !== undefined) return latest.verdict;
-  if (typeof review.closeVerdict === 'string') return review.closeVerdict;
   return review.status === 'closed' ? 'closed' : 'open';
 }
 

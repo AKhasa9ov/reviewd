@@ -160,8 +160,9 @@ no token to configure.
   returns the same-origin `/code-review/review/<id>` path, never the loopback daemon URL;
   external mode uses `publicUrl` when configured.
 - `review_status` — review status, round count, comment count, agent status and report.
-  The result includes `verdict` and `approved`, so a closed review still tells the agent
-  whether it was approved, sent back for changes or closed without approval. When the
+  The result includes `verdict` (`approve`, `request-changes`, `comment` or `closed`) and
+  `approved`, so a closed review still tells the agent whether it was approved, sent back
+  for changes or closed without approval. When the
   round has a coverage ledger, `agent.coverage` carries per-file statuses and totals.
 - `review_refresh` — create the next round, re-anchor comments and queue verification.
 - `review_feedback` — read the latest submitted feedback without delivering it again.
