@@ -169,11 +169,15 @@ describe('ReportPanel browser', () => {
     if (!(scroller instanceof HTMLElement)) throw new Error('expected findings scroller');
     scroller.scrollTop = 200;
 
-    await user.selectOptions(screen.getByLabelText('Severity'), 'major');
+    await user.click(screen.getByRole('button', { name: /^Severity:/ }));
+    await user.click(screen.getByRole('checkbox', { name: 'major' }));
+    await user.keyboard('{Escape}');
     expect(screen.getAllByText('1–50 of 126')).toHaveLength(2);
     expect(scroller.scrollTop).toBe(0);
 
-    await user.selectOptions(screen.getByLabelText('Severity'), 'all');
+    await user.click(screen.getByRole('button', { name: /^Severity:/ }));
+    await user.click(screen.getByRole('checkbox', { name: 'All severities' }));
+    await user.keyboard('{Escape}');
     expect(screen.getAllByText('1–50 of 127')).toHaveLength(2);
   });
 

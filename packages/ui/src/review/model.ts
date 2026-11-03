@@ -565,15 +565,22 @@ export function deriveSignals(snapshot: Snapshot): ReviewSignal[] {
   return signals;
 }
 
+type FindingFilter<T extends string> = T | 'all' | ReadonlySet<T>;
+
+function matchesFilter<T extends string>(value: T, filter: FindingFilter<T>): boolean {
+  if (filter === 'all') return true;
+  if (typeof filter === 'object') return filter.size === 0 || filter.has(value);
+  return value === filter;
+}
+
 export function filterFindings(
   findings: readonly Finding[] | undefined,
-  severity: Finding['severity'] | 'all',
-  category: Finding['category'] | 'all',
+  severity: FindingFilter<Finding['severity']>,
+  category: FindingFilter<Finding['category']>,
 ): Finding[] {
   return (findings ?? []).filter(
     (finding) =>
-      (severity === 'all' || finding.severity === severity) &&
-      (category === 'all' || finding.category === category),
+      matchesFilter(finding.severity, severity) && matchesFilter(finding.category, category),
   );
 }
 

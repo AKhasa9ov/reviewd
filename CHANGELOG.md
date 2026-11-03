@@ -36,6 +36,8 @@ versions may contain breaking changes.
 
 ### Added
 
+- The report toolbar filters findings by several severities and categories at once: values
+  inside one filter are ORed, the two filters are ANDed, and an empty filter means all.
 - Fixer agents can list open review comments with `review_comments_list` and mark addressed
   comments resolved with `review_resolve_comment`; resolutions are attributed to the agent,
   and accepted findings stop repeating once their transferred comment is resolved.

@@ -173,12 +173,16 @@ describe('bulk finding decisions', () => {
       />,
     );
 
-    await user.selectOptions(screen.getByLabelText('Severity'), 'blocker');
+    await user.click(screen.getByRole('button', { name: /^Severity:/ }));
+    await user.click(screen.getByRole('checkbox', { name: 'blocker' }));
+    await user.keyboard('{Escape}');
     expect(screen.getByRole('checkbox', { name: 'Select all filtered (1)' })).toBeInTheDocument();
     await user.click(screen.getByRole('checkbox', { name: 'Select all filtered (1)' }));
     expect(screen.getByText('1 selected')).toBeInTheDocument();
 
-    await user.selectOptions(screen.getByLabelText('Severity'), 'all');
+    await user.click(screen.getByRole('button', { name: /^Severity:/ }));
+    await user.click(screen.getByRole('checkbox', { name: 'All severities' }));
+    await user.keyboard('{Escape}');
     expect(screen.queryByText('1 selected')).not.toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Select all filtered (2)' })).toBeInTheDocument();
 
@@ -254,7 +258,7 @@ describe('bulk finding decisions', () => {
         onJump={() => undefined}
       />,
     );
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: /Select finding/ })).not.toBeInTheDocument();
 
     rerender(
       <ReportPanel
@@ -265,7 +269,7 @@ describe('bulk finding decisions', () => {
         onJump={() => undefined}
       />,
     );
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: /Select finding/ })).not.toBeInTheDocument();
 
     rerender(
       <ReportPanel
@@ -276,7 +280,7 @@ describe('bulk finding decisions', () => {
         onJump={() => undefined}
       />,
     );
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: /Select finding/ })).not.toBeInTheDocument();
   });
 
   it('closes an open confirmation when decisions become unavailable', async () => {

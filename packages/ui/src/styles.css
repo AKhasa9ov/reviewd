@@ -3543,6 +3543,97 @@ body.cr-selecting-lines {
   width: 170px;
 }
 
+.cr-multi-select {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  width: 170px;
+  min-width: 0;
+}
+
+.cr-multi-select-trigger {
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cr-space-2);
+  padding: 8px 10px;
+  border: 1px solid var(--cr-border);
+  border-radius: var(--cr-radius-control);
+  background: var(--cr-bg);
+  color: var(--cr-text);
+  font-size: var(--cr-text-control);
+  line-height: var(--cr-leading-control);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--cr-motion-press) ease,
+    background var(--cr-motion-press) ease;
+}
+
+.cr-multi-select-trigger:hover {
+  border-color: var(--cr-text-muted);
+}
+
+.cr-multi-select-trigger:focus-visible {
+  border-color: var(--cr-primary);
+  outline: 2px solid var(--cr-focus);
+  outline-offset: 2px;
+}
+
+.cr-multi-select-trigger[aria-expanded='true'] {
+  border-color: var(--cr-primary);
+}
+
+.cr-multi-select-trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.cr-multi-select-trigger > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cr-multi-select-chevron {
+  flex: none;
+  color: var(--cr-text-muted);
+  font-size: 11px;
+}
+
+.cr-multi-select-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  display: none;
+  width: max(100%, 220px);
+  max-height: 300px;
+  overflow: auto;
+  padding: 6px;
+  border: 1px solid var(--cr-border);
+  border-radius: var(--cr-radius-card);
+  background: var(--cr-surface);
+  box-shadow: var(--cr-shadow);
+}
+
+.cr-multi-select[data-open] .cr-multi-select-menu {
+  display: grid;
+  gap: 1px;
+}
+
+.cr-multi-select-option {
+  min-height: 40px;
+  padding: 4px 8px;
+  border-radius: var(--cr-radius-control);
+}
+
+.cr-multi-select-option:hover {
+  background: var(--cr-surface-raised);
+}
+
 .cr-report-selection {
   display: flex;
   flex-wrap: wrap;
@@ -4233,7 +4324,8 @@ body.cr-selecting-lines {
     justify-self: start;
   }
 
-  .cr-report-toolbar .cr-field {
+  .cr-report-toolbar .cr-field,
+  .cr-report-toolbar .cr-multi-select {
     width: min(100%, 220px);
   }
 }

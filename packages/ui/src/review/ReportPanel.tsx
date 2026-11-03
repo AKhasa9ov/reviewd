@@ -8,7 +8,7 @@ import type {
   FindingDecisionState,
 } from '@sir_yami/reviewd-core';
 import { Badge, EmptyState } from '../primitives/Feedback.js';
-import { Select } from '../primitives/Field.js';
+import { MultiSelect } from '../primitives/MultiSelect.js';
 import { Tabs } from '../primitives/Tabs.js';
 import { Button } from '../primitives/Button.js';
 import { Dialog } from '../primitives/Dialog.js';
@@ -26,9 +26,8 @@ export interface ReportCommentTarget {
   lineEnd: number;
 }
 
-const SEVERITIES: Array<Finding['severity'] | 'all'> = ['all', 'blocker', 'major', 'minor', 'nit'];
-const CATEGORIES: Array<Finding['category'] | 'all'> = [
-  'all',
+const SEVERITIES: Array<Finding['severity']> = ['blocker', 'major', 'minor', 'nit'];
+const CATEGORIES: Array<Finding['category']> = [
   'security',
   'correctness',
   'tests',
@@ -186,8 +185,8 @@ export function ReportPanel({
   onCommentFocus,
   onAddComment,
 }: ReportPanelProps): JSX.Element {
-  const [severity, setSeverity] = useState<Finding['severity'] | 'all'>('all');
-  const [category, setCategory] = useState<Finding['category'] | 'all'>('all');
+  const [severities, setSeverities] = useState<ReadonlySet<Finding['severity']>>(() => new Set());
+  const [categories, setCategories] = useState<ReadonlySet<Finding['category']>>(() => new Set());
   const [page, setPage] = useState(0);
   const [questionPage, setQuestionPage] = useState(0);
   const [section, setSection] = useState<ReportSection>('issues');
@@ -208,7 +207,7 @@ export function ReportPanel({
   const findings =
     report === null || report === undefined
       ? []
-      : filterFindings(activeFindings, severity, category);
+      : filterFindings(activeFindings, severities, categories);
   const questions = report === null || report === undefined ? [] : report.questions;
   const decidableFindings = activeFindings.filter(
     (finding) => finding.kind !== 'praise' && !decisions.has(finding.id),
@@ -238,7 +237,7 @@ export function ReportPanel({
 
   useEffect(() => {
     setSelectedIds(new Set());
-  }, [severity, category, report?.reviewId, report?.round, partial, canDecide, readOnly]);
+  }, [severities, categories, report?.reviewId, report?.round, partial, canDecide, readOnly]);
   const pageCount = Math.max(1, Math.ceil(findings.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount - 1);
   const pageStart = currentPage * PAGE_SIZE;
@@ -287,7 +286,7 @@ export function ReportPanel({
   useEffect(() => {
     setPage(0);
     if (listRef.current !== null) listRef.current.scrollTop = 0;
-  }, [severity, category, report?.reviewId, report?.round, partial]);
+  }, [severities, categories, report?.reviewId, report?.round, partial]);
 
   useEffect(() => {
     setPage((value) => Math.min(value, pageCount - 1));
@@ -331,7 +330,7 @@ export function ReportPanel({
   }
 
   const counts = findingCounts({ ...report, findings: activeFindings });
-  const filtered = severity !== 'all' || category !== 'all';
+  const filtered = severities.size > 0 || categories.size > 0;
   const reportRound = round ?? report.round;
 
   function commentsFor(file: string, line: number): readonly Comment[] {
@@ -444,27 +443,19 @@ export function ReportPanel({
               content: (
                 <div className="cr-report-issues">
                   <div className="cr-report-toolbar">
-                    <Select
+                    <MultiSelect
                       label="Severity"
-                      options={SEVERITIES.map((value) => ({
-                        value,
-                        label: value === 'all' ? 'All severities' : value,
-                      }))}
-                      value={severity}
-                      onChange={(event) =>
-                        setSeverity(event.target.value as Finding['severity'] | 'all')
-                      }
+                      allLabel="All severities"
+                      options={SEVERITIES.map((value) => ({ value, label: value }))}
+                      selected={severities}
+                      onChange={setSeverities}
                     />
-                    <Select
+                    <MultiSelect
                       label="Category"
-                      options={CATEGORIES.map((value) => ({
-                        value,
-                        label: value === 'all' ? 'All categories' : value,
-                      }))}
-                      value={category}
-                      onChange={(event) =>
-                        setCategory(event.target.value as Finding['category'] | 'all')
-                      }
+                      allLabel="All categories"
+                      options={CATEGORIES.map((value) => ({ value, label: value }))}
+                      selected={categories}
+                      onChange={setCategories}
                     />
                     <span className="cr-meta" aria-live="polite">
                       {findings.length} of {activeFindings.length} findings
@@ -474,8 +465,8 @@ export function ReportPanel({
                         type="button"
                         className="cr-link-button"
                         onClick={() => {
-                          setSeverity('all');
-                          setCategory('all');
+                          setSeverities(new Set());
+                          setCategories(new Set());
                         }}
                       >
                         Clear filters
