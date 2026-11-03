@@ -370,6 +370,7 @@ function DiffFileSection({
         <Badge tone={statusTone(file.status)}>
           {statusLetter(file.status)} {file.status}
         </Badge>
+        {file.conflicted === true ? <Badge tone="danger">conflict</Badge> : null}
         <span className="cr-diff-stat cr-diff-stat-add">+{shownFile.added}</span>
         <span className="cr-diff-stat cr-diff-stat-del">−{shownFile.deleted}</span>
         {shownFile.binary ? <Badge tone="neutral">binary</Badge> : null}
@@ -814,6 +815,7 @@ export function DiffViewer({
   const openComposerRef = useRef(onOpenComposer);
   openComposerRef.current = onOpenComposer;
   const allFiles = useMemo(() => filesForSnapshot(snapshot), [snapshot]);
+  const conflictedFiles = allFiles.filter((file) => file.conflicted === true);
 
   useEffect(() => {
     if (activeFile !== undefined) setCurrentFile(activeFile);
@@ -1049,10 +1051,12 @@ export function DiffViewer({
                           aria-current={currentFile === file.path ? 'true' : undefined}
                         >
                           <span
-                            className={`cr-tree-status cr-tree-status-${file.status}`}
+                            className={`cr-tree-status cr-tree-status-${file.status}${
+                              file.conflicted === true ? ' cr-tree-status-conflict' : ''
+                            }`}
                             aria-hidden="true"
                           >
-                            {statusLetter(file.status)}
+                            {file.conflicted === true ? 'U' : statusLetter(file.status)}
                           </span>
                           <span className="cr-tree-path">
                             {file.path.slice(
@@ -1083,6 +1087,34 @@ export function DiffViewer({
       </aside>
 
       <div className="cr-diff-main">
+        {conflictedFiles.length > 0 ? (
+          <div className="cr-conflict-banner" role="alert">
+            <strong>
+              Merge conflicts
+              <span className="cr-conflict-count">
+                {conflictedFiles.length} unresolved file
+                {conflictedFiles.length === 1 ? '' : 's'}
+              </span>
+            </strong>
+            <p>
+              Resolve these conflicts in the worktree before merging. The diff may contain conflict
+              markers until the index is clean.
+            </p>
+            <ul>
+              {conflictedFiles.map((file) => (
+                <li key={file.path}>
+                  <button
+                    type="button"
+                    className="cr-link-button"
+                    onClick={() => onJump(file.path, firstChangedLine(file)?.line)}
+                  >
+                    {file.path}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
         <div className="cr-diff-toolbar">
           <div className="cr-segmented" role="group" aria-label="Diff range">
             <button

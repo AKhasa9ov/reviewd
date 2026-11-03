@@ -67,6 +67,8 @@ export interface FileDiff {
   ignored?: boolean;
   /** Content was omitted by the snapshot-wide budget or because the file lies beyond the diff cap. */
   truncated?: boolean;
+  /** The worktree path has unresolved merge stages; its content may contain conflict markers. */
+  conflicted?: boolean;
   /** Set when the raw bytes are not valid UTF-8. */
   encoding?: 'unknown';
   /** Set when content was unavailable: an unreadable read or diff-cap backfill. */
@@ -102,6 +104,8 @@ export interface ManifestFile {
   binary: boolean;
   ignored: boolean;
   oversized: boolean;
+  /** The worktree path has unresolved merge stages. */
+  conflicted?: boolean;
   added: number;
   deleted: number;
   hunkCount: number;

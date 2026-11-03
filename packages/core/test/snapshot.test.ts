@@ -136,6 +136,30 @@ describe('buildSnapshot', () => {
     expect(deleted?.contentHash).toBe(createHash('sha256').update('keep\n').digest('hex'));
   });
 
+  it('marks unresolved merge conflicts in worktree snapshots', async () => {
+    const repo = await makeRepo();
+    cleanups.push(repo.cleanup);
+    await repo.write('a.txt', 'one\ntwo\nthree\n');
+    await repo.commit('base');
+    await repo.git('checkout', '-b', 'side');
+    await repo.write('a.txt', 'one\nside\nthree\n');
+    await repo.commit('side');
+    await repo.git('checkout', 'main');
+    await repo.write('a.txt', 'one\nmain\nthree\n');
+    await repo.commit('main');
+    await repo.git('merge', 'side').catch(() => '');
+
+    const result = await buildSnapshot({
+      repoRoot: repo.root,
+      scope: { kind: 'worktree', baseRef: 'main' },
+    });
+
+    const file = result.files.find((item) => item.path === 'a.txt');
+    expect(file?.conflicted).toBe(true);
+    expect(result.manifest?.files.find((item) => item.path === 'a.txt')?.conflicted).toBe(true);
+    expect(result.warnings).toContain('merge-conflict:a.txt');
+  });
+
   it('snapshots uncommitted worktree changes', async () => {
     const repo = await featureRepo();
     await repo.git('checkout', 'main');

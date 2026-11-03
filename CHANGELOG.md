@@ -42,6 +42,11 @@ versions may contain breaking changes.
 
 ### Added
 
+- Worktree snapshots detect unresolved merge conflicts with `git ls-files -u`, expose a
+  `conflicted` flag on `FileDiff` and manifest entries, and add a `merge-conflict:<path>`
+  warning. The diff shows a top-level **Merge conflicts** banner, a conflict badge on each
+  affected file and a `U` tree marker; range and commit reviews are unchanged because
+  committed conflict markers are ordinary content.
 - The report toolbar filters findings by several severities and categories at once: values
   inside one filter are ORed, the two filters are ANDed, and an empty filter means all.
 - Fixer agents can list open review comments with `review_comments_list` and mark addressed

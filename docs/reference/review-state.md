@@ -109,6 +109,12 @@ Snapshots are built from a local git checkout. Git access is read-only and strip
 and validates paths against the repository root. Symlinks leading outside the repository
 are not followed.
 
+A worktree snapshot also runs `git ls-files -u`. Every unmerged path is marked
+`conflicted: true` on its `FileDiff` and manifest entry and adds a
+`merge-conflict:<path>` snapshot warning. The UI shows a top-level banner and a badge on
+each affected file. Range and commit snapshots do not set the flag: conflict markers in a
+committed tree are ordinary content, not unresolved state.
+
 Scope kinds:
 
 - `range` — merge base of base/head to head;

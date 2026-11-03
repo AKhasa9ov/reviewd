@@ -58,6 +58,7 @@ export function manifestFileFromDiff(file: FileDiff): ManifestFile {
     binary: file.binary,
     ignored: file.ignored === true,
     oversized: file.oversized,
+    ...(file.conflicted === true ? { conflicted: true } : {}),
     added: file.added,
     deleted: file.deleted,
     hunkCount: file.hunks.length,

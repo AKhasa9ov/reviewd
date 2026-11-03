@@ -105,6 +105,7 @@ export function filesForSnapshot(snapshot: Snapshot): FileDiff[] {
       binary: entry.binary,
       oversized: entry.oversized,
       ...(entry.ignored ? { ignored: true } : {}),
+      ...(entry.conflicted === true ? { conflicted: true } : {}),
       truncated: true,
       reason: entry.reason === 'unreadable' ? 'unreadable' : 'diff-truncated',
       added: entry.added,

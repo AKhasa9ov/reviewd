@@ -288,6 +288,7 @@ interface ManifestSeed {
   deleted: number;
   ignored: boolean;
   oversized: boolean;
+  conflicted?: boolean;
   /** True when `added`/`deleted` came from the exact numstat listing. */
   fromNumstat: boolean;
   reason?: ManifestFileReason;
@@ -334,6 +335,7 @@ export function manifestEntry(input: {
   const ignored = input.seed.ignored || mapped?.ignored === true;
   const oversized = input.seed.oversized || mapped?.oversized === true;
   const binary = input.seed.binary || mapped?.binary === true;
+  const conflicted = input.seed.conflicted === true || mapped?.conflicted === true;
   let reason = mapped?.reason ?? input.seed.reason;
   // A binary path has no textual patch regardless of the cap; report the more
   // specific reason. Ignored/unreadable/explicit policy reasons still win.
@@ -350,6 +352,7 @@ export function manifestEntry(input: {
     binary,
     ignored,
     oversized,
+    ...(conflicted ? { conflicted: true } : {}),
     added: input.seed.fromNumstat ? input.seed.added : (mapped?.added ?? input.seed.added),
     deleted: input.seed.fromNumstat ? input.seed.deleted : (mapped?.deleted ?? input.seed.deleted),
     hunkCount: mapped?.hunkCount ?? 0,
@@ -518,6 +521,31 @@ async function untrackedFile(
   return file;
 }
 
+interface UnmergedListing {
+  paths: Set<string>;
+  truncated: boolean;
+}
+
+/**
+ * Worktree conflicts are not a normal diff status: `git diff` renders the
+ * conflict markers and the raw listing reports a synthetic `U` entry. Ask the
+ * index directly so a conflicted path is never silently treated as an ordinary
+ * modification.
+ */
+async function listUnmerged(repoRoot: string, signal?: AbortSignal): Promise<UnmergedListing> {
+  const result = await runGit(repoRoot, ['ls-files', '-u', '-z'], {
+    signal,
+    maxBytes: 8 * 1024 * 1024,
+    truncateOnOverflow: true,
+  });
+  const paths = new Set<string>();
+  for (const record of splitNulPaths(result.stdout)) {
+    const tab = record.indexOf('\t');
+    if (tab >= 0) paths.add(record.slice(tab + 1));
+  }
+  return { paths, truncated: result.truncated === true };
+}
+
 export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot> {
   const includeContent = options.includeContent ?? DEFAULTS.includeContent;
   const includeUntracked = options.includeUntracked ?? DEFAULTS.includeUntracked;
@@ -545,6 +573,34 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
   const listingTruncated = rawListing.truncated || numstatListing.truncated;
   if (listingTruncated) warnings.push('manifest-listing-truncated');
   const seeds = rawSeeds(rawListing.entries, numstatListing.entries, ignore);
+
+  const unmerged = new Set<string>();
+  if (scope.kind === 'worktree') {
+    const listing = await listUnmerged(scope.repoRoot, options.signal);
+    if (listing.truncated) warnings.push('merge-conflict-list-truncated');
+    for (const path of listing.paths) {
+      if (paths !== undefined && !paths.includes(path)) continue;
+      unmerged.add(path);
+      const seed = seeds.get(path);
+      if (seed === undefined) {
+        seeds.set(path, {
+          path,
+          status: 'modified',
+          binary: false,
+          added: 0,
+          deleted: 0,
+          ignored: isIgnored(path, ignore),
+          oversized: false,
+          conflicted: true,
+          fromNumstat: false,
+        });
+      } else {
+        seed.conflicted = true;
+      }
+      const warning = `merge-conflict:${path}`;
+      if (!warnings.includes(warning)) warnings.push(warning);
+    }
+  }
 
   const diff = await runGit(scope.repoRoot, diffArgs(scope, 'patch', paths), {
     signal: options.signal,
@@ -754,6 +810,12 @@ export async function buildSnapshot(options: SnapshotOptions): Promise<Snapshot>
     if (oldLines !== undefined) file.oldLines = oldLines;
     if (newLines !== undefined) file.newLines = newLines;
     files.push(file);
+  }
+
+  if (unmerged.size > 0) {
+    for (const file of files) {
+      if (unmerged.has(file.path)) file.conflicted = true;
+    }
   }
 
   if (scope.kind === 'worktree' && includeUntracked) {

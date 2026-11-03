@@ -112,6 +112,47 @@ function comment(overrides: Partial<Comment> = {}): Comment {
   };
 }
 
+describe('DiffViewer merge conflicts', () => {
+  it('surfaces unresolved conflicts in a banner and on the file', () => {
+    const base = snapshot();
+    const file = { ...loadedFile(), conflicted: true };
+    const conflicted: Snapshot = {
+      ...base,
+      files: [file],
+      manifest: {
+        ...base.manifest!,
+        files: [{ ...base.manifest!.files[0]!, conflicted: true }],
+        warnings: ['merge-conflict:src/a.ts'],
+      },
+      warnings: ['merge-conflict:src/a.ts'],
+    };
+    render(
+      <DiffViewer
+        snapshot={conflicted}
+        comments={[]}
+        round={1}
+        delta={false}
+        canDelta={false}
+        changedPaths={new Set()}
+        onDeltaChange={() => undefined}
+        onJump={() => undefined}
+        onSelectLine={() => undefined}
+        onSelectRange={() => undefined}
+        onOpenComposer={() => undefined}
+        onReply={async () => undefined}
+        onCommentState={async () => undefined}
+        onCommentJump={() => undefined}
+        onCommentFocus={() => undefined}
+      />,
+    );
+
+    const banner = screen.getByRole('alert');
+    expect(banner).toHaveTextContent('Merge conflicts');
+    expect(banner).toHaveTextContent('src/a.ts');
+    expect(screen.getAllByText('conflict').length).toBeGreaterThan(0);
+  });
+});
+
 describe('DiffViewer lazy diffs', () => {
   it('loads a diff omitted from the bounded round snapshot', async () => {
     const onLoadDiff = vi.fn(async () => loadedFile());
