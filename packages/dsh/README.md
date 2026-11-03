@@ -83,8 +83,10 @@ is optional and only changes browser-facing links. The bundle does not mount
 links to the external review UI at `publicUrl` (or `daemonUrl`), which keeps its own token
 login and HttpOnly cookie. The configured `token` stays Host-only: the proxy replaces any
 browser Authorization header with the bearer. It forwards `accept`, `content-type`,
-`idempotency-key`, `x-review-actor` and `last-event-id` (for SSE), and never forwards the
-browser's own `authorization`; `/api/code-review/info` returns addresses without the token.
+`idempotency-key`, `x-review-actor`, `x-review-actor-kind` and `last-event-id` (for SSE),
+and never forwards the browser's own `authorization`; when no kind header is present it
+sends `x-review-actor-kind: human` so browser actions stay human. `/api/code-review/info`
+returns addresses without the token.
 
 Use the profile's own patch layer for these overrides; do not edit the package's
 `cordis.patch.yml`.

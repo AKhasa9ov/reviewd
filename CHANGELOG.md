@@ -21,6 +21,9 @@ versions may contain breaking changes.
 
 ### Fixed
 
+- API-authored comments and replies are attributed to agents instead of humans. Bearer
+  requests default to `agent`, browser-cookie requests default to `human`, and
+  `x-review-actor-kind` overrides either default.
 - The DSH Host now injects `sessionController`, so submitting feedback wakes the initiating
   session instead of leaving the delivery pending. The delivered prompt explicitly starts a
   fix round for `request-changes` and `comment` submissions; `approve` gets only an approval

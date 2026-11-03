@@ -252,7 +252,7 @@ describe('review routes and events', () => {
 
     const comment = await fetch(`${daemonUrl}/api/reviews/${reviewId}/comments`, {
       method: 'POST',
-      headers: headers(),
+      headers: headers(TOKEN, { 'x-review-actor-kind': 'human' }),
       body: JSON.stringify({ path: 'src/a.ts', lineStart: 2, body: 'Please explain' }),
     });
     expect(comment.status).toBe(201);
@@ -1517,7 +1517,7 @@ describe('review and comment CRUD routes', () => {
     expect(calls).toEqual([
       {
         id: 'rev_1',
-        ctx: { actor: { name: 'api', kind: 'human' } },
+        ctx: { actor: { name: 'api', kind: 'agent' } },
         reason: 'duplicate',
       },
     ]);
@@ -1815,6 +1815,87 @@ describe('bulk review finding decisions', () => {
     expect(response.status).toBe(400);
     expect((await read(response)).error.code).toBe('validation');
     expect(called).toBe(false);
+  });
+});
+
+describe('actor attribution', () => {
+  it('records API writes as agents and browser cookie writes as humans', async () => {
+    const { daemonUrl } = await running();
+    const checkout = await repo();
+    const created = await createReview(daemonUrl, { backend: 'none' }, checkout.root);
+    const reviewId = created.body.review.review.id;
+
+    const commentResponse = await fetch(`${daemonUrl}/api/reviews/${reviewId}/comments`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ path: 'src/a.ts', lineStart: 2, body: 'Please explain' }),
+    });
+    const comment = (await read(commentResponse)).comment;
+    expect(comment.author).toEqual({ name: 'api', kind: 'agent' });
+    const commentId = comment.id as string;
+
+    const apiReply = await fetch(
+      `${daemonUrl}/api/reviews/${reviewId}/comments/${commentId}/replies`,
+      {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ body: 'API answer' }),
+      },
+    );
+    expect(apiReply.status).toBe(201);
+    const apiComment = (await read(apiReply)).comment;
+    expect(apiComment.replies[0].author).toEqual({ name: 'api', kind: 'agent' });
+
+    const humanReply = await fetch(
+      `${daemonUrl}/api/reviews/${reviewId}/comments/${commentId}/replies`,
+      {
+        method: 'POST',
+        headers: headers(TOKEN, {
+          'x-review-actor': 'Alice',
+          'x-review-actor-kind': 'human',
+        }),
+        body: JSON.stringify({ body: 'Human answer' }),
+      },
+    );
+    expect(humanReply.status).toBe(201);
+    expect((await read(humanReply)).comment.replies[1].author).toEqual({
+      name: 'Alice',
+      kind: 'human',
+    });
+
+    const auth = await fetch(`${daemonUrl}/api/auth`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token: TOKEN }),
+    });
+    const cookie = (auth.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+    const browserReply = await fetch(
+      `${daemonUrl}/api/reviews/${reviewId}/comments/${commentId}/replies`,
+      {
+        method: 'POST',
+        headers: { cookie, origin: daemonUrl, 'content-type': 'application/json' },
+        body: JSON.stringify({ body: 'Browser answer' }),
+      },
+    );
+    expect(browserReply.status).toBe(201);
+    expect((await read(browserReply)).comment.replies[2].author).toEqual({
+      name: 'browser',
+      kind: 'human',
+    });
+
+    const events = await read(
+      await fetch(`${daemonUrl}/api/reviews/${reviewId}/events?after=0&wait=0`, {
+        headers: headers(),
+      }),
+    );
+    const replyActors = events.events
+      .filter((event: { type: string }) => event.type === 'comment/replied')
+      .map((event: { actor: unknown }) => event.actor);
+    expect(replyActors).toEqual([
+      { name: 'api', kind: 'agent' },
+      { name: 'Alice', kind: 'human' },
+      { name: 'browser', kind: 'human' },
+    ]);
   });
 });
 

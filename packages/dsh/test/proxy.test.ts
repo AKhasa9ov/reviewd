@@ -44,11 +44,13 @@ describe('same-origin proxy', () => {
     let seenBody = '';
     let seenActor = '';
     let seenIdempotency = '';
+    let seenKind = '';
     const daemon = createServer((req, res) => {
       seenAuth = String(req.headers.authorization);
       seenPath = req.url ?? '';
       seenActor = String(req.headers['x-review-actor'] ?? '');
       seenIdempotency = String(req.headers['idempotency-key'] ?? '');
+      seenKind = String(req.headers['x-review-actor-kind'] ?? '');
       let body = '';
       req.on('data', (chunk: Buffer) => {
         body += chunk.toString();
@@ -85,6 +87,19 @@ describe('same-origin proxy', () => {
     expect(seenBody).toBe('{"title":"x"}');
     expect(seenActor).toBe('Alice');
     expect(seenIdempotency).toBe('key-1');
+    expect(seenKind).toBe('human');
+
+    const explicit = await fetch(`${proxyUrl}/api/code-review/reviews?limit=2`, {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer client-secret',
+        'content-type': 'application/json',
+        'x-review-actor-kind': 'agent',
+      },
+      body: '{}',
+    });
+    expect(explicit.status).toBe(201);
+    expect(seenKind).toBe('agent');
   });
 
   it('returns typed errors without leaking the token', async () => {

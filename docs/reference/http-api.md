@@ -133,6 +133,15 @@ suggestions are unchanged. Edits are rejected on closed reviews and on deleted c
 counts, while any replies remain visible under a “Comment deleted” tombstone. Both
 review and comment deletes are append-only events; nothing is physically removed.
 
+### Actor attribution
+
+Mutating requests with a bearer token are recorded as `{name, kind: "agent"}` by default;
+the name comes from `x-review-actor` or is `api`. Requests authenticated by the browser
+session cookie default to `{name: "browser", kind: "human"}`. Set
+`x-review-actor-kind: human` or `agent` to override the kind explicitly, for example when a
+person uses a bearer-token CLI. The resolve shortcut always records an agent, regardless of
+this header.
+
 ### Curl example
 
 ```bash

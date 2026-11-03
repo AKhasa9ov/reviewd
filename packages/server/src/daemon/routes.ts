@@ -88,7 +88,10 @@ function actorFor(req: IncomingMessage, auth: 'bearer' | 'cookie'): Actor {
       : auth === 'cookie'
         ? 'browser'
         : 'api';
-  return { name, kind: 'human' };
+  const rawKind = req.headers['x-review-actor-kind'];
+  const kind: Actor['kind'] =
+    rawKind === 'human' || rawKind === 'agent' ? rawKind : auth === 'cookie' ? 'human' : 'agent';
+  return { name, kind };
 }
 
 function ctxFor(

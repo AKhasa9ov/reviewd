@@ -57,9 +57,11 @@ DSH Host process              reviewd (separate process)
 External mode does not mount the SPA on the DSH origin. The panel lists reviews through
 the same-origin proxy and links to the daemon's own UI, which keeps its token login and
 HttpOnly session cookie. The configured `token` is still Host-only: the proxy replaces any
-browser `Authorization` header, forwards `idempotency-key` and `x-review-actor`, and keeps
-the token out of responses. The daemon may be on loopback with a separate `publicUrl` for
-browser links.
+browser `Authorization` header, forwards `idempotency-key`, `x-review-actor`,
+`x-review-actor-kind`, and keeps the token out of responses. It sets
+`x-review-actor-kind: human` when the browser does not send one, so the proxy's bearer does
+not turn browser actions into agent actions. The daemon may be on loopback with a separate
+`publicUrl` for browser links.
 
 ## Install
 

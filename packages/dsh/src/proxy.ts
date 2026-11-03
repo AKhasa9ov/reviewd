@@ -114,10 +114,13 @@ export function createProxyHandler(deps: ProxyDeps) {
       }
       // Preserve the caller's review attribution and retry-safety key; anything
       // else the browser sends (notably authorization) is deliberately dropped.
-      for (const name of ['idempotency-key', 'x-review-actor'] as const) {
+      for (const name of ['idempotency-key', 'x-review-actor', 'x-review-actor-kind'] as const) {
         const value = req.headers[name];
         if (typeof value === 'string' && value !== '') headers[name] = value;
       }
+      // The proxy authenticates with the daemon bearer on behalf of a human
+      // browser session. Direct API callers keep the bearer default (agent).
+      if (headers['x-review-actor-kind'] === undefined) headers['x-review-actor-kind'] = 'human';
       const controller = new AbortController();
       res.on('close', () => controller.abort());
       const daemonPath = path === '/' ? '/api' : `/api${path}`;
