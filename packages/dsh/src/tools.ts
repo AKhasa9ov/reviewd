@@ -47,6 +47,23 @@ function failure(error: unknown): ToolFailure {
   return { ok: false, error: { code, message } };
 }
 
+function reviewVerdict(review: Record<string, unknown>): string {
+  const submissions = Array.isArray(review.submissions) ? review.submissions : [];
+  let latest: { round: number; verdict: string } | undefined;
+  for (const raw of submissions) {
+    if (typeof raw !== 'object' || raw === null) continue;
+    const item = raw as Record<string, unknown>;
+    if (typeof item.verdict !== 'string') continue;
+    const round = typeof item.round === 'number' ? item.round : 0;
+    if (latest === undefined || round >= latest.round) {
+      latest = { round, verdict: item.verdict };
+    }
+  }
+  if (latest !== undefined) return latest.verdict;
+  if (typeof review.closeVerdict === 'string') return review.closeVerdict;
+  return review.status === 'closed' ? 'closed' : 'open';
+}
+
 function tool(
   name: string,
   description: string,
@@ -203,11 +220,14 @@ export function createReviewTools(
             exec.signal,
           );
           const review = view.review as Record<string, unknown>;
+          const verdict = reviewVerdict(review);
           return {
             ok: true,
             reviewId: review.id,
             title: review.title,
             status: review.status,
+            verdict,
+            approved: verdict === 'approve' || verdict === 'approved',
             rounds: Array.isArray(review.rounds) ? review.rounds.length : 0,
             comments: Array.isArray(review.comments) ? review.comments.length : 0,
             agent: review.agent ?? null,

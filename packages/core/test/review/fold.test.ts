@@ -315,3 +315,11 @@ describe('agent shard fold', () => {
     expect(second.agent?.shards?.[0]?.report.summary).toBe('replacement');
   });
 });
+
+describe('close verdict fold', () => {
+  it('keeps the explicit close verdict so consumers can distinguish approved from closed', () => {
+    const state = fold(baseState(), event('review/closed', { verdict: 'approved' }));
+    expect(state.status).toBe('closed');
+    expect(state.closeVerdict).toBe('approved');
+  });
+});

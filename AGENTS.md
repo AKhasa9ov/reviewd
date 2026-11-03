@@ -46,7 +46,7 @@ same action.
 ## DSH tools
 
 - `review_start` — create a review for the session workspace or explicit repo/range.
-- `review_status` — review, rounds, comments and report status.
+- `review_status` — review, rounds, comments, verdict and report status.
 - `review_feedback` — read the latest submitted feedback.
 - `review_comments_list` — open comments with ids and anchors.
 - `review_refresh` — create the next round and re-anchor comments.

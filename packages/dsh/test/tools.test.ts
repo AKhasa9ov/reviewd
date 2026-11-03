@@ -3,7 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { createReviewTools } from '../src/tools.js';
 import type { PluginContext } from '../src/tools.js';
 
-function setup(overrides: Record<string, unknown> = {}, comments: Array<Record<string, any>> = []) {
+function setup(
+  overrides: Record<string, unknown> = {},
+  comments: Array<Record<string, any>> = [],
+  reviewOverrides: Record<string, any> = {},
+) {
   const definitions: Array<Record<string, any>> = [];
   const ctx: PluginContext = {
     tools: {
@@ -18,7 +22,14 @@ function setup(overrides: Record<string, unknown> = {}, comments: Array<Record<s
     get: async (path: string) => {
       calls.push({ method: 'GET', path });
       return {
-        review: { id: 'rev_1', title: 'T', status: 'open', rounds: [1], comments },
+        review: {
+          id: 'rev_1',
+          title: 'T',
+          status: 'open',
+          rounds: [1],
+          comments,
+          ...reviewOverrides,
+        },
         report: null,
       };
     },
@@ -81,6 +92,38 @@ describe('review tools', () => {
       reviewId: 'rev_1',
       url: '/code-review/review/rev_1',
     });
+  });
+
+  it('exposes an approved close verdict to the fixing agent', async () => {
+    const { definitions } = setup({}, [], {
+      status: 'closed',
+      closeVerdict: 'approved',
+      closedAt: '2026-10-28T12:00:00.000Z',
+    });
+    const status = definitions.find((definition) => definition.name === 'review_status');
+    const value = await status!.execute(
+      { reviewId: 'rev_1' },
+      { signal: new AbortController().signal },
+    );
+    expect(value).toMatchObject({
+      ok: true,
+      status: 'closed',
+      verdict: 'approved',
+      approved: true,
+    });
+  });
+
+  it('uses the latest approving submission when the review has no close verdict', async () => {
+    const { definitions } = setup({}, [], {
+      status: 'closed',
+      submissions: [{ round: 1, verdict: 'approve', submissionId: 'sub_1' }],
+    });
+    const status = definitions.find((definition) => definition.name === 'review_status');
+    const value = await status!.execute(
+      { reviewId: 'rev_1' },
+      { signal: new AbortController().signal },
+    );
+    expect(value).toMatchObject({ ok: true, status: 'closed', verdict: 'approve', approved: true });
   });
 
   it('returns typed errors instead of throwing', async () => {

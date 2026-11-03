@@ -150,6 +150,32 @@ describe('remote CLI', () => {
     expect(calls.filter((call) => call.method === 'GET')).toHaveLength(1);
   });
 
+  it('shows approved instead of the internal closed status', async () => {
+    const { fetch } = fakeFetch(() => ({
+      body: {
+        review: {
+          id: 'rev_1',
+          title: 'T',
+          status: 'closed',
+          closeVerdict: 'approved',
+          rounds: [{}],
+          comments: [],
+        },
+      },
+    }));
+    const { io, out } = capture();
+    const code = await runCli(
+      ['status', 'rev_1'],
+      io,
+      deps(fetch, {
+        CODE_REVIEW_URL: 'http://reviewd:3100',
+        CODE_REVIEW_TOKEN: 't'.repeat(32),
+      }),
+    );
+    expect(code).toBe(0);
+    expect(out.join('')).toContain('rev_1 approved T');
+  });
+
   it('reads status, comments, feedback and submits', async () => {
     const { fetch } = fakeFetch((call) => {
       if (call.method === 'GET' && call.url.endsWith('/api/reviews/rev_1')) {

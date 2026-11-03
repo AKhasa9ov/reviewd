@@ -1388,7 +1388,7 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
           </div>
           <Badge
             tone={
-              latestVerdict(review) === 'approve'
+              latestVerdict(review) === 'approve' || latestVerdict(review) === 'approved'
                 ? 'success'
                 : latestVerdict(review) === 'request-changes'
                   ? 'danger'

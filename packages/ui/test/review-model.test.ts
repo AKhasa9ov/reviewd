@@ -16,6 +16,7 @@ import {
   fixCounts,
   fixStatus,
   latestAnchor,
+  latestVerdict,
   parseReviewLocation,
   parseTab,
   roundCommentCount,
@@ -421,5 +422,22 @@ describe('signals and findings', () => {
     expect(filterFindings(full, 'major', 'all')).toHaveLength(1);
     expect(filterFindings(full, 'all', 'docs')).toHaveLength(1);
     expect(findingCounts({ findings: full } as never)).toMatchObject({ major: 1, nit: 1 });
+  });
+});
+
+describe('latest verdict', () => {
+  it('distinguishes an explicit approved close from a plain close', () => {
+    const base = {
+      id: 'rev_1',
+      title: 'T',
+      repoRoot: '/repo',
+      status: 'open',
+      createdAt: '2026-10-28T12:00:00.000Z',
+      rounds: [],
+      comments: [],
+      version: 1,
+    } as ReviewState;
+    expect(latestVerdict({ ...base, status: 'closed', closeVerdict: 'approved' })).toBe('approved');
+    expect(latestVerdict({ ...base, status: 'closed', closeVerdict: 'closed' })).toBe('closed');
   });
 });

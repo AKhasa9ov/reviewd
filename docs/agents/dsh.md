@@ -159,8 +159,10 @@ no token to configure.
   base/head/commit. The initiator is `{harness:'dsh', sessionId, cwd}`. Embedded mode
   returns the same-origin `/code-review/review/<id>` path, never the loopback daemon URL;
   external mode uses `publicUrl` when configured.
-- `review_status` — review, round count, comment count, agent status and report. When
-  the round has a coverage ledger, `agent.coverage` carries per-file statuses and totals.
+- `review_status` — review status, round count, comment count, agent status and report.
+  The result includes `verdict` and `approved`, so a closed review still tells the agent
+  whether it was approved, sent back for changes or closed without approval. When the
+  round has a coverage ledger, `agent.coverage` carries per-file statuses and totals.
 - `review_refresh` — create the next round, re-anchor comments and queue verification.
 - `review_feedback` — read the latest submitted feedback without delivering it again.
 - `review_comments_list` — open comments with ids, authors, anchors and text; the fixer

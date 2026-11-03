@@ -518,11 +518,13 @@ async function runRemote(
         id?: string;
         title?: string;
         status?: string;
+        closeVerdict?: string;
         rounds?: unknown[];
         comments?: unknown[];
       };
+      const label = review.closeVerdict === 'approved' ? 'approved' : review.status;
       io.stdout.write(
-        `${review.id} ${review.status} ${review.title} (${review.rounds?.length ?? 0} rounds, ${review.comments?.length ?? 0} comments)\n`,
+        `${review.id} ${label} ${review.title} (${review.rounds?.length ?? 0} rounds, ${review.comments?.length ?? 0} comments)\n`,
       );
     }
     return 0;

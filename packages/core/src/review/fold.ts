@@ -156,6 +156,7 @@ export function fold(state: ReviewState, event: ReviewEvent): ReviewState {
     case 'review/closed': {
       next.status = 'closed';
       next.closedAt ??= event.at;
+      next.closeVerdict = event.data.verdict;
       break;
     }
     case 'review/submitted': {
@@ -168,6 +169,7 @@ export function fold(state: ReviewState, event: ReviewEvent): ReviewState {
       if (submission.verdict === 'approve') {
         next.status = 'closed';
         next.closedAt ??= event.at;
+        next.closeVerdict ??= 'approved';
       }
       break;
     }

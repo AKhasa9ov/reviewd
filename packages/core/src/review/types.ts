@@ -196,6 +196,8 @@ export interface ReviewState {
   createdAt: string;
   /** Set when the review first closes; absent while open and on legacy events. */
   closedAt?: string;
+  /** Why the review closed: an explicit approved/closed close, or an approving submission. */
+  closeVerdict?: 'approved' | 'closed';
   /** Human or system actor that opened the review; absent on legacy events. */
   createdBy?: Actor;
   /** Initiating harness session, when created by an agent. Absent on legacy events. */

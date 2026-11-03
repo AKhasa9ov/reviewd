@@ -21,6 +21,9 @@ versions may contain breaking changes.
 
 ### Fixed
 
+- `review_status` now returns the latest `verdict` and an `approved` boolean, and a review
+  closed as approved keeps `closeVerdict: "approved"` instead of only `status: "closed"`.
+  The CLI status line and the review badge use the same distinction.
 - API-authored comments and replies are attributed to agents instead of humans. Bearer
   requests default to `agent`, browser-cookie requests default to `human`, and
   `x-review-actor-kind` overrides either default.

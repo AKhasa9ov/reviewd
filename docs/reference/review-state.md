@@ -81,6 +81,10 @@ Deleting a review soft-deletes it: it disappears from the list and `GET /api/rev
 returns `404`, while the event log is retained for audit. Deleting an already deleted
 review is idempotent.
 
+A closed review keeps `closeVerdict` (`approved` or `closed`), and an approving submission
+sets it to `approved` as well. `GET /api/reviews/:id` exposes it, so adapters do not have
+to interpret `status: closed` as approval.
+
 ## Limits
 
 | Limit                  | Value        |
