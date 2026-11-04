@@ -5922,9 +5922,10 @@ function buildFeedback(input) {
   const openComments = activeComments.filter(
     (comment) => comment.author.kind === "human" && comment.state === "open"
   );
-  const resolved = activeComments.filter(
+  const resolvedComments = activeComments.filter(
     (comment) => comment.author.kind === "human" && comment.state === "resolved"
   );
+  const resolved = input.includeResolved === false ? [] : resolvedComments;
   const reportFindings = report?.findings ?? [];
   const decisions = /* @__PURE__ */ new Map();
   for (const finding of reportFindings) {
@@ -6031,7 +6032,7 @@ function buildFeedback(input) {
       (question) => `- [${question.id}] ${question.question} \u2014 ${question.why}`
     )
   );
-  if (resolved.length > 0 || input.includeResolved === true) {
+  if (resolved.length > 0) {
     section(
       lines,
       "\u0423\u0436\u0435 \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043E \u0432 \u044D\u0442\u043E\u043C \u0440\u0430\u0443\u043D\u0434\u0435",

@@ -44,8 +44,34 @@ test('lists reviews and completes comment, reply, resolve and submit from the re
   await expect(dialog.locator('.cr-submit-pending-item').first()).toBeVisible();
   await dialog.getByLabel('Comment only').check();
   await dialog.getByRole('textbox', { name: 'Summary' }).fill('E2E browser feedback.');
+  const includeResolved = dialog.getByRole('checkbox', {
+    name: 'Include resolved comments in the package',
+  });
+  await expect(includeResolved).toBeEnabled();
+  await expect(includeResolved).not.toBeChecked();
+  await includeResolved.check();
+  await expect(includeResolved).toBeChecked();
+  const submitResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      response.url().endsWith(`/api/reviews/${fx.reviewId}/submit`),
+  );
   await dialog.getByRole('button', { name: 'Submit feedback' }).click();
+  const submitted = (await (await submitResponse).json()) as {
+    submission: { feedback: { json: { resolved: { count: number } } } };
+  };
+  expect(submitted.submission.feedback.json.resolved.count).toBeGreaterThan(0);
   await expect(page.getByText(/Feedback submitted for round 2/)).toBeVisible();
+
+  await page.getByRole('button', { name: 'Submit', exact: true }).click();
+  const followUp = page.getByRole('dialog', { name: 'Submit review' });
+  const followUpIncludeResolved = followUp.getByRole('checkbox', {
+    name: 'Include resolved comments in the package',
+  });
+  await expect(followUpIncludeResolved).toBeEnabled();
+  await followUpIncludeResolved.check();
+  await expect(followUpIncludeResolved).toBeChecked();
+  await followUp.getByRole('button', { name: 'Cancel' }).click();
 
   await page.getByRole('button', { name: 'Refresh', exact: true }).click();
   const refreshDialog = page.getByRole('dialog', { name: 'Re-review this branch' });

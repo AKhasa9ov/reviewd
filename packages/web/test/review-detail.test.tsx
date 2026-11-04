@@ -855,6 +855,62 @@ describe('review detail', () => {
     expect(screen.queryByRole('dialog', { name: 'Submit review' })).not.toBeInTheDocument();
   });
 
+  it('lets a follow-up submission include resolved comments', async () => {
+    const user = userEvent.setup();
+    const reviewWithPrevious = {
+      ...reviewView,
+      review: {
+        ...reviewView.review,
+        submissions: [
+          {
+            submissionId: 'sub_prev',
+            round: 1,
+            verdict: 'request-changes' as const,
+            deliveryKey: 'rev_01:1:sub_prev',
+            createdAt: '2026-10-27T10:00:00.000Z',
+          },
+        ],
+      },
+    };
+    const submit = vi.fn(async () => ({
+      submission: {
+        reviewId: 'rev_01',
+        round: 2,
+        verdict: 'request-changes' as const,
+        feedback: latestFeedback.feedback,
+        deliveryKey: 'delivery-key',
+      },
+      delivery: {
+        id: 'd1',
+        deliveryKey: 'delivery-key',
+        reviewId: 'rev_01',
+        round: 2,
+        harness: 'claude-code',
+      },
+    }));
+    const getReview = vi.fn(async () => reviewWithPrevious);
+    render(<App client={fakeClient({ getReview, submit })} />);
+    await screen.findByRole('heading', { name: 'Billing retry semantics' });
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Submit review' });
+    const includeResolved = within(dialog).getByRole('checkbox', {
+      name: 'Include resolved comments in the package',
+    });
+
+    expect(includeResolved).toBeEnabled();
+    expect(includeResolved).not.toBeChecked();
+    await user.click(includeResolved);
+    expect(includeResolved).toBeChecked();
+    await user.click(within(dialog).getByRole('button', { name: 'Submit feedback' }));
+
+    await waitFor(() =>
+      expect(submit).toHaveBeenCalledWith('rev_01', {
+        verdict: 'request-changes',
+        includeResolved: true,
+      }),
+    );
+  });
+
   it('creates a new round after confirmation and reports the re-anchor result', async () => {
     const user = userEvent.setup();
     const refreshed = {

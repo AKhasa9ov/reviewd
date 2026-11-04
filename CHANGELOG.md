@@ -7,6 +7,12 @@ versions may contain breaking changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Include resolved comments in the package** now controls the submitted feedback package.
+  The checkbox is enabled on follow-up submissions too; clearing it omits resolved comments
+  from the feedback markdown and the `resolved` summary, while selecting it includes them.
+
 ## [0.2.0] - 2026-11-03
 
 ### Changed

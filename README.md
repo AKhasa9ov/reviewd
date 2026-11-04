@@ -125,8 +125,9 @@ actionable for the next agent.
 <img src="docs/images/reviewd-submit-context-dark.png" alt="reviewd submit review dialog with verdict, summary and pending comments" width="100%">
 
 Submitting produces a deterministic feedback package: unresolved comments, accepted
-findings, dismissed reasons, suggestions, questions and verification. It is delivered to the
-initiating DSH session or read by CLI/HTTP clients.
+findings, dismissed reasons, suggestions, questions and verification. Resolved comments are
+included only when selected. It is delivered to the initiating DSH session or read by
+CLI/HTTP clients.
 
 <p align="center">
   <img src="docs/images/reviewd-mobile-dark.png" alt="reviewd review detail reflowed for a narrow viewport" width="300">

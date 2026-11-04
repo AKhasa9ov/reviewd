@@ -205,6 +205,28 @@ describe('buildFeedback', () => {
     expect(first.json.acceptedSuggestions).toHaveLength(1);
   });
 
+  it('honours an explicit choice about including resolved comments', () => {
+    const resolved = comment({ id: 'cmt_resolved', body: 'Resolved', state: 'resolved' });
+
+    const withoutResolved = buildFeedback({
+      ...input({ comments: [resolved] }),
+      includeResolved: false,
+    });
+    expect(withoutResolved.json.resolved).toEqual({ count: 0, commentIds: [] });
+    expect(withoutResolved.markdown).not.toContain('### Уже исправлено в этом раунде');
+
+    const withResolved = buildFeedback({
+      ...input({ comments: [resolved] }),
+      includeResolved: true,
+    });
+    expect(withResolved.json.resolved).toEqual({
+      count: 1,
+      commentIds: ['cmt_resolved'],
+    });
+    expect(withResolved.markdown).toContain('### Уже исправлено в этом раунде');
+    expect(withResolved.markdown).toContain('[cmt_resolved] resolved');
+  });
+
   it('does not repeat an accepted finding whose transferred comment is resolved', () => {
     const feedback = buildFeedback(
       input({

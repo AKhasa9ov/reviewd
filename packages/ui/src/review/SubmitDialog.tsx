@@ -75,7 +75,7 @@ export function SubmitDialog({
               onSubmit({
                 verdict,
                 ...(summary.trim() === '' ? {} : { summary }),
-                includeResolved: previous ? false : includeResolved,
+                includeResolved,
               })
             }
           >
@@ -89,7 +89,8 @@ export function SubmitDialog({
           <strong>Recipient session</strong>
           <p>
             Sending feedback resumes the agent session that initiated this review. The package
-            includes unresolved comments{previous ? ' only' : ''}, findings and verification.
+            includes unresolved comments, findings and verification. Resolved comments are included
+            only when selected below.
           </p>
         </div>
 
@@ -167,15 +168,15 @@ export function SubmitDialog({
         <label className="cr-check">
           <input
             type="checkbox"
-            checked={previous ? false : includeResolved}
-            disabled={previous}
+            checked={includeResolved}
             onChange={(event) => setIncludeResolved(event.target.checked)}
           />
           <span>Include resolved comments in the package</span>
         </label>
         {previous ? (
           <p className="cr-meta">
-            This review was submitted before. Only unresolved comments are sent again.
+            This review was submitted before. Unresolved comments are sent again; select the option
+            above to include resolved comments as well.
           </p>
         ) : null}
 

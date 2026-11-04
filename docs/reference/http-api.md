@@ -92,6 +92,11 @@ Codes: `unauthorized`, `forbidden`, `not-found`, `validation`, `conflict`, `stal
 | POST   | `/api/deliveries/:id/fail`                  | `{error}`                                                                   |
 | POST   | `/api/gc`                                   | `{olderThanDays}`; closed-by-age reviews and unreferenced snapshots         |
 
+`submit` accepts `includeResolved`. Set it to `false` to omit resolved comments from the
+feedback markdown and the `resolved` summary; `true` includes them. The browser UI sends the
+explicit choice, while requests that omit the field keep the resolved summary for backward
+compatibility.
+
 ### Finding decisions
 
 `POST /api/reviews/:id/findings/:fid/decision` records a human decision

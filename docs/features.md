@@ -76,7 +76,9 @@ a deterministic markdown + JSON package. It contains:
 - accepted blocker/major findings and all accepted non-praise findings;
 - dismissed findings with the human's note;
 - accepted and applied suggestions (applied ones marked "do not reapply");
-- questions, verification entries and a resolved summary.
+- questions, verification entries and an optional resolved summary. Resolved comments are
+  included when the submitter selects **Include resolved comments in the package** or sends
+  `includeResolved: true`.
 
 The package has no timestamps or random values, so repeated reads and deliveries are
 idempotent. DSH receives the package through the initiating session; CLI and HTTP clients

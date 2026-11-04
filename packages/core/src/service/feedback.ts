@@ -201,9 +201,10 @@ export function buildFeedback(input: BuildFeedbackInput): FeedbackPackage {
   const openComments = activeComments.filter(
     (comment) => comment.author.kind === 'human' && comment.state === 'open',
   );
-  const resolved = activeComments.filter(
+  const resolvedComments = activeComments.filter(
     (comment) => comment.author.kind === 'human' && comment.state === 'resolved',
   );
+  const resolved = input.includeResolved === false ? [] : resolvedComments;
 
   const reportFindings = report?.findings ?? [];
   const decisions = new Map<string, FindingDecision>();
@@ -323,7 +324,7 @@ export function buildFeedback(input: BuildFeedbackInput): FeedbackPackage {
     ),
   );
 
-  if (resolved.length > 0 || input.includeResolved === true) {
+  if (resolved.length > 0) {
     section(
       lines,
       'Уже исправлено в этом раунде',

@@ -39,7 +39,8 @@ Read the entire package before editing. In particular:
 
 - `dismissedFindings` includes human notes; do not repeat those findings;
 - `appliedSuggestions` are marked so they are not applied again;
-- `resolved` lists already resolved comments; do not re-resolve them;
+- `resolved` lists already resolved comments when the submitter included them; do not
+  re-resolve them;
 - `verification` may contain reviewer checks that are not a human decision.
 
 The package has no timestamps or random values; the same round returns the same package.
