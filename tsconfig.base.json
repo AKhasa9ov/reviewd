@@ -18,6 +18,7 @@
     "paths": {
       "@sir_yami/reviewd-core": ["packages/core/src/index.ts"],
       "@sir_yami/reviewd-core/browser": ["packages/core/src/browser.ts"],
+      "@sir_yami/reviewd-ui": ["packages/ui/src/index.ts"],
       "@sir_yami/reviewd-worker": ["packages/worker/src/index.ts"]
     }
   }
