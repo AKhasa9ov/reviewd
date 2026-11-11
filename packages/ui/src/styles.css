@@ -366,6 +366,9 @@ body.cr-selecting-lines {
 }
 
 .cr-list {
+  /* The review list lives directly in the panel flex column; without this it shrinks
+     to the leftover viewport height and clips every row past the first screen. */
+  flex-shrink: 0;
   overflow: hidden;
   border: 1px solid var(--cr-border);
   border-radius: 0 0 var(--cr-radius-card) var(--cr-radius-card);

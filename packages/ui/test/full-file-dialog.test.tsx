@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type {
@@ -747,5 +747,99 @@ describe('FullFileDialog', () => {
     expect(findingRow).toHaveClass('cr-full-file-finding');
     expect(within(dialog).getByText('Please explain this value.')).toBeInTheDocument();
     expect(findingRow?.nextElementSibling).toBe(thread);
+  });
+});
+
+describe('FullFileDialog touch selection', () => {
+  function pointerEvent(type: string, x: number, y: number): Event {
+    const event = new Event(type, { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'pointerType', { value: 'touch' });
+    Object.defineProperty(event, 'pointerId', { value: 9 });
+    Object.defineProperty(event, 'clientX', { value: x });
+    Object.defineProperty(event, 'clientY', { value: y });
+    Object.defineProperty(event, 'button', { value: 0 });
+    return event;
+  }
+
+  it('selects a range by long-pressing and dragging, then comments through the bar', () => {
+    vi.useFakeTimers();
+    try {
+      const onOpenComposer = vi.fn();
+      render(
+        <FullFileDialog
+          file={fourLineFile()}
+          round={1}
+          onOpenComposer={onOpenComposer}
+          onClose={vi.fn()}
+        />,
+      );
+      const dialog = screen.getByRole('dialog', { name: 'src/drag.ts' });
+      const line1 = within(dialog).getByRole('row', { name: /Line 1, unchanged: alpha/ });
+      const line3 = within(dialog).getByRole('row', { name: /Line 3, unchanged: gamma/ });
+      const originalElementFromPoint = document.elementFromPoint;
+      document.elementFromPoint = () => line3;
+
+      act(() => {
+        line1.dispatchEvent(pointerEvent('pointerdown', 40, 100));
+      });
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      expect(line1).toHaveAttribute('aria-selected', 'true');
+
+      act(() => {
+        window.dispatchEvent(pointerEvent('pointermove', 40, 180));
+      });
+      act(() => {
+        window.dispatchEvent(pointerEvent('pointerup', 40, 180));
+      });
+
+      expect(line3).toHaveAttribute('aria-selected', 'true');
+      const bar = screen.getByRole('status');
+      expect(bar).toHaveTextContent('Lines 1–3');
+      act(() => {
+        within(bar).getByRole('button', { name: 'Comment 3 lines' }).click();
+      });
+      expect(onOpenComposer).toHaveBeenCalledWith('new', 1, 3);
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      document.elementFromPoint = originalElementFromPoint;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('leaves a quick scroll gesture alone', () => {
+    vi.useFakeTimers();
+    try {
+      const onOpenComposer = vi.fn();
+      render(
+        <FullFileDialog
+          file={fourLineFile()}
+          round={1}
+          onOpenComposer={onOpenComposer}
+          onClose={vi.fn()}
+        />,
+      );
+      const dialog = screen.getByRole('dialog', { name: 'src/drag.ts' });
+      const line1 = within(dialog).getByRole('row', { name: /Line 1, unchanged: alpha/ });
+
+      act(() => {
+        line1.dispatchEvent(pointerEvent('pointerdown', 40, 100));
+      });
+      act(() => {
+        window.dispatchEvent(pointerEvent('pointermove', 40, 160));
+      });
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      act(() => {
+        window.dispatchEvent(pointerEvent('pointerup', 40, 160));
+      });
+
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      expect(onOpenComposer).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

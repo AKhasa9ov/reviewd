@@ -3,6 +3,7 @@ import type {
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
   MutableRefObject,
+  PointerEvent as ReactPointerEvent,
 } from 'react';
 import type {
   Comment,
@@ -77,6 +78,19 @@ interface DragState {
   anchor: number;
   last: number;
 }
+
+interface TouchDragState {
+  pointerId: number;
+  anchor: number;
+  last: number;
+  startX: number;
+  startY: number;
+  activated: boolean;
+  timer: number | null;
+}
+
+const TOUCH_LONG_PRESS_MS = 450;
+const TOUCH_MOVE_TOLERANCE_PX = 8;
 
 function sideLabel(side: Side): string {
   return side === 'new' ? 'Current' : 'Base';
@@ -154,6 +168,9 @@ export function FullFileDialog({
   const activeSideRef = useRef<Side | null>(null);
   const commentAtSelectionRef = useRef<() => void>(() => {});
   const dragRef = useRef<DragState | null>(null);
+  const touchRef = useRef<TouchDragState | null>(null);
+  const [touchSelection, setTouchSelection] = useState<Selection | null>(null);
+  const [touchSelecting, setTouchSelecting] = useState(false);
   const suppressClickRef = useRef(false);
   // Keep the mount-only mouseup listener current without re-registering on every parent render.
   const onOpenComposerRef = useRef(onOpenComposer);
@@ -176,6 +193,8 @@ export function FullFileDialog({
     activeSideRef.current = activeSide;
     if (first) return;
     dragRef.current = null;
+    touchRef.current = null;
+    setTouchSelection(null);
     document.body.classList.remove('cr-selecting-lines');
     setAnchor(1);
     setSelection(null);
@@ -241,6 +260,91 @@ export function FullFileDialog({
   }, []);
 
   useEffect(() => {
+    function clearTouchTimer(gesture: TouchDragState): void {
+      if (gesture.timer !== null) {
+        window.clearTimeout(gesture.timer);
+        gesture.timer = null;
+      }
+    }
+
+    function lineAtPoint(x: number, y: number): number | null {
+      const hit = document.elementFromPoint?.(x, y);
+      const row = hit instanceof Element ? hit.closest<HTMLElement>('[data-full-file-line]') : null;
+      const line = Number(row?.dataset.fullFileLine);
+      return Number.isFinite(line) && line > 0 ? line : null;
+    }
+
+    function extend(gesture: TouchDragState, line: number): void {
+      gesture.last = line;
+      const start = Math.min(gesture.anchor, line);
+      const end = Math.max(gesture.anchor, line);
+      setSelection({ start, end });
+      setTouchSelection({ start, end });
+    }
+
+    function moveTo(x: number, y: number): void {
+      const gesture = touchRef.current;
+      if (gesture === null || !gesture.activated) return;
+      const line = lineAtPoint(x, y);
+      if (line !== null) extend(gesture, line);
+    }
+
+    function onPointerMove(event: PointerEvent): void {
+      const gesture = touchRef.current;
+      if (gesture === null || event.pointerId !== gesture.pointerId) return;
+      if (!gesture.activated) {
+        if (
+          Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY) >
+          TOUCH_MOVE_TOLERANCE_PX
+        ) {
+          clearTouchTimer(gesture);
+          touchRef.current = null;
+        }
+        return;
+      }
+      if (event.cancelable) event.preventDefault();
+      moveTo(event.clientX, event.clientY);
+    }
+
+    function onTouchMove(event: TouchEvent): void {
+      const gesture = touchRef.current;
+      if (gesture === null || !gesture.activated) return;
+      if (event.cancelable) event.preventDefault();
+      const touch = event.touches[0];
+      if (touch !== undefined) moveTo(touch.clientX, touch.clientY);
+    }
+
+    function finishTouch(event: PointerEvent): void {
+      const gesture = touchRef.current;
+      if (gesture === null || event.pointerId !== gesture.pointerId) return;
+      clearTouchTimer(gesture);
+      touchRef.current = null;
+      if (gesture.activated) {
+        setTouchSelecting(false);
+        document.body.classList.remove('cr-selecting-lines');
+        window.setTimeout(() => {
+          suppressClickRef.current = false;
+        }, 0);
+      }
+    }
+
+    window.addEventListener('pointermove', onPointerMove, { passive: false });
+    window.addEventListener('pointerup', finishTouch);
+    window.addEventListener('pointercancel', finishTouch);
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', finishTouch);
+      window.removeEventListener('pointercancel', finishTouch);
+      window.removeEventListener('touchmove', onTouchMove);
+      const gesture = touchRef.current;
+      if (gesture !== null) clearTouchTimer(gesture);
+      touchRef.current = null;
+      document.body.classList.remove('cr-selecting-lines');
+    };
+  }, []);
+
+  useEffect(() => {
     if (controllerRef === undefined) return;
     const controller: FullFileController = {
       commentAtSelection: () => commentAtSelectionRef.current(),
@@ -251,10 +355,48 @@ export function FullFileDialog({
     };
   }, [controllerRef]);
 
+  function beginTouchLineSelection(no: number, event: ReactPointerEvent<HTMLDivElement>): void {
+    if (readOnly || onOpenComposer === undefined) return;
+    if (event.pointerType !== 'touch' || event.button !== 0) return;
+    const target = event.target as HTMLElement | null;
+    if (target !== null && target.closest('button, a, input, textarea, select') !== null) return;
+    const previous = touchRef.current;
+    if (previous !== null && previous.timer !== null) window.clearTimeout(previous.timer);
+    const gesture: TouchDragState = {
+      pointerId: event.pointerId,
+      anchor: no,
+      last: no,
+      startX: event.clientX,
+      startY: event.clientY,
+      activated: false,
+      timer: null,
+    };
+    touchRef.current = gesture;
+    gesture.timer = window.setTimeout(() => {
+      if (touchRef.current !== gesture) return;
+      gesture.timer = null;
+      gesture.activated = true;
+      suppressClickRef.current = true;
+      document.body.classList.add('cr-selecting-lines');
+      setTouchSelecting(true);
+      navigator.vibrate?.(10);
+      setAnchor(no);
+      setSelection({ start: no, end: no });
+      setTouchSelection({ start: no, end: no });
+    }, TOUCH_LONG_PRESS_MS);
+  }
+
+  function clearTouchBar(): void {
+    setTouchSelection(null);
+    setTouchSelecting(false);
+    document.body.classList.remove('cr-selecting-lines');
+  }
+
   function commentOnLine(no: number): void {
     if (onOpenComposer === undefined) return;
     setAnchor(no);
     setSelection({ start: no, end: no });
+    setTouchSelection(null);
     onOpenComposer(activeSide, no, no);
   }
 
@@ -297,6 +439,7 @@ export function FullFileDialog({
     } else {
       setAnchor(no);
       setSelection({ start: no, end: no });
+      setTouchSelection(null);
     }
     focusLineNumber(no);
   }
@@ -424,6 +567,46 @@ export function FullFileDialog({
   return (
     <Dialog open title={file.path} description={description} onClose={handleDialogClose}>
       <div className="cr-file-view">
+        {touchSelection !== null && onOpenComposer !== undefined && !readOnly ? (
+          <div
+            className={['cr-touch-comment-bar', touchSelecting ? 'cr-touch-comment-bar-active' : '']
+              .filter(Boolean)
+              .join(' ')}
+            role="status"
+            aria-live="polite"
+          >
+            <span className="cr-touch-comment-range">
+              {touchSelection.start === touchSelection.end
+                ? `Line ${touchSelection.start}`
+                : `Lines ${touchSelection.start}–${touchSelection.end}`}
+            </span>
+            <button
+              type="button"
+              className="cr-touch-comment-cta"
+              onClick={() => {
+                const selected = touchSelection;
+                clearTouchBar();
+                onOpenComposer(activeSide, selected.start, selected.end);
+              }}
+            >
+              Comment{' '}
+              {touchSelection.start === touchSelection.end
+                ? '1 line'
+                : `${touchSelection.end - touchSelection.start + 1} lines`}
+            </button>
+            <button
+              type="button"
+              className="cr-touch-comment-clear"
+              aria-label="Clear line selection"
+              onClick={() => {
+                clearTouchBar();
+                setSelection(null);
+              }}
+            >
+              ×
+            </button>
+          </div>
+        ) : null}
         {hasCurrent && hasBase ? (
           <div className="cr-segmented" role="group" aria-label="File version">
             <button
@@ -499,6 +682,8 @@ export function FullFileDialog({
                       tabIndex={no === focusLine ? 0 : -1}
                       aria-selected={selected}
                       aria-label={`Line ${no}, ${kind}: ${text || '(blank)'}`}
+                      data-full-file-line={no}
+                      onPointerDown={(event) => beginTouchLineSelection(no, event)}
                       onMouseDown={(event) => {
                         if (event.button !== 0 || event.shiftKey) return;
                         const target = event.target as HTMLElement | null;
