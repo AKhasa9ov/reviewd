@@ -7115,7 +7115,7 @@ var ReviewServiceImpl = class {
 };
 
 // packages/core/src/index.ts
-var CORE_VERSION = "0.2.0";
+var CORE_VERSION = "0.3.0";
 
 // packages/server/src/daemon/errors.ts
 var STATUS = {
