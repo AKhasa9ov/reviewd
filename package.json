@@ -39,6 +39,7 @@
     "@types/node": "22.20.5",
     "esbuild": "0.28.2",
     "eslint": "10.13.0",
+    "postcss": "8.5.31",
     "prettier": "3.9.10",
     "typescript": "5.9.3",
     "typescript-eslint": "8.72.0",

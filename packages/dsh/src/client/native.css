@@ -1,0 +1,118 @@
+.cr-native-scope {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--cr-bg);
+  color: var(--cr-text);
+  font-family: var(--dsw-font-family, var(--cr-font-ui));
+}
+
+.cr-native-scope.cr-native-panel .cr-native-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--cr-border);
+  background: var(--cr-surface);
+}
+
+.cr-native-brand {
+  flex: 0 0 auto;
+  color: var(--cr-text);
+  font-family: var(--dsw-font-family, var(--cr-font-ui));
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.cr-native-nav {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.cr-native-tab {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 5px 9px;
+  border: 1px solid transparent;
+  border-radius: var(--cr-radius-control);
+  color: var(--cr-text-muted);
+  font-size: 12px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.cr-native-tab:hover {
+  background: var(--cr-surface-raised);
+  color: var(--cr-text);
+}
+
+.cr-native-tab[aria-current='page'] {
+  border-color: var(--cr-border);
+  background: var(--cr-surface-raised);
+  color: var(--cr-text);
+}
+
+.cr-native-main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+  padding: 20px 24px 48px;
+}
+
+.cr-native-scope.cr-native-panel {
+  --cr-bg: var(--dsw-alias-bg-layer-1, #0d1117);
+  --cr-surface: var(--dsw-alias-bg-layer-2, #161b22);
+  --cr-surface-raised: var(--dsw-alias-bg-layer-3, #21262d);
+  --cr-text: var(--dsw-alias-label-primary, #e6edf3);
+  --cr-text-muted: var(--dsw-alias-label-tertiary, #9da7b3);
+  --cr-border: var(--dsw-alias-border-l2, #5b6572);
+  --cr-primary: var(--dsw-alias-brand-primary, #58a6ff);
+  --cr-on-primary: var(--dsw-alias-label-primary-foreground, #08111f);
+}
+
+.cr-native-scope.cr-settings-tab {
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+  padding: 4px 0 24px;
+}
+
+.cr-native-scope.cr-settings-tab > .cr-page-head {
+  margin-bottom: 16px;
+}
+
+@media (max-width: 640px) {
+  .cr-native-scope.cr-native-panel .cr-native-bar {
+    padding-inline: 12px;
+  }
+
+  .cr-native-main {
+    padding: 16px 16px 40px;
+  }
+}
+
+.cr-native-scope .cr-native-error {
+  padding: 24px;
+  color: var(--cr-text);
+}
+
+.cr-native-scope .cr-native-error h1 {
+  margin: 0 0 8px;
+  font-size: 20px;
+}
+
+.cr-native-scope .cr-native-error p {
+  margin: 0 0 16px;
+  color: var(--cr-text-muted);
+}
