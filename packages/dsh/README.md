@@ -44,9 +44,13 @@ The token is not written to disk and never reaches the browser.
   browser authenticates with the normal DSH session; there is no review-token form and no
   token in HTML, URLs or client code. Unauthenticated requests get 401/403 before any
   static or proxy work.
-- The daemon keeps review state under `$HOME/.local/share/dsh-code-review` on first run.
-  Set `storeDir` to an absolute path to use another directory. The store survives restarts,
-  upgrades and package uninstalls until you delete it.
+- The daemon keeps review state under `$HOME/.local/share/dsh-code-review` on first run;
+  that default is unchanged. `storeDir` accepts any explicit directory, and a leading `~/`
+  expands to `$HOME`. Set `storeDir: ~/.local/share/code-review` only when you intentionally
+  want the embedded daemon to share the standalone daemon's store; only one daemon may write
+  a store at a time, so stop the standalone daemon before starting an embedded daemon on the
+  same store. The store survives restarts, upgrades and package uninstalls until you delete
+  it.
 - `uiBase` defaults to `/code-review`; keep it at that value in this release because the
   shipped SPA is built with that base.
 

@@ -21,6 +21,15 @@ export interface EmbeddedOptions {
 }
 
 /**
+ * Expands a leading `~` or `~/` in an explicit store directory. Relative paths
+ * and `~user` forms are left unchanged rather than guessed at.
+ */
+export function expandStoreDir(value: string, home = homedir()): string {
+  if (value === '~') return home;
+  return value.startsWith('~/') ? `${home}/${value.slice(2)}` : value;
+}
+
+/**
  * Runs the review daemon in-process on an ephemeral loopback port. The bearer token
  * is generated per instance and never exposed to the browser; `api` may be used
  * before the port is known because calls wait for `ready`.
@@ -30,7 +39,9 @@ export function startEmbeddedReview(
   options: EmbeddedOptions = {},
 ): EmbeddedReview {
   const token = randomBytes(32).toString('base64url');
-  const storeDir = options.storeDir ?? join(homedir(), '.local', 'share', 'dsh-code-review');
+  const storeDir = expandStoreDir(
+    options.storeDir ?? join(homedir(), '.local', 'share', 'dsh-code-review'),
+  );
   const start = options.startDaemon ?? startDaemon;
   const ready = start({
     host: '127.0.0.1',

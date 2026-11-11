@@ -96,6 +96,8 @@ layer applied after every bundle), not in the package's `cordis.patch.yml`:
   config:
     embedded: true
     storeDir: /var/lib/dsh-code-review
+    # Or, only to share the standalone daemon's store (one writer at a time):
+    # storeDir: ~/.local/share/code-review
     worker: true
     reviewerBackend: worker
     repoHint: /absolute/repo
@@ -108,23 +110,23 @@ layer applied after every bundle), not in the package's `cordis.patch.yml`:
     # reviewerTimeoutMs: 600000
 ```
 
-| Key                                                           | Meaning                                                                 |
-| ------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `embedded`                                                    | `true` (default) starts `reviewd` in-process; `false` uses `daemonUrl`. |
-| `uiBase`                                                      | Same-origin mount for the embedded SPA. Default `/code-review`.         |
-| `storeDir`                                                    | Embedded store directory. Default `$HOME/.local/share/dsh-code-review`. |
-| `daemonUrl`                                                   | External `reviewd` origin. Ignored when `embedded` is true.             |
-| `publicUrl`                                                   | Browser-facing UI origin when the daemon URL is loopback or host-only.  |
-| `token`                                                       | External daemon bearer. Required (32+ chars) only when not embedded.    |
-| `worker`                                                      | Register the reviewer worker. Default `true` in the bundle patch.       |
-| `repoHint`                                                    | Default repository root when the session has no usable cwd.             |
-| `reviewerBackend`                                             | `worker`, `command` or `none`, copied into new reviews.                 |
-| `sessionId`                                                   | Parent session for reviewer agents and fallback initiator.              |
-| `cwd`                                                         | Fallback reviewer working directory.                                    |
-| `reviewerPreset`                                              | Agent preset for reviewer subagents.                                    |
-| `reviewerModel`                                               | Provider/model/reasoning override; an explicit value wins over Host.    |
-| `reviewerTimeoutMs`                                           | Reviewer deadline in ms (default `600000`); timeouts cancel and retry.  |
-| `pollMs`, `deliveryPollMs`, `heartbeatMs`, `requestTimeoutMs` | Loop and request tuning.                                                |
+| Key                                                           | Meaning                                                                               |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `embedded`                                                    | `true` (default) starts `reviewd` in-process; `false` uses `daemonUrl`.               |
+| `uiBase`                                                      | Same-origin mount for the embedded SPA. Default `/code-review`.                       |
+| `storeDir`                                                    | Embedded store directory. Default `$HOME/.local/share/dsh-code-review`; `~/` expands. |
+| `daemonUrl`                                                   | External `reviewd` origin. Ignored when `embedded` is true.                           |
+| `publicUrl`                                                   | Browser-facing UI origin when the daemon URL is loopback or host-only.                |
+| `token`                                                       | External daemon bearer. Required (32+ chars) only when not embedded.                  |
+| `worker`                                                      | Register the reviewer worker. Default `true` in the bundle patch.                     |
+| `repoHint`                                                    | Default repository root when the session has no usable cwd.                           |
+| `reviewerBackend`                                             | `worker`, `command` or `none`, copied into new reviews.                               |
+| `sessionId`                                                   | Parent session for reviewer agents and fallback initiator.                            |
+| `cwd`                                                         | Fallback reviewer working directory.                                                  |
+| `reviewerPreset`                                              | Agent preset for reviewer subagents.                                                  |
+| `reviewerModel`                                               | Provider/model/reasoning override; an explicit value wins over Host.                  |
+| `reviewerTimeoutMs`                                           | Reviewer deadline in ms (default `600000`); timeouts cancel and retry.                |
+| `pollMs`, `deliveryPollMs`, `heartbeatMs`, `requestTimeoutMs` | Loop and request tuning.                                                              |
 
 Embedded mode ignores `daemonUrl` and `token`; its URL and bearer are generated per
 process. External mode validates both: `daemonUrl` must be an http(s) URL and `token` must
@@ -257,9 +259,13 @@ pending for a human or CLI.
 ## Store, upgrade and uninstall
 
 The embedded daemon creates `$HOME/.local/share/dsh-code-review` on first run (the store
-also creates missing directories). Set `storeDir` to an absolute path to use another
-directory. The store holds the append-only event log, replay caches, snapshots, deliveries,
-settings and the single-writer lock; it survives restarts, upgrades and package removal.
+also creates missing directories); this default is unchanged. Set `storeDir` to an explicit
+directory to use another one. A leading `~/` is expanded to `$HOME`, so
+`storeDir: ~/.local/share/code-review` selects the standalone daemon's store. Use that only
+when intentionally sharing the store: only one daemon may write a store at a time, so stop
+the standalone daemon before starting an embedded daemon on the same store. The store holds
+the append-only event log, replay caches, snapshots, deliveries, settings and the
+single-writer lock; it survives restarts, upgrades and package removal.
 
 Upgrade with `dsh plugin --profile web add @sir_yami/reviewd@latest`, then restart the
 profile. Back up `storeDir` first; the event store is preserved, but this release does not

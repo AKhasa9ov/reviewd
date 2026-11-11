@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { DeferredReviewApi } from '../src/api.js';
 import type { ReviewApiLike } from '../src/api.js';
 import { normalizeConfig } from '../src/config.js';
-import { startEmbeddedReview } from '../src/embedded.js';
+import { expandStoreDir, startEmbeddedReview } from '../src/embedded.js';
 import type { EmbeddedOptions } from '../src/embedded.js';
 import type { DaemonConfig, ReviewDaemon } from '../../server/src/daemon/types.js';
 
@@ -57,6 +57,21 @@ describe('deferred review api', () => {
       'get /api/health same-signal=true',
       'post /api/reviews {"title":"one"} same-signal=true',
     ]);
+  });
+});
+
+describe('storeDir expansion', () => {
+  it('expands a leading home directory in storeDir', () => {
+    expect(expandStoreDir('~/.local/share/code-review', '/home/tester')).toBe(
+      '/home/tester/.local/share/code-review',
+    );
+    expect(expandStoreDir('~', '/home/tester')).toBe('/home/tester');
+    expect(expandStoreDir('/var/lib/reviewd', '/home/tester')).toBe('/var/lib/reviewd');
+  });
+
+  it('leaves relative paths and ~user forms unchanged', () => {
+    expect(expandStoreDir('relative/store', '/home/tester')).toBe('relative/store');
+    expect(expandStoreDir('~other/store', '/home/tester')).toBe('~other/store');
   });
 });
 
@@ -171,6 +186,28 @@ describe('embedded review daemon', () => {
     });
     expect(configs[0]?.webDir).toBeUndefined();
     expect(embedded.token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+  });
+
+  it('expands a home-relative storeDir before starting the daemon', async () => {
+    const configs: DaemonConfig[] = [];
+    const fakeStart: NonNullable<EmbeddedOptions['startDaemon']> = async (config) => {
+      configs.push(config);
+      return {
+        url: 'http://127.0.0.1:4568',
+        port: 4568,
+        close: async () => undefined,
+      };
+    };
+    const embedded = startEmbeddedReview(normalizeConfig({ reviewerBackend: 'none' }), {
+      startDaemon: fakeStart,
+      storeDir: '~/.local/share/code-review',
+    });
+
+    await embedded.ready;
+    await embedded.close();
+
+    expect(configs[0]?.storeDir).toBe(join(homedir(), '.local', 'share', 'code-review'));
+    expect(configs[0]?.storeDir).not.toContain('~');
   });
 
   it('forwards an explicit webDir to the injected daemon starter', async () => {
