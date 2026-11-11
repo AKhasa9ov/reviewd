@@ -105,12 +105,12 @@ See [Run a fix agent](guides/run-a-fix-agent.md) for the full workflow.
 
 ## Harness-agnostic integration
 
-| Harness                  | Integration                                                                |
-| ------------------------ | -------------------------------------------------------------------------- |
-| DSH 0.2.x                | Native bundle: sidebar panel, `review_*` tools, `/review`, reviewer worker |
-| Claude Code / Codex / pi | Shell out to the `review` CLI or call the authenticated HTTP API           |
-| Custom agent             | HTTP API with bearer auth, idempotency keys and worker leases              |
-| Human                    | Browser UI served by the daemon                                            |
+| Harness                  | Integration                                                                             |
+| ------------------------ | --------------------------------------------------------------------------------------- |
+| DSH 0.2.x                | Native bundle: review panel, settings tab, `review_*` tools, `/review`, reviewer worker |
+| Claude Code / Codex / pi | Shell out to the `review` CLI or call the authenticated HTTP API                        |
+| Custom agent             | HTTP API with bearer auth, idempotency keys and worker leases                           |
+| Human                    | Browser UI served by the daemon                                                         |
 
 There is no MCP server in this release. The stable integration surface is the CLI and HTTP
 contract; see [Connect an agent](guides/connect-an-agent.md).
@@ -128,6 +128,10 @@ The standalone SPA supports:
 - deep links to files and lines;
 - keyboard navigation, 320px layouts and light/dark themes;
 - axe WCAG 2.1 A/AA checks in the browser suite.
+
+The DSH panel renders the same review pages natively; in embedded mode the standalone SPA
+remains at `/code-review/` on the DSH origin for direct links and fallback (an external
+daemon serves the same SPA at its own origin).
 
 Repository settings are stored on the daemon (mode `0600`) and let `/new` start a
 merge-request-style review from a saved checkout and branch range. reviewd records the

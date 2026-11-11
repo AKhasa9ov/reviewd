@@ -10,12 +10,22 @@ separate server process:
 - **Host**: starts the daemon in-process (embedded mode) or proxies an external one,
   registers the `review_*` tools and `/review` command, runs the reviewer worker and
   delivers feedback into the initiating DSH session.
-- **Client**: a `Code Review` entry in `sidebar.panellist` and a keyed `main` panel. The
-  panel lists reviews, creates them and opens the full review SPA in a new tab.
+- **Client**: a `Code Review` icon in `sidebar.panellist`, a keyed `main` panel and a
+  `Code Review` tab in `settings.plugins.tab`. The panel renders the full review workflow
+  natively inside DSH: compact **Reviews** / **New review** / **Health** navigation, the
+  review list, review detail with diff and file views, comments, findings, submit and
+  health. It calls `/api/code-review` and keeps the whole workflow inside DSH.
 
 Review state is owned by `reviewd` and its filesystem store, not by DSH. Embedded mode
 runs that daemon inside the DSH process; external mode connects to one the operator runs.
 Both modes use the same store, review lifecycle and HTTP contract.
+
+In embedded mode the standalone SPA remains at `/code-review/` for direct links and as a
+fallback.
+Repository settings are not a panel tab: the DSH Settings → Built-in plugins → **Code
+Review** tab renders the repository settings page, where saved repositories, their daemon
+paths and their default target branches are edited. The native panel has no review-token
+form and no reviewd sidebar or drawer; only the fallback SPA keeps its own shell.
 
 ## Architecture
 
@@ -23,6 +33,7 @@ Both modes use the same store, review lifecycle and HTTP contract.
 
 ```text
 DSH Web UI (browser)
+  ├── Code Review panel     native UI in the main slot (Reviews / New review / Health)
   ├── /code-review/*        SPA served by the bundle, behind the DSH connection gate
   └── /api/code-review/*    panel/SPA API proxy, behind the same gate
         │
@@ -44,24 +55,24 @@ DSH session cookie; the bearer is injected by the Host and never appears in HTML
 
 ```text
 DSH Web UI (browser)
-  ├── /api/code-review/*    panel API proxy, behind the DSH connection gate
-  └── Open link             external review UI (publicUrl or daemonUrl)
-        │                         │
-        ▼                         ▼
+  ├── Code Review panel     native UI in the main slot (Reviews / New review / Health)
+  └── /api/code-review/*    panel API proxy, behind the DSH connection gate
+        │
+        ▼
 DSH Host process              reviewd (separate process)
-  ├── proxy → daemonUrl ────────┘  token login + HttpOnly cookie
+  ├── proxy → daemonUrl ────────┘  token login + HttpOnly cookie for the daemon's own UI
   ├── tools, /review, worker, delivery loops
   └── no /code-review static mount
 ```
 
-External mode does not mount the SPA on the DSH origin. The panel lists reviews through
-the same-origin proxy and links to the daemon's own UI, which keeps its token login and
-HttpOnly session cookie. The configured `token` is still Host-only: the proxy replaces any
-browser `Authorization` header, forwards `idempotency-key`, `x-review-actor`,
-`x-review-actor-kind`, and keeps the token out of responses. It sets
-`x-review-actor-kind: human` when the browser does not send one, so the proxy's bearer does
-not turn browser actions into agent actions. The daemon may be on loopback with a separate
-`publicUrl` for browser links.
+External mode does not mount the SPA on the DSH origin. The panel renders the same native
+workflow through the same-origin proxy. The daemon's own UI at `publicUrl` (or `daemonUrl`)
+stays available for direct links and keeps its token login and HttpOnly session cookie. The
+configured `token` is still Host-only: the proxy replaces any browser `Authorization`
+header, forwards `idempotency-key`, `x-review-actor`, `x-review-actor-kind`, and keeps the
+token out of responses. It sets `x-review-actor-kind: human` when the browser does not send
+one, so the proxy's bearer does not turn browser actions into agent actions. The daemon may
+be on loopback with a separate `publicUrl` for browser links.
 
 ## Install
 
@@ -96,8 +107,8 @@ layer applied after every bundle), not in the package's `cordis.patch.yml`:
   config:
     embedded: true
     storeDir: /var/lib/dsh-code-review
-    # Or, only to share the standalone daemon's store (one writer at a time):
-    # storeDir: ~/.local/share/code-review
+    # To share the standalone daemon's store instead, replace the line above
+    # with `storeDir: ~/.local/share/code-review` (one writer at a time):
     worker: true
     reviewerBackend: worker
     repoHint: /absolute/repo
@@ -120,7 +131,7 @@ layer applied after every bundle), not in the package's `cordis.patch.yml`:
 | `token`                                                       | External daemon bearer. Required (32+ chars) only when not embedded.                  |
 | `worker`                                                      | Register the reviewer worker. Default `true` in the bundle patch.                     |
 | `repoHint`                                                    | Default repository root when the session has no usable cwd.                           |
-| `reviewerBackend`                                             | `worker`, `command` or `none`, copied into new reviews.                               |
+| `reviewerBackend`                                             | `worker`, `command` or `none`, copied into `review_start`/`/review` reviews.          |
 | `sessionId`                                                   | Parent session for reviewer agents and fallback initiator.                            |
 | `cwd`                                                         | Fallback reviewer working directory.                                                  |
 | `reviewerPreset`                                              | Agent preset for reviewer subagents.                                                  |
@@ -138,17 +149,22 @@ panel in a not-configured state instead of failing activation.
 Both `/api/code-review/*` and, in embedded mode, `/code-review/*` pass through
 `connection.requestRejection()` before any proxy or static work. That gate applies DSH's
 Host/Origin fence and browser/API credential checks. Unauthenticated requests get 401/403;
-there is no separate review-token form in embedded mode. The browser authenticates with
-its DSH session and never receives the daemon bearer.
+there is no separate review-token form inside DSH. The browser authenticates with its DSH
+session and never receives the daemon bearer.
 
 - `/api/code-review/info` is authenticated and returns `{daemonUrl, publicUrl?, uiBase?}`
-  without the token. The panel uses `uiBase` first in embedded mode and falls back to
-  `publicUrl`, then `daemonUrl`, for the `Open` link.
+  without the token. The panel does not call it; it renders natively and uses
+  `/api/code-review`.
 - `/api/code-review/*` proxies to `<daemon>/api/*` and forwards `last-event-id` for SSE.
-  Bodies over 2 MiB get 413; an unreachable daemon or failed embedded start gets 502/503.
-- `/code-review/` serves the SPA; deep links are `/code-review/review/<id>`. The SPA calls
-  `/code-review/api/*`, which the Host proxies to the daemon. Static paths outside the SPA
-  contract return 404/405 rather than the index page.
+  The panel's API client uses `/api/code-review` as its base and appends `/api/...` paths,
+  and the proxy forwards a remainder that already starts with `/api` unchanged, so both
+  `/api/code-review/reviews` and `/api/code-review/api/reviews` reach `/api/reviews` and no
+  request becomes `/api/api/...`. Bodies over 2 MiB get 413; an unreachable daemon or failed
+  embedded start gets 502/503.
+- `/code-review/` serves the standalone SPA for direct links and fallback; deep links are
+  `/code-review/review/<id>`. The SPA calls `/code-review/api/*`, which the Host proxies to
+  the daemon. Static paths outside the SPA contract return 404/405 rather than the index
+  page.
 - In external mode the static mount is absent. `/api/code-review` remains available for
   the panel and any DSH-side API calls.
 
@@ -235,10 +251,11 @@ The subagent:
   path. Plugin disposal cancels an active reviewer.
 
 Set `worker: false` to stop this Host from picking up jobs. Reviews created with
-`reviewerBackend: worker` then wait for another worker; the sidebar's **New review** form
-always requests the worker backend. Use `reviewerBackend: none` for no automated
-pre-review, or `command` when the daemon is configured for a command reviewer. With
-`none`, the review is created and a skipped report is recorded.
+`reviewerBackend: worker` then wait for another worker. The panel's **New review** form
+defaults to Manual review only and offers Agent worker to queue a reviewer job. Use
+`reviewerBackend: none` for no automated pre-review, or `command` when the daemon is
+configured for a command reviewer. With `none`, the review is created and a skipped report
+is recorded.
 
 ## Delivery
 
@@ -260,12 +277,13 @@ pending for a human or CLI.
 
 The embedded daemon creates `$HOME/.local/share/dsh-code-review` on first run (the store
 also creates missing directories); this default is unchanged. Set `storeDir` to an explicit
-directory to use another one. A leading `~/` is expanded to `$HOME`, so
-`storeDir: ~/.local/share/code-review` selects the standalone daemon's store. Use that only
-when intentionally sharing the store: only one daemon may write a store at a time, so stop
-the standalone daemon before starting an embedded daemon on the same store. The store holds
-the append-only event log, replay caches, snapshots, deliveries, settings and the
-single-writer lock; it survives restarts, upgrades and package removal.
+directory to use another one. A leading `~/` (or a bare `~`) is expanded to `$HOME`;
+`~user` and relative paths are left unchanged and both resolve against the Host's working
+directory. So `storeDir: ~/.local/share/code-review` selects the standalone daemon's store.
+Use that only when intentionally sharing the store: only one daemon may write a store at a
+time, so stop the standalone daemon before starting an embedded daemon on the same store.
+The store holds the append-only event log, replay caches, snapshots, deliveries, settings and
+the single-writer lock; it survives restarts, upgrades and package removal.
 
 Upgrade with `dsh plugin --profile web add @sir_yami/reviewd@latest`, then restart the
 profile. Back up `storeDir` first; the event store is preserved, but this release does not
@@ -321,10 +339,13 @@ listing may stay "Declared/unverified" until it is independently install-tested.
   `src/`, `test/`, `node_modules/` or `*.map`.
 - `packages/dsh/test/integration.test.ts` starts a real daemon, creates a review with an
   initiator, submits feedback and asserts one queued prompt plus an acknowledged delivery.
+- `packages/dsh/test/native-panel.test.tsx` covers the compact panel nav, in-panel
+  navigation from the list to New review and to a review detail, and the settings tab's
+  repository form and save path.
 - `pnpm test:e2e` covers the standalone daemon and its token UI. It does not load the DSH
   plugin or an `embedded: false` DSH profile; the external-mode Host/proxy paths are covered
   by unit tests, not a live external profile. The live fat-package check used a disposable
-  profile: panel without a token, review creation, `/code-review/review/<id>` in a new tab,
+  profile: panel without a token, review creation, `/code-review/review/<id>` deep links,
   comments and deep-link reload, findings in the report and inline view, proxy SSE, and
   cleanup of both DSH and daemon ports on shutdown.
 - After install, `dsh plugin --profile web why @sir_yami/reviewd` should show the

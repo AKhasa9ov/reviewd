@@ -1,15 +1,15 @@
 # @sir_yami/reviewd
 
-Code review for DeepSeek Harness in one package: a sidebar panel, `review_*` tools,
-`/review`, a reviewer worker, feedback delivery, and the full review daemon and UI in the
-default embedded mode.
+Code review for DeepSeek Harness in one package: a native review panel plus a repository
+settings tab, `review_*` tools, `/review`, a reviewer worker, feedback delivery, and the
+full review daemon and SPA in the default embedded mode.
 
 See [DSH integration](../../docs/agents/dsh.md) for the user guide and
 [Architecture](../../docs/architecture.md) for how the bundle fits together.
 
 The package declares both DSH signals — `dsh.bundle.patch` (the `code-review` row) and
-`dsh.client` (the web client) — and ships the bundled Host, the built SPA, locale files and
-the MIT license.
+`dsh.client` (the web client that mounts the panel, sidebar icon and settings tab) — and
+ships the bundled Host, the built SPA, locale files and the MIT license.
 
 ## Install
 
@@ -36,21 +36,30 @@ The bundle patch sets `embedded: true`. The Host starts `reviewd` in-process on 
 ephemeral `127.0.0.1` port and generates a random 32-byte bearer token for that process.
 The token is not written to disk and never reaches the browser.
 
-- The full review SPA is served on the DSH origin at `/code-review/`; review deep links are
-  `/code-review/review/<id>`. The sidebar panel calls `/api/code-review/*`, and `Open`
-  opens the same-origin SPA in a new tab.
+- The `Code Review` sidebar icon opens a native `main` panel that runs the whole review
+  workflow inside DSH: the compact **Reviews** / **New review** / **Health** navigation, the
+  review list, review detail with diff and file views, comments, findings and submit. It
+  calls `/api/code-review/*` through the same-origin proxy. The native panel has no
+  review-token form and no reviewd sidebar or drawer; only the fallback SPA keeps its shell.
+- Repository settings are not a panel tab. They live under DSH Settings → Built-in plugins
+  → **Code Review**, where the saved repositories, their daemon paths and their default
+  target branches are edited.
+- In embedded mode the standalone SPA is still served on the DSH origin at `/code-review/`
+  for direct links and as a fallback; review deep links are `/code-review/review/<id>`.
 - `/code-review` and `/api/code-review` sit behind DSH's connection gate
   (`connection.requestRejection`: Host/Origin fence plus browser/API credentials). The
-  browser authenticates with the normal DSH session; there is no review-token form and no
-  token in HTML, URLs or client code. Unauthenticated requests get 401/403 before any
-  static or proxy work.
+  browser authenticates with the normal DSH session; no token appears in HTML, URLs or
+  client code. Unauthenticated requests get 401/403 before any static or proxy work.
 - The daemon keeps review state under `$HOME/.local/share/dsh-code-review` on first run;
   that default is unchanged. `storeDir` accepts any explicit directory, and a leading `~/`
-  expands to `$HOME`. Set `storeDir: ~/.local/share/code-review` only when you intentionally
-  want the embedded daemon to share the standalone daemon's store; only one daemon may write
-  a store at a time, so stop the standalone daemon before starting an embedded daemon on the
-  same store. The store survives restarts, upgrades and package uninstalls until you delete
-  it.
+  (or a bare `~`) expands to `$HOME`; `~user` and relative paths are left unchanged and both
+  resolve against the Host's working directory. Set the store to
+  `~/.local/share/code-review` only when you intentionally want the embedded daemon to share
+  the standalone daemon's store; only one daemon may write a store at a time, so stop the
+  standalone daemon before starting an embedded daemon on the same store. The store survives
+  restarts, upgrades and package uninstalls until you delete it. See
+  [Store, upgrade and uninstall](../../docs/agents/dsh.md#store-upgrade-and-uninstall) for
+  backup, retention and the single-writer rule.
 - `uiBase` defaults to `/code-review`; keep it at that value in this release because the
   shipped SPA is built with that base.
 
@@ -83,14 +92,17 @@ Set `embedded: false` and point the Host at an existing `reviewd`:
 
 `daemonUrl` must be an http(s) URL and `token` must be at least 32 characters. `publicUrl`
 is optional and only changes browser-facing links. The bundle does not mount
-`/code-review` in this mode. The panel lists reviews through the same-origin proxy and
-links to the external review UI at `publicUrl` (or `daemonUrl`), which keeps its own token
-login and HttpOnly cookie. The configured `token` stays Host-only: the proxy replaces any
-browser Authorization header with the bearer. It forwards `accept`, `content-type`,
-`idempotency-key`, `x-review-actor`, `x-review-actor-kind` and `last-event-id` (for SSE),
-and never forwards the browser's own `authorization`; when no kind header is present it
-sends `x-review-actor-kind: human` so browser actions stay human. `/api/code-review/info`
-returns addresses without the token.
+`/code-review` in this mode. The panel renders the same native workflow through the
+same-origin proxy; the daemon's own UI at `publicUrl` (or `daemonUrl`) stays available for
+direct links and keeps its own token login and HttpOnly cookie. The configured `token` stays
+Host-only: the proxy replaces any browser Authorization header with the bearer. It forwards
+`accept`, `content-type`, `idempotency-key`, `x-review-actor`, `x-review-actor-kind` and
+`last-event-id` (for SSE), and never forwards the browser's own `authorization`; when no kind
+header is present it sends `x-review-actor-kind: human` so browser actions stay human. The
+panel's API client uses `/api/code-review` as its base and appends `/api/...` paths, and the
+proxy forwards a remainder that already starts with `/api` unchanged, so both
+`/api/code-review/reviews` and `/api/code-review/api/reviews` reach the daemon's
+`/api/reviews`. `/api/code-review/info` returns addresses without the token.
 
 Use the profile's own patch layer for these overrides; do not edit the package's
 `cordis.patch.yml`.
@@ -138,9 +150,10 @@ cancels the agent with a retryable failure when `reviewerTimeoutMs` expires (def
 minutes).
 
 Set `worker: false` to stop this Host from picking up jobs. Reviews created with
-`reviewerBackend: worker` then wait for another worker; the sidebar's **New review** form
-always requests the worker backend. Use `reviewerBackend: none` for no automated
-pre-review, or `command` when the daemon is configured for a command reviewer.
+`reviewerBackend: worker` then wait for another worker. The panel's **New review** form
+defaults to Manual review only and offers Agent worker to queue a reviewer job. Use
+`reviewerBackend: none` for no automated pre-review, or `command` when the daemon is
+configured for a command reviewer.
 
 ## Security notes
 
