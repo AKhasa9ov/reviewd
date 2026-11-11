@@ -6,7 +6,7 @@ import {
   ToastProvider,
   createApiClient,
 } from '@sir_yami/reviewd-ui';
-import { FolderPickerDialog } from '../../../web/src/pages/FolderPickerDialog.js';
+import { NativeFolderPicker } from './NativeFolderPicker.js';
 import { ErrorBoundary } from './ErrorBoundary.js';
 
 export interface SettingsSectionProps {
@@ -514,7 +514,7 @@ export function SettingsSection({ client }: SettingsSectionProps): JSX.Element {
                 )}
               </section>
               {picker !== null ? (
-                <FolderPickerDialog
+                <NativeFolderPicker
                   key={picker.key}
                   client={activeClient}
                   initialPath={picker.path === '' ? undefined : picker.path}

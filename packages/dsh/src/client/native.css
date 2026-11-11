@@ -439,3 +439,213 @@
     margin-top: 15px;
   }
 }
+
+/* Native folder picker opened from the Code Review settings section. */
+.cr-dsh-picker-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: color-mix(in srgb, #000 42%, transparent);
+}
+
+.cr-dsh-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(560px, 100%);
+  max-height: min(80vh, 720px);
+  padding: 16px;
+  border: 1px solid var(--dsw-alias-border-l2, #d0d5dd);
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-layer-1, #fff);
+  color: var(--dsw-alias-label-primary, #111827);
+  box-shadow: 0 16px 48px rgb(0 0 0 / 28%);
+  font-family: var(--dsw-font-family, system-ui, sans-serif);
+  font-size: 13px;
+  outline: none;
+}
+
+.cr-dsh-picker-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cr-dsh-picker-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.cr-dsh-picker-head p {
+  margin: 2px 0 0;
+  color: var(--dsw-alias-label-tertiary, #6b7280);
+  font-size: 12px;
+}
+
+.cr-dsh-picker-path {
+  display: grid;
+  gap: 4px;
+}
+
+.cr-dsh-picker-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.cr-dsh-button-quiet {
+  padding: 0 9px;
+}
+
+.cr-dsh-breadcrumbs {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: none;
+}
+
+.cr-dsh-breadcrumbs::-webkit-scrollbar {
+  display: none;
+}
+
+.cr-dsh-crumb {
+  display: inline-flex;
+  align-items: center;
+}
+
+.cr-dsh-crumb-separator {
+  padding: 0 2px;
+  color: var(--dsw-alias-label-quaternary, #98a2b3);
+}
+
+.cr-dsh-crumb-button {
+  padding: 2px 3px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dsw-alias-brand-primary, #2f6fed);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.cr-dsh-crumb-button:hover {
+  background: var(--dsw-alias-bg-layer-3, #f2f4f7);
+}
+
+.cr-dsh-crumb-button[aria-current='location'] {
+  color: var(--dsw-alias-label-primary, #111827);
+  font-weight: 500;
+}
+
+.cr-dsh-badge {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border: 1px solid
+    color-mix(in srgb, var(--dsw-alias-state-success-primary, #12b76a) 50%, transparent);
+  border-radius: 999px;
+  color: var(--dsw-alias-state-success-primary, #067647);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.cr-dsh-picker-list {
+  flex: 1 1 auto;
+  min-height: 120px;
+  max-height: 46vh;
+  overflow: auto;
+  border: 1px solid var(--dsw-alias-border-l2, #d0d5dd);
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.cr-dsh-picker-entries {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cr-dsh-picker-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary, #111827);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cr-dsh-picker-entry:hover {
+  background: var(--dsw-alias-bg-layer-3, #f2f4f7);
+}
+
+.cr-dsh-picker-entry-name {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cr-dsh-picker-state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px;
+  color: var(--dsw-alias-state-error-primary, #b42318);
+  font-size: 12px;
+}
+
+.cr-dsh-picker-hint {
+  flex: 0 0 auto;
+}
+
+.cr-dsh-picker-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+@media (max-width: 600px) {
+  .cr-dsh-picker-layer {
+    padding: 12px;
+  }
+
+  .cr-dsh-picker {
+    max-height: 90vh;
+  }
+
+  .cr-dsh-picker-actions .cr-dsh-button {
+    flex: 1 1 0;
+  }
+}
+
+@media (pointer: coarse) {
+  .cr-dsh-picker-entry {
+    min-height: 44px;
+  }
+
+  .cr-dsh-picker {
+    font-size: 14px;
+  }
+}

@@ -183,6 +183,42 @@ describe('NativePanel', () => {
     );
   });
 
+  it('opens the native folder picker for a repository path', async () => {
+    const user = userEvent.setup();
+    const listDirectories = vi.fn(async (path?: string) => ({
+      path: path ?? '/srv/demo',
+      parent: '/',
+      breadcrumbs: [
+        { name: '/', path: '/' },
+        { name: 'srv', path: '/srv' },
+        { name: 'demo', path: '/srv/demo' },
+      ],
+      entries: [
+        { name: '.git', path: '/srv/demo/.git', isGit: true },
+        { name: 'nested', path: '/srv/demo/nested', isGit: false },
+      ],
+      truncated: false,
+    }));
+    render(
+      <SettingsSection
+        client={client({
+          listRepositories: vi.fn(async () => ({
+            repositories: [{ name: 'demo', path: '/srv/demo' }],
+          })),
+          listDirectories,
+        })}
+      />,
+    );
+    await screen.findByDisplayValue('/srv/demo');
+    await user.click(screen.getByRole('button', { name: /Browse folders for repository/ }));
+
+    expect(
+      await screen.findByRole('dialog', { name: 'Choose a repository folder' }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText('nested')).toBeInTheDocument();
+    expect(screen.getByText('git repo')).toBeInTheDocument();
+  });
+
   it('contains a settings render failure instead of blanking the tab', () => {
     function Boom(): JSX.Element {
       throw new Error('settings render failed');
