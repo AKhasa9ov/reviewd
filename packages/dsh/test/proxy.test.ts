@@ -38,6 +38,29 @@ async function listen(server: ReturnType<typeof createServer>): Promise<string> 
 }
 
 describe('same-origin proxy', () => {
+  it('forwards an API-prefixed remainder without doubling the daemon /api segment', async () => {
+    let seenPath = '';
+    const daemon = createServer((req, res) => {
+      seenPath = req.url ?? '';
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end('{"items":[]}');
+    });
+    const daemonUrl = await listen(daemon);
+    const proxyServer = createServer(
+      (req, res) =>
+        void createProxyHandler({ config: normalizeConfig({ daemonUrl, token: 'x'.repeat(32) }) })(
+          req,
+          res,
+        ),
+    );
+    const proxyUrl = await listen(proxyServer);
+
+    const response = await fetch(`${proxyUrl}/api/code-review/api/reviews?limit=2`);
+
+    expect(response.status).toBe(200);
+    expect(seenPath).toBe('/api/reviews?limit=2');
+  });
+
   it('forwards path, query, body, actor and idempotency key with the bearer token', async () => {
     let seenAuth = '';
     let seenPath = '';

@@ -123,7 +123,12 @@ export function createProxyHandler(deps: ProxyDeps) {
       if (headers['x-review-actor-kind'] === undefined) headers['x-review-actor-kind'] = 'human';
       const controller = new AbortController();
       res.on('close', () => controller.abort());
-      const daemonPath = path === '/' ? '/api' : `/api${path}`;
+      // The standalone UI proxy strips a prefix that already ends in `/api`, while
+      // the native client's base (`/api/code-review`) is followed by ApiClient's own
+      // `/api/...` paths. Forward an `/api`-prefixed remainder unchanged so neither
+      // convention produces `/api/api/...` at the daemon.
+      const daemonPath =
+        path === '/' ? '/api' : path === '/api' || path.startsWith('/api/') ? path : `/api${path}`;
       const response = await fetchImpl(`${endpoint.daemonUrl}${daemonPath}`, {
         method: req.method ?? 'GET',
         headers,
