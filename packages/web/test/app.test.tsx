@@ -3,7 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ApiClient, ReviewSummary } from '@sir_yami/reviewd-ui';
-import { App } from '../src/App.js';
+import { App, ReviewApp } from '../src/App.js';
 import { repoName } from '../src/pages/ReviewListPage.js';
 import { createMemoryRouter, RouterProvider } from '../src/router.js';
 import { latestFeedback, reviewView, snapshotR1, snapshotR2 } from './reviewFixtures.js';
@@ -170,6 +170,18 @@ describe('router context', () => {
     await user.click(screen.getAllByRole('button', { name: /new review/i })[0]!);
     expect(router.location()).toBe('/new');
     expect(window.location.pathname).not.toBe('/new');
+  });
+});
+
+describe('native composition root', () => {
+  it('renders the native header and route through ReviewApp', async () => {
+    const router = createMemoryRouter('/');
+    render(
+      <ReviewApp client={fakeClient()} router={router} header={<header>Native header</header>} />,
+    );
+
+    expect(screen.getByText('Native header')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Reviews' })).toBeInTheDocument();
   });
 });
 
