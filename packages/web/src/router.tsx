@@ -1,39 +1,114 @@
-import { useEffect, useSyncExternalStore } from 'react';
+import { createContext, useContext, useEffect, useSyncExternalStore } from 'react';
 import type { AnchorHTMLAttributes, MouseEvent, ReactNode } from 'react';
 import { BASE_PATH, normalizeBase, withBase } from './base.js';
 
-const NAVIGATE_EVENT = 'cr:navigate';
-const listeners = new Set<() => void>();
+export interface Router {
+  location(): string;
+  subscribe(listener: () => void): () => void;
+  navigate(to: string, options?: { replace?: boolean }): void;
+  href(to: string): string;
+}
 
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener);
-  const onPop = (): void => listener();
-  window.addEventListener('popstate', onPop);
-  window.addEventListener(NAVIGATE_EVENT, onPop);
-  return () => {
-    listeners.delete(listener);
-    window.removeEventListener('popstate', onPop);
-    window.removeEventListener(NAVIGATE_EVENT, onPop);
+const RouterContext = createContext<Router | null>(null);
+
+export function createBrowserRouter(base = BASE_PATH): Router {
+  const listeners = new Set<() => void>();
+  const read = (): string =>
+    `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  const emit = (): void => {
+    for (const listener of listeners) listener();
+  };
+  window.addEventListener('popstate', emit);
+  return {
+    location: read,
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    navigate: (to, options = {}) => {
+      const target = withBase(to, base);
+      if (options.replace === true) window.history.replaceState({}, '', target);
+      else window.history.pushState({}, '', target);
+      emit();
+    },
+    href: (to) => withBase(to, base),
   };
 }
 
-function snapshot(): string {
-  return `${window.location.pathname}${window.location.search}${window.location.hash}`;
+export function createMemoryRouter(
+  initial = '/',
+  options: {
+    storage?: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
+    storageKey?: string;
+    hrefBase?: string;
+  } = {},
+): Router {
+  const key = options.storageKey;
+  const stored = key === undefined ? null : (options.storage?.getItem(key) ?? null);
+  let current = stored ?? initial;
+  const listeners = new Set<() => void>();
+  const persist = (value: string): void => {
+    if (key !== undefined) options.storage?.setItem(key, value);
+  };
+  const emit = (): void => {
+    for (const listener of listeners) listener();
+  };
+  return {
+    location: () => current,
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    navigate: (to, navigateOptions = {}) => {
+      current = to;
+      persist(to);
+      emit();
+      // Keep the variable used so the API stays symmetric with the browser adapter.
+      void navigateOptions;
+    },
+    href: (to) => withBase(to, options.hrefBase ?? ''),
+  };
 }
 
-function emit(): void {
-  window.dispatchEvent(new Event(NAVIGATE_EVENT));
+/*
+ * Created eagerly in a DOM so the `popstate` listener lives for the whole page.
+ * Kept null outside a DOM so node-environment tests can import `parseRoute`.
+ */
+const browserRouter: Router | null = typeof window === 'undefined' ? null : createBrowserRouter();
+
+function getBrowserRouter(): Router {
+  if (browserRouter === null) {
+    throw new Error('The browser router is unavailable outside a DOM environment.');
+  }
+  return browserRouter;
 }
 
-export function navigate(to: string, options: { replace?: boolean } = {}): void {
-  const target = withBase(to);
-  if (options.replace === true) window.history.replaceState({}, '', target);
-  else window.history.pushState({}, '', target);
-  emit();
+export function RouterProvider({
+  router,
+  children,
+}: {
+  router: Router;
+  children: ReactNode;
+}): JSX.Element {
+  return <RouterContext.Provider value={router}>{children}</RouterContext.Provider>;
+}
+
+export function useRouter(): Router {
+  const router = useContext(RouterContext) ?? getBrowserRouter();
+  return router;
 }
 
 export function useLocation(): string {
-  return useSyncExternalStore(subscribe, snapshot, () => '/');
+  const router = useRouter();
+  return useSyncExternalStore(router.subscribe, router.location, router.location);
+}
+
+export function useNavigate(): Router['navigate'] {
+  return useRouter().navigate;
+}
+
+export function navigate(to: string, options: { replace?: boolean } = {}): void {
+  getBrowserRouter().navigate(to, options);
 }
 
 export type Route =
@@ -91,6 +166,8 @@ export interface LinkProps extends Omit<AnchorHTMLAttributes<HTMLAnchorElement>,
 }
 
 export function Link({ to, children, onClick, ...rest }: LinkProps): JSX.Element {
+  const router = useRouter();
+
   function handleClick(event: MouseEvent<HTMLAnchorElement>): void {
     onClick?.(event);
     if (event.defaultPrevented) return;
@@ -99,11 +176,11 @@ export function Link({ to, children, onClick, ...rest }: LinkProps): JSX.Element
     }
     if (rest.target === '_blank' || rest.download !== undefined) return;
     event.preventDefault();
-    navigate(to);
+    router.navigate(to);
   }
 
   return (
-    <a {...rest} href={withBase(to)} onClick={handleClick}>
+    <a {...rest} href={router.href(to)} onClick={handleClick}>
       {children}
     </a>
   );
