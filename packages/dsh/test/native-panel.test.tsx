@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ApiClient, ReviewSummary } from '@sir_yami/reviewd-ui';
 import { createMemoryRouter } from '../../web/src/router.js';
 import { reviewView, snapshotR1, snapshotR2 } from '../../web/test/reviewFixtures.js';
@@ -65,7 +65,28 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function jsonResponse(payload: unknown): Response {
+  return new Response(JSON.stringify(payload), {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  });
+}
+
+function stubJsonFetch(payload: unknown): string[] {
+  const requested: string[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL) => {
+      requested.push(String(input));
+      return jsonResponse(payload);
+    }),
+  );
+  return requested;
+}
+
 describe('NativePanel', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
   it('renders the compact nav without a Settings tab', async () => {
     render(<NativePanel client={client()} router={createMemoryRouter('/')} />);
     expect(await screen.findByRole('heading', { name: 'Reviews' })).toBeInTheDocument();
@@ -99,6 +120,39 @@ describe('NativePanel', () => {
     expect(
       await screen.findByRole('heading', { name: reviewView.review.title }),
     ).toBeInTheDocument();
+  });
+
+  it('ignores page-level shortcuts outside the native panel scope', async () => {
+    const user = userEvent.setup();
+    render(<NativePanel client={reviewClient()} router={createMemoryRouter('/')} />);
+    await user.click(
+      await screen.findByRole('link', {
+        name: new RegExp(escapeRegExp(reviewView.review.title)),
+      }),
+    );
+    const heading = await screen.findByRole('heading', { name: reviewView.review.title });
+
+    fireEvent.keyDown(document.body, { key: '?' });
+    expect(screen.queryByRole('dialog', { name: 'Keyboard shortcuts' })).not.toBeInTheDocument();
+
+    fireEvent.keyDown(heading, { key: '?' });
+    expect(await screen.findByRole('dialog', { name: 'Keyboard shortcuts' })).toBeInTheDocument();
+  });
+
+  it('uses the /api/code-review proxy for the default native client', async () => {
+    const requested = stubJsonFetch({ items: [], total: 0, limit: 50, offset: 0 });
+
+    render(<NativePanel router={createMemoryRouter('/')} />);
+    await waitFor(() => expect(requested).toHaveLength(1));
+    expect(requested[0]).toMatch(/^\/api\/code-review\/api\/reviews/);
+  });
+
+  it('uses the /api/code-review proxy for the default settings tab client', async () => {
+    const requested = stubJsonFetch({ repositories: [] });
+
+    render(<SettingsTab />);
+    await waitFor(() => expect(requested).toHaveLength(1));
+    expect(requested[0]).toMatch(/^\/api\/code-review\/api\/settings\/repositories/);
   });
 
   it('renders repository settings in the DSH settings tab surface', async () => {

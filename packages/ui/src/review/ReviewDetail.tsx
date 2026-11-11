@@ -57,6 +57,17 @@ import {
   type ReviewTab,
 } from './model.js';
 
+/**
+ * The standalone SPA owns the whole page, so its window-level shortcuts apply
+ * everywhere. The DSH native panel shares the page with the host UI, so only
+ * keystrokes that originate inside the panel may trigger review shortcuts.
+ */
+function eventInNativeScope(event: KeyboardEvent): boolean {
+  const scope = typeof document === 'undefined' ? null : document.querySelector('.cr-native-scope');
+  if (scope === null) return true;
+  return event.target instanceof Node && scope.contains(event.target);
+}
+
 export interface ReviewDetailProps {
   client: ApiClient;
   id: string;
@@ -1095,6 +1106,7 @@ export function ReviewDetail({ client, id, location, navigate }: ReviewDetailPro
     function onKeyDown(event: KeyboardEvent): void {
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
       if (document.documentElement.hasAttribute('data-shortcuts-off')) return;
+      if (!eventInNativeScope(event)) return;
       if (event.key === 'Escape' && helpOpen) {
         // The dialog focuses its first control asynchronously; if focus has not
         // landed yet, the dialog's own Escape handler never sees the key.

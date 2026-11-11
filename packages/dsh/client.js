@@ -5343,6 +5343,11 @@ function SubmitDialog({
 
 // packages/ui/src/review/ReviewDetail.tsx
 var import_jsx_runtime24 = require("react/jsx-runtime");
+function eventInNativeScope(event) {
+  const scope = typeof document === "undefined" ? null : document.querySelector(".cr-native-scope");
+  if (scope === null) return true;
+  return event.target instanceof Node && scope.contains(event.target);
+}
 var TABS = [
   { id: "conversation", label: "Conversation" },
   { id: "files", label: "Files changed" },
@@ -6204,6 +6209,7 @@ function ReviewDetail({ client, id, location, navigate }) {
     function onKeyDown(event) {
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
       if (document.documentElement.hasAttribute("data-shortcuts-off")) return;
+      if (!eventInNativeScope(event)) return;
       if (event.key === "Escape" && helpOpen) {
         event.preventDefault();
         setHelpOpen(false);
