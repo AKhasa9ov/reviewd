@@ -198,7 +198,7 @@ starts `reviewd` in-process and serves the review UI at `/code-review` behind DS
 auth. See [DSH integration](docs/agents/dsh.md) for configuration, tools, worker and data
 retention.
 
-> **Release status:** the `0.3.0` npm release is live under `@sir_yami`: DSH bundle, core,
+> **Release status:** the `0.4.0` npm release is live under `@sir_yami`: DSH bundle, core,
 > server and CLI. Docker and source checkouts remain available.
 
 ### CLI
@@ -278,14 +278,14 @@ See [SECURITY.md](SECURITY.md) for the full threat model and reporting process.
 
 ## Status and limitations
 
-- **0.3.0 release.** API/schema version 1; no automatic event-schema migrations.
+- **0.4.0 release.** API/schema version 1; no automatic event-schema migrations.
 - Single-tenant by design: one token, no accounts, no hosted control plane.
 - No bundled model or agent CLI; bring a DSH worker, command backend or your own reviewer.
 - Native adapters exist for DSH only. Claude Code, Codex, pi and other harnesses use the
   CLI/HTTP contract; MCP is not shipped.
 - The event store is a single-writer local filesystem store; there is no HA/clustering.
 - The image is Linux/amd64-oriented; multi-arch manifests are not published.
-- npm packages are published under `@sir_yami/*`: DSH bundle, core, server and CLI `0.3.0`.
+- npm packages are published under `@sir_yami/*`: DSH bundle, core, server and CLI `0.4.0`.
 
 ## License
 

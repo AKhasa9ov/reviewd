@@ -141,7 +141,7 @@ describe('review diff', () => {
 
     const version = capture();
     expect(await runCli(['version'], version.io)).toBe(0);
-    expect(version.out.join('')).toContain('review 0.3.0');
+    expect(version.out.join('')).toContain('review 0.4.0');
   });
 
   it('diffs a commit against its parent', async () => {

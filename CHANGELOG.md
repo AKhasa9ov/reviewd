@@ -7,6 +7,18 @@ versions may contain breaking changes.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-11
+
+### Added
+
+- IDE-style syntax highlighting in diff hunks and the full-file dialog. Prism tokenizes
+  TypeScript/JavaScript, JSX/TSX, JSON, CSS/SCSS, HTML/XML/SVG, Markdown, YAML, shell,
+  Python, Go, Rust, SQL, Dockerfile and TOML; keywords, types, variables, functions,
+  strings, comments, numbers and tags get distinct colours.
+- The syntax palette follows light/dark themes in the standalone review UI and in the
+  native DSH panel. Tokens render as React spans rather than raw HTML, and the existing
+  line selection, comments, findings and touch gestures are unchanged.
+
 ## [0.3.0] - 2026-11-11
 
 ### Changed
