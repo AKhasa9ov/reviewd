@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { ApiClient, DiffScope, ReviewView } from '@sir_yami/reviewd-ui';
 import { Button, Input, Select, useToast } from '@sir_yami/reviewd-ui';
 import { ErrorPanel, PageHeader } from '../components.js';
-import { navigate } from '../router.js';
+import { useNavigate } from '../router.js';
 
 type ScopeKind = DiffScope['kind'];
 type ReviewerBackend = 'none' | 'worker' | 'command' | 'fake';
@@ -111,6 +111,7 @@ export interface EditReviewPageProps {
 }
 
 export function EditReviewPage({ client, id }: EditReviewPageProps): JSX.Element {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [view, setView] = useState<ReviewView | null>(null);
   const [form, setForm] = useState<FormState | null>(null);

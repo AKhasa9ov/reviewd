@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { ApiClient } from '@sir_yami/reviewd-ui';
 import { Button, Input } from '@sir_yami/reviewd-ui';
 import { PageHeader } from '../components.js';
-import { navigate } from '../router.js';
+import { useNavigate } from '../router.js';
 
 export interface AuthPageProps {
   client: ApiClient;
@@ -16,6 +16,7 @@ function nextPath(): string {
 }
 
 export function AuthPage({ client }: AuthPageProps): JSX.Element {
+  const navigate = useNavigate();
   const [token, setToken] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);

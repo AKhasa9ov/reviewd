@@ -3,7 +3,7 @@ import { createApiClient, ToastProvider, ThemeProvider } from '@sir_yami/reviewd
 import type { ApiClient } from '@sir_yami/reviewd-ui';
 import { AUTH_MODE, BASE_PATH } from './base.js';
 import { Shell } from './Shell.js';
-import { navigate, parseRoute, useLocation } from './router.js';
+import { parseRoute, useLocation, useNavigate } from './router.js';
 import { ReviewListPage } from './pages/ReviewListPage.js';
 import { NewReviewPage } from './pages/NewReviewPage.js';
 import { AuthPage } from './pages/AuthPage.js';
@@ -19,6 +19,7 @@ export interface AppProps {
 
 export function App({ client }: AppProps = {}): JSX.Element {
   const location = useLocation();
+  const navigate = useNavigate();
   const route = parseRoute(location);
   const activeClient = useMemo(
     () =>
@@ -32,12 +33,12 @@ export function App({ client }: AppProps = {}): JSX.Element {
             }
           : {}),
       }),
-    [client],
+    [client, navigate],
   );
 
   useEffect(() => {
     if (AUTH_MODE === 'dsh' && route.name === 'auth') navigate('/', { replace: true });
-  }, [route.name]);
+  }, [navigate, route.name]);
 
   return (
     <ThemeProvider>

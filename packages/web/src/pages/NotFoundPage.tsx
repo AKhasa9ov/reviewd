@@ -1,8 +1,9 @@
 import { Button } from '@sir_yami/reviewd-ui';
 import { PageHeader } from '../components.js';
-import { navigate } from '../router.js';
+import { useNavigate } from '../router.js';
 
 export function NotFoundPage({ path }: { path: string }): JSX.Element {
+  const navigate = useNavigate();
   return (
     <div className="cr-placeholder">
       <PageHeader

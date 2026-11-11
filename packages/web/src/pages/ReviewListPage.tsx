@@ -12,7 +12,7 @@ import {
   formatAge,
 } from '@sir_yami/reviewd-ui';
 import { ErrorPanel, PageHeader } from '../components.js';
-import { Link, navigate } from '../router.js';
+import { Link, useNavigate } from '../router.js';
 
 type StatusFilter = 'all' | 'open' | 'closed';
 
@@ -124,6 +124,7 @@ export interface ReviewListPageProps {
 }
 
 export function ReviewListPage({ client }: ReviewListPageProps): JSX.Element {
+  const navigate = useNavigate();
   const [status, setStatus] = useState<StatusFilter>('all');
   const [query, setQuery] = useState('');
   const [reviews, setReviews] = useState<ReviewSummary[] | null>(null);

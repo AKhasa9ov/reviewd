@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { ApiClient, DiffScope, RepoCommit, RepositorySetting } from '@sir_yami/reviewd-ui';
 import { Button, Select } from '@sir_yami/reviewd-ui';
 import { ErrorPanel, PageHeader } from '../components.js';
-import { Link, navigate } from '../router.js';
+import { Link, useNavigate } from '../router.js';
 
 type ScopeKind = 'branch' | 'worktree' | 'commit';
 type CommitsMode = 'all' | 'selected';
@@ -106,9 +106,15 @@ function buildScope(
 export interface NewReviewPageProps {
   client: ApiClient;
   onCreated?: (id: string) => void;
+  showSettingsLink?: boolean;
 }
 
-export function NewReviewPage({ client, onCreated }: NewReviewPageProps): JSX.Element {
+export function NewReviewPage({
+  client,
+  onCreated,
+  showSettingsLink = true,
+}: NewReviewPageProps): JSX.Element {
+  const navigate = useNavigate();
   const [form, setForm] = useState<FormState>(initialForm);
   const [repositories, setRepositories] = useState<RepositorySetting[]>([]);
   const [branches, setBranches] = useState<string[]>([]);
@@ -331,12 +337,17 @@ export function NewReviewPage({ client, onCreated }: NewReviewPageProps): JSX.El
               <div>
                 <h2 className="cr-form-section-title">Repository</h2>
                 <p className="cr-form-section-copy">
-                  Paths are resolved on the daemon. Manage saved repositories in Settings.
+                  Paths are resolved on the daemon.{' '}
+                  {showSettingsLink
+                    ? 'Manage saved repositories in Settings.'
+                    : 'Manage saved repositories in DSH Settings → Built-in plugins → Code Review.'}
                 </p>
               </div>
-              <Link className="cr-link-button" to="/settings">
-                Manage repositories
-              </Link>
+              {showSettingsLink ? (
+                <Link className="cr-link-button" to="/settings">
+                  Manage repositories
+                </Link>
+              ) : null}
             </div>
             <div className="cr-form-grid">
               <div className="cr-field">

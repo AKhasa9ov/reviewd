@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ApiClient, ReviewSummary } from '@sir_yami/reviewd-ui';
 import { App } from '../src/App.js';
 import { repoName } from '../src/pages/ReviewListPage.js';
+import { createMemoryRouter, RouterProvider } from '../src/router.js';
 import { latestFeedback, reviewView, snapshotR1, snapshotR2 } from './reviewFixtures.js';
 
 const review: ReviewSummary = {
@@ -153,6 +154,22 @@ describe('review list', () => {
     expect(screen.getByText('rev_01')).toBeInTheDocument();
     await user.click(screen.getByRole('link', { name: 'All reviews' }));
     expect(screen.getByRole('heading', { name: 'Reviews' })).toBeInTheDocument();
+  });
+});
+
+describe('router context', () => {
+  it('navigates inside a supplied memory router without changing window.history', async () => {
+    const router = createMemoryRouter('/', { hrefBase: '/code-review' });
+    const user = userEvent.setup();
+    render(
+      <RouterProvider router={router}>
+        <App client={fakeClient()} />
+      </RouterProvider>,
+    );
+
+    await user.click(screen.getAllByRole('button', { name: /new review/i })[0]!);
+    expect(router.location()).toBe('/new');
+    expect(window.location.pathname).not.toBe('/new');
   });
 });
 
