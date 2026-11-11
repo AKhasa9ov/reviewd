@@ -100,6 +100,7 @@ describe('DSH client bundle', () => {
     const { style } = mountBundle();
     expect(style).not.toBeNull();
     expect(style?.textContent ?? '').toContain('.cr-native-scope');
+    expect(style?.textContent ?? '').toContain('.cr-native-scope .cr-token-keyword');
     expect(style?.textContent ?? '').not.toMatch(/(^|\n)\s*(html|body|:root|#root)\s*[{,]/);
   });
 });

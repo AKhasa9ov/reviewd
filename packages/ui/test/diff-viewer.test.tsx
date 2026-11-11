@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { Anchor, Comment, FileDiff, ReviewQuestion, Snapshot } from '@sir_yami/reviewd-core';
@@ -179,7 +179,9 @@ describe('DiffViewer lazy diffs', () => {
 
     expect(screen.getAllByText('src/a.ts').length).toBeGreaterThan(0);
     await waitFor(() => expect(onLoadDiff).toHaveBeenCalledWith('src/a.ts'));
-    expect(await screen.findByText('const value = 1;')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('row', { name: /line 1, added: const value = 1;/ }),
+    ).toBeInTheDocument();
   });
 
   it('renders an agent question under its line on the current diff', async () => {
@@ -208,7 +210,7 @@ describe('DiffViewer lazy diffs', () => {
       />,
     );
 
-    await screen.findByText('const value = 1;');
+    await screen.findByRole('row', { name: /line 1, added: const value = 1;/ });
     const line = screen.getByRole('row', { name: /line 1, added:/ });
     const card = screen.getByLabelText('question: Why is this value 1?');
 
@@ -254,7 +256,7 @@ describe('DiffViewer lazy diffs', () => {
       />,
     );
 
-    await screen.findByText('const value = 1;');
+    await screen.findByRole('row', { name: /line 1, added: const value = 1;/ });
     const card = screen.getByLabelText('question: Why is this value 1?');
     await user.click(within(card).getByRole('button', { name: 'Expand question' }));
 
@@ -432,5 +434,83 @@ describe('DiffViewer touch line selection', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('DiffViewer syntax highlighting', () => {
+  function syntaxFile(): FileDiff {
+    return {
+      path: 'src/syntax.ts',
+      status: 'added',
+      binary: false,
+      oversized: false,
+      added: 1,
+      deleted: 0,
+      contentHash: 'syntax',
+      hunks: [
+        {
+          oldStart: 0,
+          oldLines: 0,
+          newStart: 1,
+          newLines: 1,
+          header: '@@ -0,0 +1 @@',
+          lines: [{ kind: 'add', oldNo: null, newNo: 1, text: 'const answer: number = 42;' }],
+        },
+      ],
+      newLines: ['const answer: number = 42;'],
+    };
+  }
+
+  it('renders tokens inside the line without changing its selection semantics', () => {
+    const file = syntaxFile();
+    const base = snapshot();
+    const onSelectLine = vi.fn();
+    render(
+      <DiffViewer
+        snapshot={{
+          ...base,
+          files: [file],
+          manifest: {
+            ...base.manifest!,
+            files: [
+              {
+                path: file.path,
+                status: file.status,
+                binary: false,
+                ignored: false,
+                oversized: false,
+                added: 1,
+                deleted: 0,
+                hunkCount: 1,
+                patchBytes: 0,
+              },
+            ],
+            warnings: [],
+          },
+          warnings: [],
+        }}
+        comments={[]}
+        round={1}
+        delta={false}
+        canDelta={false}
+        changedPaths={new Set()}
+        onDeltaChange={() => undefined}
+        onJump={() => undefined}
+        onSelectLine={onSelectLine}
+        onSelectRange={vi.fn()}
+        onOpenComposer={vi.fn()}
+        onReply={async () => undefined}
+        onCommentState={async () => undefined}
+        onCommentJump={() => undefined}
+        onCommentFocus={() => undefined}
+      />,
+    );
+    const row = screen.getByRole('row', { name: /line 1, added: const answer/ });
+    expect(row.querySelector('.cr-token-keyword')?.textContent).toBe('const');
+    expect(row.querySelector('.cr-token-type')?.textContent).toBe('number');
+    expect(row.querySelector('.cr-token-variable')?.textContent).toBe('answer');
+
+    fireEvent.click(row);
+    expect(onSelectLine).toHaveBeenCalledWith(file, 'new', 1, false);
   });
 });

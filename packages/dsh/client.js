@@ -4,10 +4,19 @@ window.__ModuleLoader__.load({
     var module = { exports: {} };
     var exports = module.exports;
 "use strict";
+var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __commonJS = (cb, mod) => function __require() {
+  try {
+    return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+  } catch (e) {
+    throw mod = 0, e;
+  }
+};
 var __export = (target, all) => {
   for (var name in all)
     __defProp(target, name, { get: all[name], enumerable: true });
@@ -20,7 +29,914 @@ var __copyProps = (to, from, except, desc) => {
   }
   return to;
 };
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  // If the importer is in node compatibility mode or this is not an ESM
+  // file that has been converted to a CommonJS file using a Babel-
+  // compatible transform (i.e. "__esModule" has not been set), then set
+  // "default" to the CommonJS "module.exports" for node compatibility.
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  mod
+));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+// node_modules/.pnpm/prismjs@1.30.0/node_modules/prismjs/components/prism-core.js
+var require_prism_core = __commonJS({
+  "node_modules/.pnpm/prismjs@1.30.0/node_modules/prismjs/components/prism-core.js"(exports, module2) {
+    var _self = typeof window !== "undefined" ? window : typeof WorkerGlobalScope !== "undefined" && self instanceof WorkerGlobalScope ? self : {};
+    var Prism3 = (function(_self2) {
+      var lang = /(?:^|\s)lang(?:uage)?-([\w-]+)(?=\s|$)/i;
+      var uniqueId = 0;
+      var plainTextGrammar = {};
+      var _ = {
+        /**
+         * By default, Prism will attempt to highlight all code elements (by calling {@link Prism.highlightAll}) on the
+         * current page after the page finished loading. This might be a problem if e.g. you wanted to asynchronously load
+         * additional languages or plugins yourself.
+         *
+         * By setting this value to `true`, Prism will not automatically highlight all code elements on the page.
+         *
+         * You obviously have to change this value before the automatic highlighting started. To do this, you can add an
+         * empty Prism object into the global scope before loading the Prism script like this:
+         *
+         * ```js
+         * window.Prism = window.Prism || {};
+         * Prism.manual = true;
+         * // add a new <script> to load Prism's script
+         * ```
+         *
+         * @default false
+         * @type {boolean}
+         * @memberof Prism
+         * @public
+         */
+        manual: _self2.Prism && _self2.Prism.manual,
+        /**
+         * By default, if Prism is in a web worker, it assumes that it is in a worker it created itself, so it uses
+         * `addEventListener` to communicate with its parent instance. However, if you're using Prism manually in your
+         * own worker, you don't want it to do this.
+         *
+         * By setting this value to `true`, Prism will not add its own listeners to the worker.
+         *
+         * You obviously have to change this value before Prism executes. To do this, you can add an
+         * empty Prism object into the global scope before loading the Prism script like this:
+         *
+         * ```js
+         * window.Prism = window.Prism || {};
+         * Prism.disableWorkerMessageHandler = true;
+         * // Load Prism's script
+         * ```
+         *
+         * @default false
+         * @type {boolean}
+         * @memberof Prism
+         * @public
+         */
+        disableWorkerMessageHandler: _self2.Prism && _self2.Prism.disableWorkerMessageHandler,
+        /**
+         * A namespace for utility methods.
+         *
+         * All function in this namespace that are not explicitly marked as _public_ are for __internal use only__ and may
+         * change or disappear at any time.
+         *
+         * @namespace
+         * @memberof Prism
+         */
+        util: {
+          encode: function encode(tokens) {
+            if (tokens instanceof Token) {
+              return new Token(tokens.type, encode(tokens.content), tokens.alias);
+            } else if (Array.isArray(tokens)) {
+              return tokens.map(encode);
+            } else {
+              return tokens.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\u00a0/g, " ");
+            }
+          },
+          /**
+           * Returns the name of the type of the given value.
+           *
+           * @param {any} o
+           * @returns {string}
+           * @example
+           * type(null)      === 'Null'
+           * type(undefined) === 'Undefined'
+           * type(123)       === 'Number'
+           * type('foo')     === 'String'
+           * type(true)      === 'Boolean'
+           * type([1, 2])    === 'Array'
+           * type({})        === 'Object'
+           * type(String)    === 'Function'
+           * type(/abc+/)    === 'RegExp'
+           */
+          type: function(o) {
+            return Object.prototype.toString.call(o).slice(8, -1);
+          },
+          /**
+           * Returns a unique number for the given object. Later calls will still return the same number.
+           *
+           * @param {Object} obj
+           * @returns {number}
+           */
+          objId: function(obj) {
+            if (!obj["__id"]) {
+              Object.defineProperty(obj, "__id", { value: ++uniqueId });
+            }
+            return obj["__id"];
+          },
+          /**
+           * Creates a deep clone of the given object.
+           *
+           * The main intended use of this function is to clone language definitions.
+           *
+           * @param {T} o
+           * @param {Record<number, any>} [visited]
+           * @returns {T}
+           * @template T
+           */
+          clone: function deepClone(o, visited) {
+            visited = visited || {};
+            var clone;
+            var id;
+            switch (_.util.type(o)) {
+              case "Object":
+                id = _.util.objId(o);
+                if (visited[id]) {
+                  return visited[id];
+                }
+                clone = /** @type {Record<string, any>} */
+                {};
+                visited[id] = clone;
+                for (var key in o) {
+                  if (o.hasOwnProperty(key)) {
+                    clone[key] = deepClone(o[key], visited);
+                  }
+                }
+                return (
+                  /** @type {any} */
+                  clone
+                );
+              case "Array":
+                id = _.util.objId(o);
+                if (visited[id]) {
+                  return visited[id];
+                }
+                clone = [];
+                visited[id] = clone;
+                /** @type {Array} */
+                /** @type {any} */
+                o.forEach(function(v, i) {
+                  clone[i] = deepClone(v, visited);
+                });
+                return (
+                  /** @type {any} */
+                  clone
+                );
+              default:
+                return o;
+            }
+          },
+          /**
+           * Returns the Prism language of the given element set by a `language-xxxx` or `lang-xxxx` class.
+           *
+           * If no language is set for the element or the element is `null` or `undefined`, `none` will be returned.
+           *
+           * @param {Element} element
+           * @returns {string}
+           */
+          getLanguage: function(element) {
+            while (element) {
+              var m = lang.exec(element.className);
+              if (m) {
+                return m[1].toLowerCase();
+              }
+              element = element.parentElement;
+            }
+            return "none";
+          },
+          /**
+           * Sets the Prism `language-xxxx` class of the given element.
+           *
+           * @param {Element} element
+           * @param {string} language
+           * @returns {void}
+           */
+          setLanguage: function(element, language) {
+            element.className = element.className.replace(RegExp(lang, "gi"), "");
+            element.classList.add("language-" + language);
+          },
+          /**
+           * Returns the script element that is currently executing.
+           *
+           * This does __not__ work for line script element.
+           *
+           * @returns {HTMLScriptElement | null}
+           */
+          currentScript: function() {
+            if (typeof document === "undefined") {
+              return null;
+            }
+            if (document.currentScript && document.currentScript.tagName === "SCRIPT" && 1 < 2) {
+              return (
+                /** @type {any} */
+                document.currentScript
+              );
+            }
+            try {
+              throw new Error();
+            } catch (err) {
+              var src = (/at [^(\r\n]*\((.*):[^:]+:[^:]+\)$/i.exec(err.stack) || [])[1];
+              if (src) {
+                var scripts = document.getElementsByTagName("script");
+                for (var i in scripts) {
+                  if (scripts[i].src == src) {
+                    return scripts[i];
+                  }
+                }
+              }
+              return null;
+            }
+          },
+          /**
+           * Returns whether a given class is active for `element`.
+           *
+           * The class can be activated if `element` or one of its ancestors has the given class and it can be deactivated
+           * if `element` or one of its ancestors has the negated version of the given class. The _negated version_ of the
+           * given class is just the given class with a `no-` prefix.
+           *
+           * Whether the class is active is determined by the closest ancestor of `element` (where `element` itself is
+           * closest ancestor) that has the given class or the negated version of it. If neither `element` nor any of its
+           * ancestors have the given class or the negated version of it, then the default activation will be returned.
+           *
+           * In the paradoxical situation where the closest ancestor contains __both__ the given class and the negated
+           * version of it, the class is considered active.
+           *
+           * @param {Element} element
+           * @param {string} className
+           * @param {boolean} [defaultActivation=false]
+           * @returns {boolean}
+           */
+          isActive: function(element, className, defaultActivation) {
+            var no = "no-" + className;
+            while (element) {
+              var classList = element.classList;
+              if (classList.contains(className)) {
+                return true;
+              }
+              if (classList.contains(no)) {
+                return false;
+              }
+              element = element.parentElement;
+            }
+            return !!defaultActivation;
+          }
+        },
+        /**
+         * This namespace contains all currently loaded languages and the some helper functions to create and modify languages.
+         *
+         * @namespace
+         * @memberof Prism
+         * @public
+         */
+        languages: {
+          /**
+           * The grammar for plain, unformatted text.
+           */
+          plain: plainTextGrammar,
+          plaintext: plainTextGrammar,
+          text: plainTextGrammar,
+          txt: plainTextGrammar,
+          /**
+           * Creates a deep copy of the language with the given id and appends the given tokens.
+           *
+           * If a token in `redef` also appears in the copied language, then the existing token in the copied language
+           * will be overwritten at its original position.
+           *
+           * ## Best practices
+           *
+           * Since the position of overwriting tokens (token in `redef` that overwrite tokens in the copied language)
+           * doesn't matter, they can technically be in any order. However, this can be confusing to others that trying to
+           * understand the language definition because, normally, the order of tokens matters in Prism grammars.
+           *
+           * Therefore, it is encouraged to order overwriting tokens according to the positions of the overwritten tokens.
+           * Furthermore, all non-overwriting tokens should be placed after the overwriting ones.
+           *
+           * @param {string} id The id of the language to extend. This has to be a key in `Prism.languages`.
+           * @param {Grammar} redef The new tokens to append.
+           * @returns {Grammar} The new language created.
+           * @public
+           * @example
+           * Prism.languages['css-with-colors'] = Prism.languages.extend('css', {
+           *     // Prism.languages.css already has a 'comment' token, so this token will overwrite CSS' 'comment' token
+           *     // at its original position
+           *     'comment': { ... },
+           *     // CSS doesn't have a 'color' token, so this token will be appended
+           *     'color': /\b(?:red|green|blue)\b/
+           * });
+           */
+          extend: function(id, redef) {
+            var lang2 = _.util.clone(_.languages[id]);
+            for (var key in redef) {
+              lang2[key] = redef[key];
+            }
+            return lang2;
+          },
+          /**
+           * Inserts tokens _before_ another token in a language definition or any other grammar.
+           *
+           * ## Usage
+           *
+           * This helper method makes it easy to modify existing languages. For example, the CSS language definition
+           * not only defines CSS highlighting for CSS documents, but also needs to define highlighting for CSS embedded
+           * in HTML through `<style>` elements. To do this, it needs to modify `Prism.languages.markup` and add the
+           * appropriate tokens. However, `Prism.languages.markup` is a regular JavaScript object literal, so if you do
+           * this:
+           *
+           * ```js
+           * Prism.languages.markup.style = {
+           *     // token
+           * };
+           * ```
+           *
+           * then the `style` token will be added (and processed) at the end. `insertBefore` allows you to insert tokens
+           * before existing tokens. For the CSS example above, you would use it like this:
+           *
+           * ```js
+           * Prism.languages.insertBefore('markup', 'cdata', {
+           *     'style': {
+           *         // token
+           *     }
+           * });
+           * ```
+           *
+           * ## Special cases
+           *
+           * If the grammars of `inside` and `insert` have tokens with the same name, the tokens in `inside`'s grammar
+           * will be ignored.
+           *
+           * This behavior can be used to insert tokens after `before`:
+           *
+           * ```js
+           * Prism.languages.insertBefore('markup', 'comment', {
+           *     'comment': Prism.languages.markup.comment,
+           *     // tokens after 'comment'
+           * });
+           * ```
+           *
+           * ## Limitations
+           *
+           * The main problem `insertBefore` has to solve is iteration order. Since ES2015, the iteration order for object
+           * properties is guaranteed to be the insertion order (except for integer keys) but some browsers behave
+           * differently when keys are deleted and re-inserted. So `insertBefore` can't be implemented by temporarily
+           * deleting properties which is necessary to insert at arbitrary positions.
+           *
+           * To solve this problem, `insertBefore` doesn't actually insert the given tokens into the target object.
+           * Instead, it will create a new object and replace all references to the target object with the new one. This
+           * can be done without temporarily deleting properties, so the iteration order is well-defined.
+           *
+           * However, only references that can be reached from `Prism.languages` or `insert` will be replaced. I.e. if
+           * you hold the target object in a variable, then the value of the variable will not change.
+           *
+           * ```js
+           * var oldMarkup = Prism.languages.markup;
+           * var newMarkup = Prism.languages.insertBefore('markup', 'comment', { ... });
+           *
+           * assert(oldMarkup !== Prism.languages.markup);
+           * assert(newMarkup === Prism.languages.markup);
+           * ```
+           *
+           * @param {string} inside The property of `root` (e.g. a language id in `Prism.languages`) that contains the
+           * object to be modified.
+           * @param {string} before The key to insert before.
+           * @param {Grammar} insert An object containing the key-value pairs to be inserted.
+           * @param {Object<string, any>} [root] The object containing `inside`, i.e. the object that contains the
+           * object to be modified.
+           *
+           * Defaults to `Prism.languages`.
+           * @returns {Grammar} The new grammar object.
+           * @public
+           */
+          insertBefore: function(inside, before, insert, root) {
+            root = root || /** @type {any} */
+            _.languages;
+            var grammar = root[inside];
+            var ret = {};
+            for (var token in grammar) {
+              if (grammar.hasOwnProperty(token)) {
+                if (token == before) {
+                  for (var newToken in insert) {
+                    if (insert.hasOwnProperty(newToken)) {
+                      ret[newToken] = insert[newToken];
+                    }
+                  }
+                }
+                if (!insert.hasOwnProperty(token)) {
+                  ret[token] = grammar[token];
+                }
+              }
+            }
+            var old = root[inside];
+            root[inside] = ret;
+            _.languages.DFS(_.languages, function(key, value) {
+              if (value === old && key != inside) {
+                this[key] = ret;
+              }
+            });
+            return ret;
+          },
+          // Traverse a language definition with Depth First Search
+          DFS: function DFS(o, callback, type, visited) {
+            visited = visited || {};
+            var objId = _.util.objId;
+            for (var i in o) {
+              if (o.hasOwnProperty(i)) {
+                callback.call(o, i, o[i], type || i);
+                var property = o[i];
+                var propertyType = _.util.type(property);
+                if (propertyType === "Object" && !visited[objId(property)]) {
+                  visited[objId(property)] = true;
+                  DFS(property, callback, null, visited);
+                } else if (propertyType === "Array" && !visited[objId(property)]) {
+                  visited[objId(property)] = true;
+                  DFS(property, callback, i, visited);
+                }
+              }
+            }
+          }
+        },
+        plugins: {},
+        /**
+         * This is the most high-level function in Prism’s API.
+         * It fetches all the elements that have a `.language-xxxx` class and then calls {@link Prism.highlightElement} on
+         * each one of them.
+         *
+         * This is equivalent to `Prism.highlightAllUnder(document, async, callback)`.
+         *
+         * @param {boolean} [async=false] Same as in {@link Prism.highlightAllUnder}.
+         * @param {HighlightCallback} [callback] Same as in {@link Prism.highlightAllUnder}.
+         * @memberof Prism
+         * @public
+         */
+        highlightAll: function(async, callback) {
+          _.highlightAllUnder(document, async, callback);
+        },
+        /**
+         * Fetches all the descendants of `container` that have a `.language-xxxx` class and then calls
+         * {@link Prism.highlightElement} on each one of them.
+         *
+         * The following hooks will be run:
+         * 1. `before-highlightall`
+         * 2. `before-all-elements-highlight`
+         * 3. All hooks of {@link Prism.highlightElement} for each element.
+         *
+         * @param {ParentNode} container The root element, whose descendants that have a `.language-xxxx` class will be highlighted.
+         * @param {boolean} [async=false] Whether each element is to be highlighted asynchronously using Web Workers.
+         * @param {HighlightCallback} [callback] An optional callback to be invoked on each element after its highlighting is done.
+         * @memberof Prism
+         * @public
+         */
+        highlightAllUnder: function(container, async, callback) {
+          var env = {
+            callback,
+            container,
+            selector: 'code[class*="language-"], [class*="language-"] code, code[class*="lang-"], [class*="lang-"] code'
+          };
+          _.hooks.run("before-highlightall", env);
+          env.elements = Array.prototype.slice.apply(env.container.querySelectorAll(env.selector));
+          _.hooks.run("before-all-elements-highlight", env);
+          for (var i = 0, element; element = env.elements[i++]; ) {
+            _.highlightElement(element, async === true, env.callback);
+          }
+        },
+        /**
+         * Highlights the code inside a single element.
+         *
+         * The following hooks will be run:
+         * 1. `before-sanity-check`
+         * 2. `before-highlight`
+         * 3. All hooks of {@link Prism.highlight}. These hooks will be run by an asynchronous worker if `async` is `true`.
+         * 4. `before-insert`
+         * 5. `after-highlight`
+         * 6. `complete`
+         *
+         * Some the above hooks will be skipped if the element doesn't contain any text or there is no grammar loaded for
+         * the element's language.
+         *
+         * @param {Element} element The element containing the code.
+         * It must have a class of `language-xxxx` to be processed, where `xxxx` is a valid language identifier.
+         * @param {boolean} [async=false] Whether the element is to be highlighted asynchronously using Web Workers
+         * to improve performance and avoid blocking the UI when highlighting very large chunks of code. This option is
+         * [disabled by default](https://prismjs.com/faq.html#why-is-asynchronous-highlighting-disabled-by-default).
+         *
+         * Note: All language definitions required to highlight the code must be included in the main `prism.js` file for
+         * asynchronous highlighting to work. You can build your own bundle on the
+         * [Download page](https://prismjs.com/download.html).
+         * @param {HighlightCallback} [callback] An optional callback to be invoked after the highlighting is done.
+         * Mostly useful when `async` is `true`, since in that case, the highlighting is done asynchronously.
+         * @memberof Prism
+         * @public
+         */
+        highlightElement: function(element, async, callback) {
+          var language = _.util.getLanguage(element);
+          var grammar = _.languages[language];
+          _.util.setLanguage(element, language);
+          var parent = element.parentElement;
+          if (parent && parent.nodeName.toLowerCase() === "pre") {
+            _.util.setLanguage(parent, language);
+          }
+          var code = element.textContent;
+          var env = {
+            element,
+            language,
+            grammar,
+            code
+          };
+          function insertHighlightedCode(highlightedCode) {
+            env.highlightedCode = highlightedCode;
+            _.hooks.run("before-insert", env);
+            env.element.innerHTML = env.highlightedCode;
+            _.hooks.run("after-highlight", env);
+            _.hooks.run("complete", env);
+            callback && callback.call(env.element);
+          }
+          _.hooks.run("before-sanity-check", env);
+          parent = env.element.parentElement;
+          if (parent && parent.nodeName.toLowerCase() === "pre" && !parent.hasAttribute("tabindex")) {
+            parent.setAttribute("tabindex", "0");
+          }
+          if (!env.code) {
+            _.hooks.run("complete", env);
+            callback && callback.call(env.element);
+            return;
+          }
+          _.hooks.run("before-highlight", env);
+          if (!env.grammar) {
+            insertHighlightedCode(_.util.encode(env.code));
+            return;
+          }
+          if (async && _self2.Worker) {
+            var worker = new Worker(_.filename);
+            worker.onmessage = function(evt) {
+              insertHighlightedCode(evt.data);
+            };
+            worker.postMessage(JSON.stringify({
+              language: env.language,
+              code: env.code,
+              immediateClose: true
+            }));
+          } else {
+            insertHighlightedCode(_.highlight(env.code, env.grammar, env.language));
+          }
+        },
+        /**
+         * Low-level function, only use if you know what you’re doing. It accepts a string of text as input
+         * and the language definitions to use, and returns a string with the HTML produced.
+         *
+         * The following hooks will be run:
+         * 1. `before-tokenize`
+         * 2. `after-tokenize`
+         * 3. `wrap`: On each {@link Token}.
+         *
+         * @param {string} text A string with the code to be highlighted.
+         * @param {Grammar} grammar An object containing the tokens to use.
+         *
+         * Usually a language definition like `Prism.languages.markup`.
+         * @param {string} language The name of the language definition passed to `grammar`.
+         * @returns {string} The highlighted HTML.
+         * @memberof Prism
+         * @public
+         * @example
+         * Prism.highlight('var foo = true;', Prism.languages.javascript, 'javascript');
+         */
+        highlight: function(text, grammar, language) {
+          var env = {
+            code: text,
+            grammar,
+            language
+          };
+          _.hooks.run("before-tokenize", env);
+          if (!env.grammar) {
+            throw new Error('The language "' + env.language + '" has no grammar.');
+          }
+          env.tokens = _.tokenize(env.code, env.grammar);
+          _.hooks.run("after-tokenize", env);
+          return Token.stringify(_.util.encode(env.tokens), env.language);
+        },
+        /**
+         * This is the heart of Prism, and the most low-level function you can use. It accepts a string of text as input
+         * and the language definitions to use, and returns an array with the tokenized code.
+         *
+         * When the language definition includes nested tokens, the function is called recursively on each of these tokens.
+         *
+         * This method could be useful in other contexts as well, as a very crude parser.
+         *
+         * @param {string} text A string with the code to be highlighted.
+         * @param {Grammar} grammar An object containing the tokens to use.
+         *
+         * Usually a language definition like `Prism.languages.markup`.
+         * @returns {TokenStream} An array of strings and tokens, a token stream.
+         * @memberof Prism
+         * @public
+         * @example
+         * let code = `var foo = 0;`;
+         * let tokens = Prism.tokenize(code, Prism.languages.javascript);
+         * tokens.forEach(token => {
+         *     if (token instanceof Prism.Token && token.type === 'number') {
+         *         console.log(`Found numeric literal: ${token.content}`);
+         *     }
+         * });
+         */
+        tokenize: function(text, grammar) {
+          var rest = grammar.rest;
+          if (rest) {
+            for (var token in rest) {
+              grammar[token] = rest[token];
+            }
+            delete grammar.rest;
+          }
+          var tokenList = new LinkedList();
+          addAfter(tokenList, tokenList.head, text);
+          matchGrammar(text, tokenList, grammar, tokenList.head, 0);
+          return toArray(tokenList);
+        },
+        /**
+         * @namespace
+         * @memberof Prism
+         * @public
+         */
+        hooks: {
+          all: {},
+          /**
+           * Adds the given callback to the list of callbacks for the given hook.
+           *
+           * The callback will be invoked when the hook it is registered for is run.
+           * Hooks are usually directly run by a highlight function but you can also run hooks yourself.
+           *
+           * One callback function can be registered to multiple hooks and the same hook multiple times.
+           *
+           * @param {string} name The name of the hook.
+           * @param {HookCallback} callback The callback function which is given environment variables.
+           * @public
+           */
+          add: function(name, callback) {
+            var hooks = _.hooks.all;
+            hooks[name] = hooks[name] || [];
+            hooks[name].push(callback);
+          },
+          /**
+           * Runs a hook invoking all registered callbacks with the given environment variables.
+           *
+           * Callbacks will be invoked synchronously and in the order in which they were registered.
+           *
+           * @param {string} name The name of the hook.
+           * @param {Object<string, any>} env The environment variables of the hook passed to all callbacks registered.
+           * @public
+           */
+          run: function(name, env) {
+            var callbacks = _.hooks.all[name];
+            if (!callbacks || !callbacks.length) {
+              return;
+            }
+            for (var i = 0, callback; callback = callbacks[i++]; ) {
+              callback(env);
+            }
+          }
+        },
+        Token
+      };
+      _self2.Prism = _;
+      function Token(type, content, alias, matchedStr) {
+        this.type = type;
+        this.content = content;
+        this.alias = alias;
+        this.length = (matchedStr || "").length | 0;
+      }
+      Token.stringify = function stringify(o, language) {
+        if (typeof o == "string") {
+          return o;
+        }
+        if (Array.isArray(o)) {
+          var s = "";
+          o.forEach(function(e) {
+            s += stringify(e, language);
+          });
+          return s;
+        }
+        var env = {
+          type: o.type,
+          content: stringify(o.content, language),
+          tag: "span",
+          classes: ["token", o.type],
+          attributes: {},
+          language
+        };
+        var aliases = o.alias;
+        if (aliases) {
+          if (Array.isArray(aliases)) {
+            Array.prototype.push.apply(env.classes, aliases);
+          } else {
+            env.classes.push(aliases);
+          }
+        }
+        _.hooks.run("wrap", env);
+        var attributes = "";
+        for (var name in env.attributes) {
+          attributes += " " + name + '="' + (env.attributes[name] || "").replace(/"/g, "&quot;") + '"';
+        }
+        return "<" + env.tag + ' class="' + env.classes.join(" ") + '"' + attributes + ">" + env.content + "</" + env.tag + ">";
+      };
+      function matchPattern(pattern, pos, text, lookbehind) {
+        pattern.lastIndex = pos;
+        var match = pattern.exec(text);
+        if (match && lookbehind && match[1]) {
+          var lookbehindLength = match[1].length;
+          match.index += lookbehindLength;
+          match[0] = match[0].slice(lookbehindLength);
+        }
+        return match;
+      }
+      function matchGrammar(text, tokenList, grammar, startNode, startPos, rematch) {
+        for (var token in grammar) {
+          if (!grammar.hasOwnProperty(token) || !grammar[token]) {
+            continue;
+          }
+          var patterns = grammar[token];
+          patterns = Array.isArray(patterns) ? patterns : [patterns];
+          for (var j = 0; j < patterns.length; ++j) {
+            if (rematch && rematch.cause == token + "," + j) {
+              return;
+            }
+            var patternObj = patterns[j];
+            var inside = patternObj.inside;
+            var lookbehind = !!patternObj.lookbehind;
+            var greedy = !!patternObj.greedy;
+            var alias = patternObj.alias;
+            if (greedy && !patternObj.pattern.global) {
+              var flags = patternObj.pattern.toString().match(/[imsuy]*$/)[0];
+              patternObj.pattern = RegExp(patternObj.pattern.source, flags + "g");
+            }
+            var pattern = patternObj.pattern || patternObj;
+            for (var currentNode = startNode.next, pos = startPos; currentNode !== tokenList.tail; pos += currentNode.value.length, currentNode = currentNode.next) {
+              if (rematch && pos >= rematch.reach) {
+                break;
+              }
+              var str = currentNode.value;
+              if (tokenList.length > text.length) {
+                return;
+              }
+              if (str instanceof Token) {
+                continue;
+              }
+              var removeCount = 1;
+              var match;
+              if (greedy) {
+                match = matchPattern(pattern, pos, text, lookbehind);
+                if (!match || match.index >= text.length) {
+                  break;
+                }
+                var from = match.index;
+                var to = match.index + match[0].length;
+                var p = pos;
+                p += currentNode.value.length;
+                while (from >= p) {
+                  currentNode = currentNode.next;
+                  p += currentNode.value.length;
+                }
+                p -= currentNode.value.length;
+                pos = p;
+                if (currentNode.value instanceof Token) {
+                  continue;
+                }
+                for (var k = currentNode; k !== tokenList.tail && (p < to || typeof k.value === "string"); k = k.next) {
+                  removeCount++;
+                  p += k.value.length;
+                }
+                removeCount--;
+                str = text.slice(pos, p);
+                match.index -= pos;
+              } else {
+                match = matchPattern(pattern, 0, str, lookbehind);
+                if (!match) {
+                  continue;
+                }
+              }
+              var from = match.index;
+              var matchStr = match[0];
+              var before = str.slice(0, from);
+              var after = str.slice(from + matchStr.length);
+              var reach = pos + str.length;
+              if (rematch && reach > rematch.reach) {
+                rematch.reach = reach;
+              }
+              var removeFrom = currentNode.prev;
+              if (before) {
+                removeFrom = addAfter(tokenList, removeFrom, before);
+                pos += before.length;
+              }
+              removeRange(tokenList, removeFrom, removeCount);
+              var wrapped = new Token(token, inside ? _.tokenize(matchStr, inside) : matchStr, alias, matchStr);
+              currentNode = addAfter(tokenList, removeFrom, wrapped);
+              if (after) {
+                addAfter(tokenList, currentNode, after);
+              }
+              if (removeCount > 1) {
+                var nestedRematch = {
+                  cause: token + "," + j,
+                  reach
+                };
+                matchGrammar(text, tokenList, grammar, currentNode.prev, pos, nestedRematch);
+                if (rematch && nestedRematch.reach > rematch.reach) {
+                  rematch.reach = nestedRematch.reach;
+                }
+              }
+            }
+          }
+        }
+      }
+      function LinkedList() {
+        var head = { value: null, prev: null, next: null };
+        var tail = { value: null, prev: head, next: null };
+        head.next = tail;
+        this.head = head;
+        this.tail = tail;
+        this.length = 0;
+      }
+      function addAfter(list, node, value) {
+        var next = node.next;
+        var newNode = { value, prev: node, next };
+        node.next = newNode;
+        next.prev = newNode;
+        list.length++;
+        return newNode;
+      }
+      function removeRange(list, node, count) {
+        var next = node.next;
+        for (var i = 0; i < count && next !== list.tail; i++) {
+          next = next.next;
+        }
+        node.next = next;
+        next.prev = node;
+        list.length -= i;
+      }
+      function toArray(list) {
+        var array = [];
+        var node = list.head.next;
+        while (node !== list.tail) {
+          array.push(node.value);
+          node = node.next;
+        }
+        return array;
+      }
+      if (!_self2.document) {
+        if (!_self2.addEventListener) {
+          return _;
+        }
+        if (!_.disableWorkerMessageHandler) {
+          _self2.addEventListener("message", function(evt) {
+            var message = JSON.parse(evt.data);
+            var lang2 = message.language;
+            var code = message.code;
+            var immediateClose = message.immediateClose;
+            _self2.postMessage(_.highlight(code, _.languages[lang2], lang2));
+            if (immediateClose) {
+              _self2.close();
+            }
+          }, false);
+        }
+        return _;
+      }
+      var script = _.util.currentScript();
+      if (script) {
+        _.filename = script.src;
+        if (script.hasAttribute("data-manual")) {
+          _.manual = true;
+        }
+      }
+      function highlightAutomaticallyCallback() {
+        if (!_.manual) {
+          _.highlightAll();
+        }
+      }
+      if (!_.manual) {
+        var readyState = document.readyState;
+        if (readyState === "loading" || readyState === "interactive" && script && script.defer) {
+          document.addEventListener("DOMContentLoaded", highlightAutomaticallyCallback);
+        } else {
+          if (window.requestAnimationFrame) {
+            window.requestAnimationFrame(highlightAutomaticallyCallback);
+          } else {
+            window.setTimeout(highlightAutomaticallyCallback, 16);
+          }
+        }
+      }
+      return _;
+    })(_self);
+    if (typeof module2 !== "undefined" && module2.exports) {
+      module2.exports = Prism3;
+    }
+    if (typeof global !== "undefined") {
+      global.Prism = Prism3;
+    }
+  }
+});
 
 // packages/dsh/src/client.tsx
 var client_exports = {};
@@ -2676,8 +3592,1924 @@ function InlineQuestion({
   );
 }
 
-// packages/ui/src/review/FullFileDialog.tsx
+// packages/ui/src/review/CodeText.tsx
 var import_jsx_runtime17 = require("react/jsx-runtime");
+function CodeText({ text, syntax }) {
+  const segments = syntax?.segments;
+  if (segments === void 0 || segments.length === 0) {
+    return /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(import_jsx_runtime17.Fragment, { children: text === "" ? " " : text });
+  }
+  if (segments.map((segment) => segment.text).join("") !== text) {
+    return /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(import_jsx_runtime17.Fragment, { children: text === "" ? " " : text });
+  }
+  return /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(import_jsx_runtime17.Fragment, { children: segments.map(
+    (segment, index) => segment.token === null ? /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { children: segment.text }, index) : /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { className: `cr-token cr-token-${segment.token}`, children: segment.text }, index)
+  ) });
+}
+
+// packages/ui/src/prism-setup.ts
+var import_prism_core = __toESM(require_prism_core(), 1);
+globalThis.Prism = import_prism_core.default;
+var prism_setup_default = import_prism_core.default;
+
+// node_modules/.pnpm/prismjs@1.30.0/node_modules/prismjs/components/prism-markup.js
+Prism.languages.markup = {
+  "comment": {
+    pattern: /<!--(?:(?!<!--)[\s\S])*?-->/,
+    greedy: true
+  },
+  "prolog": {
+    pattern: /<\?[\s\S]+?\?>/,
+    greedy: true
+  },
+  "doctype": {
+    // https://www.w3.org/TR/xml/#NT-doctypedecl
+    pattern: /<!DOCTYPE(?:[^>"'[\]]|"[^"]*"|'[^']*')+(?:\[(?:[^<"'\]]|"[^"]*"|'[^']*'|<(?!!--)|<!--(?:[^-]|-(?!->))*-->)*\]\s*)?>/i,
+    greedy: true,
+    inside: {
+      "internal-subset": {
+        pattern: /(^[^\[]*\[)[\s\S]+(?=\]>$)/,
+        lookbehind: true,
+        greedy: true,
+        inside: null
+        // see below
+      },
+      "string": {
+        pattern: /"[^"]*"|'[^']*'/,
+        greedy: true
+      },
+      "punctuation": /^<!|>$|[[\]]/,
+      "doctype-tag": /^DOCTYPE/i,
+      "name": /[^\s<>'"]+/
+    }
+  },
+  "cdata": {
+    pattern: /<!\[CDATA\[[\s\S]*?\]\]>/i,
+    greedy: true
+  },
+  "tag": {
+    pattern: /<\/?(?!\d)[^\s>\/=$<%]+(?:\s(?:\s*[^\s>\/=]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s'">=]+(?=[\s>]))|(?=[\s/>])))+)?\s*\/?>/,
+    greedy: true,
+    inside: {
+      "tag": {
+        pattern: /^<\/?[^\s>\/]+/,
+        inside: {
+          "punctuation": /^<\/?/,
+          "namespace": /^[^\s>\/:]+:/
+        }
+      },
+      "special-attr": [],
+      "attr-value": {
+        pattern: /=\s*(?:"[^"]*"|'[^']*'|[^\s'">=]+)/,
+        inside: {
+          "punctuation": [
+            {
+              pattern: /^=/,
+              alias: "attr-equals"
+            },
+            {
+              pattern: /^(\s*)["']|["']$/,
+              lookbehind: true
+            }
+          ]
+        }
+      },
+      "punctuation": /\/?>/,
+      "attr-name": {
+        pattern: /[^\s>\/]+/,
+        inside: {
+          "namespace": /^[^\s>\/:]+:/
+        }
+      }
+    }
+  },
+  "entity": [
+    {
+      pattern: /&[\da-z]{1,8};/i,
+      alias: "named-entity"
+    },
+    /&#x?[\da-f]{1,8};/i
+  ]
+};
+Prism.languages.markup["tag"].inside["attr-value"].inside["entity"] = Prism.languages.markup["entity"];
+Prism.languages.markup["doctype"].inside["internal-subset"].inside = Prism.languages.markup;
+Prism.hooks.add("wrap", function(env) {
+  if (env.type === "entity") {
+    env.attributes["title"] = env.content.replace(/&amp;/, "&");
+  }
+});
+Object.defineProperty(Prism.languages.markup.tag, "addInlined", {
+  /**
+   * Adds an inlined language to markup.
+   *
+   * An example of an inlined language is CSS with `<style>` tags.
+   *
+   * @param {string} tagName The name of the tag that contains the inlined language. This name will be treated as
+   * case insensitive.
+   * @param {string} lang The language key.
+   * @example
+   * addInlined('style', 'css');
+   */
+  value: function addInlined(tagName, lang) {
+    var includedCdataInside = {};
+    includedCdataInside["language-" + lang] = {
+      pattern: /(^<!\[CDATA\[)[\s\S]+?(?=\]\]>$)/i,
+      lookbehind: true,
+      inside: Prism.languages[lang]
+    };
+    includedCdataInside["cdata"] = /^<!\[CDATA\[|\]\]>$/i;
+    var inside = {
+      "included-cdata": {
+        pattern: /<!\[CDATA\[[\s\S]*?\]\]>/i,
+        inside: includedCdataInside
+      }
+    };
+    inside["language-" + lang] = {
+      pattern: /[\s\S]+/,
+      inside: Prism.languages[lang]
+    };
+    var def = {};
+    def[tagName] = {
+      pattern: RegExp(/(<__[^>]*>)(?:<!\[CDATA\[(?:[^\]]|\](?!\]>))*\]\]>|(?!<!\[CDATA\[)[\s\S])*?(?=<\/__>)/.source.replace(/__/g, function() {
+        return tagName;
+      }), "i"),
+      lookbehind: true,
+      greedy: true,
+      inside
+    };
+    Prism.languages.insertBefore("markup", "cdata", def);
+  }
+});
+Object.defineProperty(Prism.languages.markup.tag, "addAttribute", {
+  /**
+   * Adds an pattern to highlight languages embedded in HTML attributes.
+   *
+   * An example of an inlined language is CSS with `style` attributes.
+   *
+   * @param {string} attrName The name of the tag that contains the inlined language. This name will be treated as
+   * case insensitive.
+   * @param {string} lang The language key.
+   * @example
+   * addAttribute('style', 'css');
+   */
+  value: function(attrName, lang) {
+    Prism.languages.markup.tag.inside["special-attr"].push({
+      pattern: RegExp(
+        /(^|["'\s])/.source + "(?:" + attrName + ")" + /\s*=\s*(?:"[^"]*"|'[^']*'|[^\s'">=]+(?=[\s>]))/.source,
+        "i"
+      ),
+      lookbehind: true,
+      inside: {
+        "attr-name": /^[^\s=]+/,
+        "attr-value": {
+          pattern: /=[\s\S]+/,
+          inside: {
+            "value": {
+              pattern: /(^=\s*(["']|(?!["'])))\S[\s\S]*(?=\2$)/,
+              lookbehind: true,
+              alias: [lang, "language-" + lang],
+              inside: Prism.languages[lang]
+            },
+            "punctuation": [
+              {
+                pattern: /^=/,
+                alias: "attr-equals"
+              },
+              /"|'/
+            ]
+          }
+        }
+      }
+    });
+  }
+});
+Prism.languages.html = Prism.languages.markup;
+Prism.languages.mathml = Prism.languages.markup;
+Prism.languages.svg = Prism.languages.markup;
+Prism.languages.xml = Prism.languages.extend("markup", {});
+Prism.languages.ssml = Prism.languages.xml;
+Prism.languages.atom = Prism.languages.xml;
+Prism.languages.rss = Prism.languages.xml;
+
+// node_modules/.pnpm/prismjs@1.30.0/node_modules/prismjs/components/prism-css.js
+(function(Prism3) {
+  var string = /(?:"(?:\\(?:\r\n|[\s\S])|[^"\\\r\n])*"|'(?:\\(?:\r\n|[\s\S])|[^'\\\r\n])*')/;
+  Prism3.languages.css = {
+    "comment": /\/\*[\s\S]*?\*\//,
+    "atrule": {
+      pattern: RegExp("@[\\w-](?:" + /[^;{\s"']|\s+(?!\s)/.source + "|" + string.source + ")*?" + /(?:;|(?=\s*\{))/.source),
+      inside: {
+        "rule": /^@[\w-]+/,
+        "selector-function-argument": {
+          pattern: /(\bselector\s*\(\s*(?![\s)]))(?:[^()\s]|\s+(?![\s)])|\((?:[^()]|\([^()]*\))*\))+(?=\s*\))/,
+          lookbehind: true,
+          alias: "selector"
+        },
+        "keyword": {
+          pattern: /(^|[^\w-])(?:and|not|only|or)(?![\w-])/,
+          lookbehind: true
+        }
+        // See rest below
+      }
+    },
+    "url": {
+      // https://drafts.csswg.org/css-values-3/#urls
+      pattern: RegExp("\\burl\\((?:" + string.source + "|" + /(?:[^\\\r\n()"']|\\[\s\S])*/.source + ")\\)", "i"),
+      greedy: true,
+      inside: {
+        "function": /^url/i,
+        "punctuation": /^\(|\)$/,
+        "string": {
+          pattern: RegExp("^" + string.source + "$"),
+          alias: "url"
+        }
+      }
+    },
+    "selector": {
+      pattern: RegExp(`(^|[{}\\s])[^{}\\s](?:[^{};"'\\s]|\\s+(?![\\s{])|` + string.source + ")*(?=\\s*\\{)"),
+      lookbehind: true
+    },
+    "string": {
+      pattern: string,
+      greedy: true
+    },
+    "property": {
+      pattern: /(^|[^-\w\xA0-\uFFFF])(?!\s)[-_a-z\xA0-\uFFFF](?:(?!\s)[-\w\xA0-\uFFFF])*(?=\s*:)/i,
+      lookbehind: true
+    },
+    "important": /!important\b/i,
+    "function": {
+      pattern: /(^|[^-a-z0-9])[-a-z0-9]+(?=\()/i,
+      lookbehind: true
+    },
+    "punctuation": /[(){};:,]/
+  };
+  Prism3.languages.css["atrule"].inside.rest = Prism3.languages.css;
+  var markup = Prism3.languages.markup;
+  if (markup) {
+    markup.tag.addInlined("style", "css");
+    markup.tag.addAttribute("style", "css");
+  }
+})(Prism);
+
+// node_modules/.pnpm/prismjs@1.30.0/node_modules/prismjs/components/prism-clike.js
+Prism.languages.clike = {
+  "comment": [
+    {
+      pattern: /(^|[^\\])\/\*[\s\S]*?(?:\*\/|$)/,
+      lookbehind: true,
+      greedy: true
+    },
+    {
+      pattern: /(^|[^\\:])\/\/.*/,
+      lookbehind: true,
+      greedy: true
+    }
+  ],
+  "string": {
+    pattern: /(["'])(?:\\(?:\r\n|[\s\S])|(?!\1)[^\\\r\n])*\1/,
+    greedy: true
+  },
+  "class-name": {
+    pattern: /(\b(?:class|extends|implements|instanceof|interface|new|trait)\s+|\bcatch\s+\()[\w.\\]+/i,
+    lookbehind: true,
+    inside: {
+      "punctuation": /[.\\]/
+    }
+  },
+  "keyword": /\b(?:break|catch|continue|do|else|finally|for|function|if|in|instanceof|new|null|return|throw|try|while)\b/,
+  "boolean": /\b(?:false|true)\b/,
+  "function": /\b\w+(?=\()/,
+  "number": /\b0x[\da-f]+\b|(?:\b\d+(?:\.\d*)?|\B\.\d+)(?:e[+-]?\d+)?/i,
+  "operator": /[<>]=?|[!=]=?=?|--?|\+\+?|&&?|\|\|?|[?*/~^%]/,
+  "punctuation": /[{}[\];(),.:]/
+};
+
+// node_modules/.pnpm/prismjs@1.30.0/node_modules/prismjs/components/prism-javascript.js
+Prism.languages.javascript = Prism.languages.extend("clike", {
+  "class-name": [
+    Prism.languages.clike["class-name"],
+    {
+      pattern: /(^|[^$\w\xA0-\uFFFF])(?!\s)[_$A-Z\xA0-\uFFFF](?:(?!\s)[$\w\xA0-\uFFFF])*(?=\.(?:constructor|prototype))/,
+      lookbehind: true
+    }
+  ],
+  "keyword": [
+    {
+      pattern: /((?:^|\})\s*)catch\b/,
+      lookbehind: true
+    },
+    {
+      pattern: /(^|[^.]|\.\.\.\s*)\b(?:as|assert(?=\s*\{)|async(?=\s*(?:function\b|\(|[$\w\xA0-\uFFFF]|$))|await|break|case|class|const|continue|debugger|default|delete|do|else|enum|export|extends|finally(?=\s*(?:\{|$))|for|from(?=\s*(?:['"]|$))|function|(?:get|set)(?=\s*(?:[#\[$\w\xA0-\uFFFF]|$))|if|implements|import|in|instanceof|interface|let|new|null|of|package|private|protected|public|return|static|super|switch|this|throw|try|typeof|undefined|var|void|while|with|yield)\b/,
+      lookbehind: true
+    }
+  ],
+  // Allow for all non-ASCII characters (See http://stackoverflow.com/a/2008444)
+  "function": /#?(?!\s)[_$a-zA-Z\xA0-\uFFFF](?:(?!\s)[$\w\xA0-\uFFFF])*(?=\s*(?:\.\s*(?:apply|bind|call)\s*)?\()/,
+  "number": {
+    pattern: RegExp(
+      /(^|[^\w$])/.source + "(?:" + // constant
+      (/NaN|Infinity/.source + "|" + // binary integer
+      /0[bB][01]+(?:_[01]+)*n?/.source + "|" + // octal integer
+      /0[oO][0-7]+(?:_[0-7]+)*n?/.source + "|" + // hexadecimal integer
+      /0[xX][\dA-Fa-f]+(?:_[\dA-Fa-f]+)*n?/.source + "|" + // decimal bigint
+      /\d+(?:_\d+)*n/.source + "|" + // decimal number (integer or float) but no bigint
+      /(?:\d+(?:_\d+)*(?:\.(?:\d+(?:_\d+)*)?)?|\.\d+(?:_\d+)*)(?:[Ee][+-]?\d+(?:_\d+)*)?/.source) + ")" + /(?![\w$])/.source
+    ),
+    lookbehind: true
+  },
+  "operator": /--|\+\+|\*\*=?|=>|&&=?|\|\|=?|[!=]==|<<=?|>>>?=?|[-+*/%&|^!=<>]=?|\.{3}|\?\?=?|\?\.?|[~:]/
+});
+Prism.languages.javascript["class-name"][0].pattern = /(\b(?:class|extends|implements|instanceof|interface|new)\s+)[\w.\\]+/;
+Prism.languages.insertBefore("javascript", "keyword", {
+  "regex": {
+    pattern: RegExp(
+      // lookbehind
+      // eslint-disable-next-line regexp/no-dupe-characters-character-class
+      /((?:^|[^$\w\xA0-\uFFFF."'\])\s]|\b(?:return|yield))\s*)/.source + // Regex pattern:
+      // There are 2 regex patterns here. The RegExp set notation proposal added support for nested character
+      // classes if the `v` flag is present. Unfortunately, nested CCs are both context-free and incompatible
+      // with the only syntax, so we have to define 2 different regex patterns.
+      /\//.source + "(?:" + /(?:\[(?:[^\]\\\r\n]|\\.)*\]|\\.|[^/\\\[\r\n])+\/[dgimyus]{0,7}/.source + "|" + // `v` flag syntax. This supports 3 levels of nested character classes.
+      /(?:\[(?:[^[\]\\\r\n]|\\.|\[(?:[^[\]\\\r\n]|\\.|\[(?:[^[\]\\\r\n]|\\.)*\])*\])*\]|\\.|[^/\\\[\r\n])+\/[dgimyus]{0,7}v[dgimyus]{0,7}/.source + ")" + // lookahead
+      /(?=(?:\s|\/\*(?:[^*]|\*(?!\/))*\*\/)*(?:$|[\r\n,.;:})\]]|\/\/))/.source
+    ),
+    lookbehind: true,
+    greedy: true,
+    inside: {
+      "regex-source": {
+        pattern: /^(\/)[\s\S]+(?=\/[a-z]*$)/,
+        lookbehind: true,
+        alias: "language-regex",
+        inside: Prism.languages.regex
+      },
+      "regex-delimiter": /^\/|\/$/,
+      "regex-flags": /^[a-z]+$/
+    }
+  },
+  // This must be declared before keyword because we use "function" inside the look-forward
+  "function-variable": {
+    pattern: /#?(?!\s)[_$a-zA-Z\xA0-\uFFFF](?:(?!\s)[$\w\xA0-\uFFFF])*(?=\s*[=:]\s*(?:async\s*)?(?:\bfunction\b|(?:\((?:[^()]|\([^()]*\))*\)|(?!\s)[_$a-zA-Z\xA0-\uFFFF](?:(?!\s)[$\w\xA0-\uFFFF])*)\s*=>))/,
+    alias: "function"
+  },
+  "parameter": [
+    {
+      pattern: /(function(?:\s+(?!\s)[_$a-zA-Z\xA0-\uFFFF](?:(?!\s)[$\w\xA0-\uFFFF])*)?\s*\(\s*)(?!\s)(?:[^()\s]|\s+(?![\s)])|\([^()]*\))+(?=\s*\))/,
+      lookbehind: true,
+      inside: Prism.languages.javascript
+    },
+    {
+      pattern: /(^|[^$\w\xA0-\uFFFF])(?!\s)[_$a-z\xA0-\uFFFF](?:(?!\s)[$\w\xA0-\uFFFF])*(?=\s*=>)/i,
+      lookbehind: true,
+      inside: Prism.languages.javascript
+    },
+    {
+      pattern: /(\(\s*)(?!\s)(?:[^()\s]|\s+(?![\s)])|\([^()]*\))+(?=\s*\)\s*=>)/,
+      lookbehind: true,
+      inside: Prism.languages.javascript
+    },
+    {
+      pattern: /((?:\b|\s|^)(?!(?:as|async|await|break|case|catch|class|const|continue|debugger|default|delete|do|else|enum|export|extends|finally|for|from|function|get|if|implements|import|in|instanceof|interface|let|new|null|of|package|private|protected|public|return|set|static|super|switch|this|throw|try|typeof|undefined|var|void|while|with|yield)(?![$\w\xA0-\uFFFF]))(?:(?!\s)[_$a-zA-Z\xA0-\uFFFF](?:(?!\s)[$\w\xA0-\uFFFF])*\s*)\(\s*|\]\s*\(\s*)(?!\s)(?:[^()\s]|\s+(?![\s)])|\([^()]*\))+(?=\s*\)\s*\{)/,
+      lookbehind: true,
+      inside: Prism.languages.javascript
+    }
+  ],
+  "constant": /\b[A-Z](?:[A-Z_]|\dx?)*\b/
+});
+Prism.languages.insertBefore("javascript", "string", {
+  "hashbang": {
+    pattern: /^#!.*/,
+    greedy: true,
+    alias: "comment"
+  },
+  "template-string": {
+    pattern: /`(?:\\[\s\S]|\$\{(?:[^{}]|\{(?:[^{}]|\{[^}]*\})*\})+\}|(?!\$\{)[^\\`])*`/,
+    greedy: true,
+    inside: {
+      "template-punctuation": {
+        pattern: /^`|`$/,
+        alias: "string"
+      },
+      "interpolation": {
+        pattern: /((?:^|[^\\])(?:\\{2})*)\$\{(?:[^{}]|\{(?:[^{}]|\{[^}]*\})*\})+\}/,
+        lookbehind: true,
+        inside: {
+          "interpolation-punctuation": {
+            pattern: /^\$\{|\}$/,
+            alias: "punctuation"
+          },
+          rest: Prism.languages.javascript
+        }
+      },
+      "string": /[\s\S]+/
+    }
+  },
+  "string-property": {
+    pattern: /((?:^|[,{])[ \t]*)(["'])(?:\\(?:\r\n|[\s\S])|(?!\2)[^\\\r\n])*\2(?=\s*:)/m,
+    lookbehind: true,
+    greedy: true,
+    alias: "property"
+  }
+});
+Prism.languages.insertBefore("javascript", "operator", {
+  "literal-property": {
+    pattern: /((?:^|[,{])[ \t]*)(?!\s)[_$a-zA-Z\xA0-\uFFFF](?:(?!\s)[$\w\xA0-\uFFFF])*(?=\s*:)/m,
+    lookbehind: true,
+    alias: "property"
+  }
+});
+if (Prism.languages.markup) {
+  Prism.languages.markup.tag.addInlined("script", "javascript");
+  Prism.languages.markup.tag.addAttribute(
+    /on(?:abort|blur|change|click|composition(?:end|start|update)|dblclick|error|focus(?:in|out)?|key(?:down|up)|load|mouse(?:down|enter|leave|move|out|over|up)|reset|resize|scroll|select|slotchange|submit|unload|wheel)/.source,
+    "javascript"
+  );
+}
+Prism.languages.js = Prism.languages.javascript;
+
+// node_modules/.pnpm/prismjs@1.30.0/node_modules/prismjs/components/prism-jsx.js
+(function(Prism3) {
+  var javascript = Prism3.util.clone(Prism3.languages.javascript);
+  var space = /(?:\s|\/\/.*(?!.)|\/\*(?:[^*]|\*(?!\/))\*\/)/.source;
+  var braces = /(?:\{(?:\{(?:\{[^{}]*\}|[^{}])*\}|[^{}])*\})/.source;
+  var spread = /(?:\{<S>*\.{3}(?:[^{}]|<BRACES>)*\})/.source;
+  function re(source, flags) {
+    source = source.replace(/<S>/g, function() {
+      return space;
+    }).replace(/<BRACES>/g, function() {
+      return braces;
+    }).replace(/<SPREAD>/g, function() {
+      return spread;
+    });
+    return RegExp(source, flags);
+  }
+  spread = re(spread).source;
+  Prism3.languages.jsx = Prism3.languages.extend("markup", javascript);
+  Prism3.languages.jsx.tag.pattern = re(
+    /<\/?(?:[\w.:-]+(?:<S>+(?:[\w.:$-]+(?:=(?:"(?:\\[\s\S]|[^\\"])*"|'(?:\\[\s\S]|[^\\'])*'|[^\s{'"/>=]+|<BRACES>))?|<SPREAD>))*<S>*\/?)?>/.source
+  );
+  Prism3.languages.jsx.tag.inside["tag"].pattern = /^<\/?[^\s>\/]*/;
+  Prism3.languages.jsx.tag.inside["attr-value"].pattern = /=(?!\{)(?:"(?:\\[\s\S]|[^\\"])*"|'(?:\\[\s\S]|[^\\'])*'|[^\s'">]+)/;
+  Prism3.languages.jsx.tag.inside["tag"].inside["class-name"] = /^[A-Z]\w*(?:\.[A-Z]\w*)*$/;
+  Prism3.languages.jsx.tag.inside["comment"] = javascript["comment"];
+  Prism3.languages.insertBefore("inside", "attr-name", {
+    "spread": {
+      pattern: re(/<SPREAD>/.source),
+      inside: Prism3.languages.jsx
+    }
+  }, Prism3.languages.jsx.tag);
+  Prism3.languages.insertBefore("inside", "special-attr", {
+    "script": {
+      // Allow for two levels of nesting
+      pattern: re(/=<BRACES>/.source),
+      alias: "language-javascript",
+      inside: {
+        "script-punctuation": {
+          pattern: /^=(?=\{)/,
+          alias: "punctuation"
+        },
+        rest: Prism3.languages.jsx
+      }
+    }
+  }, Prism3.languages.jsx.tag);
+  var stringifyToken = function(token) {
+    if (!token) {
+      return "";
+    }
+    if (typeof token === "string") {
+      return token;
+    }
+    if (typeof token.content === "string") {
+      return token.content;
+    }
+    return token.content.map(stringifyToken).join("");
+  };
+  var walkTokens = function(tokens) {
+    var openedTags = [];
+    for (var i = 0; i < tokens.length; i++) {
+      var token = tokens[i];
+      var notTagNorBrace = false;
+      if (typeof token !== "string") {
+        if (token.type === "tag" && token.content[0] && token.content[0].type === "tag") {
+          if (token.content[0].content[0].content === "</") {
+            if (openedTags.length > 0 && openedTags[openedTags.length - 1].tagName === stringifyToken(token.content[0].content[1])) {
+              openedTags.pop();
+            }
+          } else {
+            if (token.content[token.content.length - 1].content === "/>") {
+            } else {
+              openedTags.push({
+                tagName: stringifyToken(token.content[0].content[1]),
+                openedBraces: 0
+              });
+            }
+          }
+        } else if (openedTags.length > 0 && token.type === "punctuation" && token.content === "{") {
+          openedTags[openedTags.length - 1].openedBraces++;
+        } else if (openedTags.length > 0 && openedTags[openedTags.length - 1].openedBraces > 0 && token.type === "punctuation" && token.content === "}") {
+          openedTags[openedTags.length - 1].openedBraces--;
+        } else {
+          notTagNorBrace = true;
+        }
+      }
+      if (notTagNorBrace || typeof token === "string") {
+        if (openedTags.length > 0 && openedTags[openedTags.length - 1].openedBraces === 0) {
+          var plainText = stringifyToken(token);
+          if (i < tokens.length - 1 && (typeof tokens[i + 1] === "string" || tokens[i + 1].type === "plain-text")) {
+            plainText += stringifyToken(tokens[i + 1]);
+            tokens.splice(i + 1, 1);
+          }
+          if (i > 0 && (typeof tokens[i - 1] === "string" || tokens[i - 1].type === "plain-text")) {
+            plainText = stringifyToken(tokens[i - 1]) + plainText;
+            tokens.splice(i - 1, 1);
+            i--;
+          }
+          tokens[i] = new Prism3.Token("plain-text", plainText, null, plainText);
+        }
+      }
+      if (token.content && typeof token.content !== "string") {
+        walkTokens(token.content);
+      }
+    }
+  };
+  Prism3.hooks.add("after-tokenize", function(env) {
+    if (env.language !== "jsx" && env.language !== "tsx") {
+      return;
+    }
+    walkTokens(env.tokens);
+  });
+})(Prism);
+
+// node_modules/.pnpm/prismjs@1.30.0/node_modules/prismjs/components/prism-typescript.js
+(function(Prism3) {
+  Prism3.languages.typescript = Prism3.languages.extend("javascript", {
+    "class-name": {
+      pattern: /(\b(?:class|extends|implements|instanceof|interface|new|type)\s+)(?!keyof\b)(?!\s)[_$a-zA-Z\xA0-\uFFFF](?:(?!\s)[$\w\xA0-\uFFFF])*(?:\s*<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>)?/,
+      lookbehind: true,
+      greedy: true,
+      inside: null
+      // see below
+    },
+    "builtin": /\b(?:Array|Function|Promise|any|boolean|console|never|number|string|symbol|unknown)\b/
+  });
+  Prism3.languages.typescript.keyword.push(
+    /\b(?:abstract|declare|is|keyof|readonly|require)\b/,
+    // keywords that have to be followed by an identifier
+    /\b(?:asserts|infer|interface|module|namespace|type)\b(?=\s*(?:[{_$a-zA-Z\xA0-\uFFFF]|$))/,
+    // This is for `import type *, {}`
+    /\btype\b(?=\s*(?:[\{*]|$))/
+  );
+  delete Prism3.languages.typescript["parameter"];
+  delete Prism3.languages.typescript["literal-property"];
+  var typeInside = Prism3.languages.extend("typescript", {});
+  delete typeInside["class-name"];
+  Prism3.languages.typescript["class-name"].inside = typeInside;
+  Prism3.languages.insertBefore("typescript", "function", {
+    "decorator": {
+      pattern: /@[$\w\xA0-\uFFFF]+/,
+      inside: {
+        "at": {
+          pattern: /^@/,
+          alias: "operator"
+        },
+        "function": /^[\s\S]+/
+      }
+    },
+    "generic-function": {
+      // e.g. foo<T extends "bar" | "baz">( ...
+      pattern: /#?(?!\s)[_$a-zA-Z\xA0-\uFFFF](?:(?!\s)[$\w\xA0-\uFFFF])*\s*<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>(?=\s*\()/,
+      greedy: true,
+      inside: {
+        "function": /^#?(?!\s)[_$a-zA-Z\xA0-\uFFFF](?:(?!\s)[$\w\xA0-\uFFFF])*/,
+        "generic": {
+          pattern: /<[\s\S]+/,
+          // everything after the first <
+          alias: "class-name",
+          inside: typeInside
+        }
+      }
+    }
+  });
+  Prism3.languages.ts = Prism3.languages.typescript;
+})(Prism);
+
+// node_modules/.pnpm/prismjs@1.30.0/node_modules/prismjs/components/prism-tsx.js
+(function(Prism3) {
+  var typescript = Prism3.util.clone(Prism3.languages.typescript);
+  Prism3.languages.tsx = Prism3.languages.extend("jsx", typescript);
+  delete Prism3.languages.tsx["parameter"];
+  delete Prism3.languages.tsx["literal-property"];
+  var tag = Prism3.languages.tsx.tag;
+  tag.pattern = RegExp(/(^|[^\w$]|(?=<\/))/.source + "(?:" + tag.pattern.source + ")", tag.pattern.flags);
+  tag.lookbehind = true;
+})(Prism);
+
+// node_modules/.pnpm/prismjs@1.30.0/node_modules/prismjs/components/prism-json.js
+Prism.languages.json = {
+  "property": {
+    pattern: /(^|[^\\])"(?:\\.|[^\\"\r\n])*"(?=\s*:)/,
+    lookbehind: true,
+    greedy: true
+  },
+  "string": {
+    pattern: /(^|[^\\])"(?:\\.|[^\\"\r\n])*"(?!\s*:)/,
+    lookbehind: true,
+    greedy: true
+  },
+  "comment": {
+    pattern: /\/\/.*|\/\*[\s\S]*?(?:\*\/|$)/,
+    greedy: true
+  },
+  "number": /-?\b\d+(?:\.\d+)?(?:e[+-]?\d+)?\b/i,
+  "punctuation": /[{}[\],]/,
+  "operator": /:/,
+  "boolean": /\b(?:false|true)\b/,
+  "null": {
+    pattern: /\bnull\b/,
+    alias: "keyword"
+  }
+};
+Prism.languages.webmanifest = Prism.languages.json;
+
+// node_modules/.pnpm/prismjs@1.30.0/node_modules/prismjs/components/prism-scss.js
+Prism.languages.scss = Prism.languages.extend("css", {
+  "comment": {
+    pattern: /(^|[^\\])(?:\/\*[\s\S]*?\*\/|\/\/.*)/,
+    lookbehind: true
+  },
+  "atrule": {
+    pattern: /@[\w-](?:\([^()]+\)|[^()\s]|\s+(?!\s))*?(?=\s+[{;])/,
+    inside: {
+      "rule": /@[\w-]+/
+      // See rest below
+    }
+  },
+  // url, compassified
+  "url": /(?:[-a-z]+-)?url(?=\()/i,
+  // CSS selector regex is not appropriate for Sass
+  // since there can be lot more things (var, @ directive, nesting..)
+  // a selector must start at the end of a property or after a brace (end of other rules or nesting)
+  // it can contain some characters that aren't used for defining rules or end of selector, & (parent selector), or interpolated variable
+  // the end of a selector is found when there is no rules in it ( {} or {\s}) or if there is a property (because an interpolated var
+  // can "pass" as a selector- e.g: proper#{$erty})
+  // this one was hard to do, so please be careful if you edit this one :)
+  "selector": {
+    // Initial look-ahead is used to prevent matching of blank selectors
+    pattern: /(?=\S)[^@;{}()]?(?:[^@;{}()\s]|\s+(?!\s)|#\{\$[-\w]+\})+(?=\s*\{(?:\}|\s|[^}][^:{}]*[:{][^}]))/,
+    inside: {
+      "parent": {
+        pattern: /&/,
+        alias: "important"
+      },
+      "placeholder": /%[-\w]+/,
+      "variable": /\$[-\w]+|#\{\$[-\w]+\}/
+    }
+  },
+  "property": {
+    pattern: /(?:[-\w]|\$[-\w]|#\{\$[-\w]+\})+(?=\s*:)/,
+    inside: {
+      "variable": /\$[-\w]+|#\{\$[-\w]+\}/
+    }
+  }
+});
+Prism.languages.insertBefore("scss", "atrule", {
+  "keyword": [
+    /@(?:content|debug|each|else(?: if)?|extend|for|forward|function|if|import|include|mixin|return|use|warn|while)\b/i,
+    {
+      pattern: /( )(?:from|through)(?= )/,
+      lookbehind: true
+    }
+  ]
+});
+Prism.languages.insertBefore("scss", "important", {
+  // var and interpolated vars
+  "variable": /\$[-\w]+|#\{\$[-\w]+\}/
+});
+Prism.languages.insertBefore("scss", "function", {
+  "module-modifier": {
+    pattern: /\b(?:as|hide|show|with)\b/i,
+    alias: "keyword"
+  },
+  "placeholder": {
+    pattern: /%[-\w]+/,
+    alias: "selector"
+  },
+  "statement": {
+    pattern: /\B!(?:default|optional)\b/i,
+    alias: "keyword"
+  },
+  "boolean": /\b(?:false|true)\b/,
+  "null": {
+    pattern: /\bnull\b/,
+    alias: "keyword"
+  },
+  "operator": {
+    pattern: /(\s)(?:[-+*\/%]|[=!]=|<=?|>=?|and|not|or)(?=\s)/,
+    lookbehind: true
+  }
+});
+Prism.languages.scss["atrule"].inside.rest = Prism.languages.scss;
+
+// node_modules/.pnpm/prismjs@1.30.0/node_modules/prismjs/components/prism-markdown.js
+(function(Prism3) {
+  var inner = /(?:\\.|[^\\\n\r]|(?:\n|\r\n?)(?![\r\n]))/.source;
+  function createInline(pattern) {
+    pattern = pattern.replace(/<inner>/g, function() {
+      return inner;
+    });
+    return RegExp(/((?:^|[^\\])(?:\\{2})*)/.source + "(?:" + pattern + ")");
+  }
+  var tableCell = /(?:\\.|``(?:[^`\r\n]|`(?!`))+``|`[^`\r\n]+`|[^\\|\r\n`])+/.source;
+  var tableRow = /\|?__(?:\|__)+\|?(?:(?:\n|\r\n?)|(?![\s\S]))/.source.replace(/__/g, function() {
+    return tableCell;
+  });
+  var tableLine = /\|?[ \t]*:?-{3,}:?[ \t]*(?:\|[ \t]*:?-{3,}:?[ \t]*)+\|?(?:\n|\r\n?)/.source;
+  Prism3.languages.markdown = Prism3.languages.extend("markup", {});
+  Prism3.languages.insertBefore("markdown", "prolog", {
+    "front-matter-block": {
+      pattern: /(^(?:\s*[\r\n])?)---(?!.)[\s\S]*?[\r\n]---(?!.)/,
+      lookbehind: true,
+      greedy: true,
+      inside: {
+        "punctuation": /^---|---$/,
+        "front-matter": {
+          pattern: /\S+(?:\s+\S+)*/,
+          alias: ["yaml", "language-yaml"],
+          inside: Prism3.languages.yaml
+        }
+      }
+    },
+    "blockquote": {
+      // > ...
+      pattern: /^>(?:[\t ]*>)*/m,
+      alias: "punctuation"
+    },
+    "table": {
+      pattern: RegExp("^" + tableRow + tableLine + "(?:" + tableRow + ")*", "m"),
+      inside: {
+        "table-data-rows": {
+          pattern: RegExp("^(" + tableRow + tableLine + ")(?:" + tableRow + ")*$"),
+          lookbehind: true,
+          inside: {
+            "table-data": {
+              pattern: RegExp(tableCell),
+              inside: Prism3.languages.markdown
+            },
+            "punctuation": /\|/
+          }
+        },
+        "table-line": {
+          pattern: RegExp("^(" + tableRow + ")" + tableLine + "$"),
+          lookbehind: true,
+          inside: {
+            "punctuation": /\||:?-{3,}:?/
+          }
+        },
+        "table-header-row": {
+          pattern: RegExp("^" + tableRow + "$"),
+          inside: {
+            "table-header": {
+              pattern: RegExp(tableCell),
+              alias: "important",
+              inside: Prism3.languages.markdown
+            },
+            "punctuation": /\|/
+          }
+        }
+      }
+    },
+    "code": [
+      {
+        // Prefixed by 4 spaces or 1 tab and preceded by an empty line
+        pattern: /((?:^|\n)[ \t]*\n|(?:^|\r\n?)[ \t]*\r\n?)(?: {4}|\t).+(?:(?:\n|\r\n?)(?: {4}|\t).+)*/,
+        lookbehind: true,
+        alias: "keyword"
+      },
+      {
+        // ```optional language
+        // code block
+        // ```
+        pattern: /^```[\s\S]*?^```$/m,
+        greedy: true,
+        inside: {
+          "code-block": {
+            pattern: /^(```.*(?:\n|\r\n?))[\s\S]+?(?=(?:\n|\r\n?)^```$)/m,
+            lookbehind: true
+          },
+          "code-language": {
+            pattern: /^(```).+/,
+            lookbehind: true
+          },
+          "punctuation": /```/
+        }
+      }
+    ],
+    "title": [
+      {
+        // title 1
+        // =======
+        // title 2
+        // -------
+        pattern: /\S.*(?:\n|\r\n?)(?:==+|--+)(?=[ \t]*$)/m,
+        alias: "important",
+        inside: {
+          punctuation: /==+$|--+$/
+        }
+      },
+      {
+        // # title 1
+        // ###### title 6
+        pattern: /(^\s*)#.+/m,
+        lookbehind: true,
+        alias: "important",
+        inside: {
+          punctuation: /^#+|#+$/
+        }
+      }
+    ],
+    "hr": {
+      // ***
+      // ---
+      // * * *
+      // -----------
+      pattern: /(^\s*)([*-])(?:[\t ]*\2){2,}(?=\s*$)/m,
+      lookbehind: true,
+      alias: "punctuation"
+    },
+    "list": {
+      // * item
+      // + item
+      // - item
+      // 1. item
+      pattern: /(^\s*)(?:[*+-]|\d+\.)(?=[\t ].)/m,
+      lookbehind: true,
+      alias: "punctuation"
+    },
+    "url-reference": {
+      // [id]: http://example.com "Optional title"
+      // [id]: http://example.com 'Optional title'
+      // [id]: http://example.com (Optional title)
+      // [id]: <http://example.com> "Optional title"
+      pattern: /!?\[[^\]]+\]:[\t ]+(?:\S+|<(?:\\.|[^>\\])+>)(?:[\t ]+(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\((?:\\.|[^)\\])*\)))?/,
+      inside: {
+        "variable": {
+          pattern: /^(!?\[)[^\]]+/,
+          lookbehind: true
+        },
+        "string": /(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\((?:\\.|[^)\\])*\))$/,
+        "punctuation": /^[\[\]!:]|[<>]/
+      },
+      alias: "url"
+    },
+    "bold": {
+      // **strong**
+      // __strong__
+      // allow one nested instance of italic text using the same delimiter
+      pattern: createInline(/\b__(?:(?!_)<inner>|_(?:(?!_)<inner>)+_)+__\b|\*\*(?:(?!\*)<inner>|\*(?:(?!\*)<inner>)+\*)+\*\*/.source),
+      lookbehind: true,
+      greedy: true,
+      inside: {
+        "content": {
+          pattern: /(^..)[\s\S]+(?=..$)/,
+          lookbehind: true,
+          inside: {}
+          // see below
+        },
+        "punctuation": /\*\*|__/
+      }
+    },
+    "italic": {
+      // *em*
+      // _em_
+      // allow one nested instance of bold text using the same delimiter
+      pattern: createInline(/\b_(?:(?!_)<inner>|__(?:(?!_)<inner>)+__)+_\b|\*(?:(?!\*)<inner>|\*\*(?:(?!\*)<inner>)+\*\*)+\*/.source),
+      lookbehind: true,
+      greedy: true,
+      inside: {
+        "content": {
+          pattern: /(^.)[\s\S]+(?=.$)/,
+          lookbehind: true,
+          inside: {}
+          // see below
+        },
+        "punctuation": /[*_]/
+      }
+    },
+    "strike": {
+      // ~~strike through~~
+      // ~strike~
+      // eslint-disable-next-line regexp/strict
+      pattern: createInline(/(~~?)(?:(?!~)<inner>)+\2/.source),
+      lookbehind: true,
+      greedy: true,
+      inside: {
+        "content": {
+          pattern: /(^~~?)[\s\S]+(?=\1$)/,
+          lookbehind: true,
+          inside: {}
+          // see below
+        },
+        "punctuation": /~~?/
+      }
+    },
+    "code-snippet": {
+      // `code`
+      // ``code``
+      pattern: /(^|[^\\`])(?:``[^`\r\n]+(?:`[^`\r\n]+)*``(?!`)|`[^`\r\n]+`(?!`))/,
+      lookbehind: true,
+      greedy: true,
+      alias: ["code", "keyword"]
+    },
+    "url": {
+      // [example](http://example.com "Optional title")
+      // [example][id]
+      // [example] [id]
+      pattern: createInline(/!?\[(?:(?!\])<inner>)+\](?:\([^\s)]+(?:[\t ]+"(?:\\.|[^"\\])*")?\)|[ \t]?\[(?:(?!\])<inner>)+\])/.source),
+      lookbehind: true,
+      greedy: true,
+      inside: {
+        "operator": /^!/,
+        "content": {
+          pattern: /(^\[)[^\]]+(?=\])/,
+          lookbehind: true,
+          inside: {}
+          // see below
+        },
+        "variable": {
+          pattern: /(^\][ \t]?\[)[^\]]+(?=\]$)/,
+          lookbehind: true
+        },
+        "url": {
+          pattern: /(^\]\()[^\s)]+/,
+          lookbehind: true
+        },
+        "string": {
+          pattern: /(^[ \t]+)"(?:\\.|[^"\\])*"(?=\)$)/,
+          lookbehind: true
+        }
+      }
+    }
+  });
+  ["url", "bold", "italic", "strike"].forEach(function(token) {
+    ["url", "bold", "italic", "strike", "code-snippet"].forEach(function(inside) {
+      if (token !== inside) {
+        Prism3.languages.markdown[token].inside.content.inside[inside] = Prism3.languages.markdown[inside];
+      }
+    });
+  });
+  Prism3.hooks.add("after-tokenize", function(env) {
+    if (env.language !== "markdown" && env.language !== "md") {
+      return;
+    }
+    function walkTokens(tokens) {
+      if (!tokens || typeof tokens === "string") {
+        return;
+      }
+      for (var i = 0, l = tokens.length; i < l; i++) {
+        var token = tokens[i];
+        if (token.type !== "code") {
+          walkTokens(token.content);
+          continue;
+        }
+        var codeLang = token.content[1];
+        var codeBlock = token.content[3];
+        if (codeLang && codeBlock && codeLang.type === "code-language" && codeBlock.type === "code-block" && typeof codeLang.content === "string") {
+          var lang = codeLang.content.replace(/\b#/g, "sharp").replace(/\b\+\+/g, "pp");
+          lang = (/[a-z][\w-]*/i.exec(lang) || [""])[0].toLowerCase();
+          var alias = "language-" + lang;
+          if (!codeBlock.alias) {
+            codeBlock.alias = [alias];
+          } else if (typeof codeBlock.alias === "string") {
+            codeBlock.alias = [codeBlock.alias, alias];
+          } else {
+            codeBlock.alias.push(alias);
+          }
+        }
+      }
+    }
+    walkTokens(env.tokens);
+  });
+  Prism3.hooks.add("wrap", function(env) {
+    if (env.type !== "code-block") {
+      return;
+    }
+    var codeLang = "";
+    for (var i = 0, l = env.classes.length; i < l; i++) {
+      var cls = env.classes[i];
+      var match = /language-(.+)/.exec(cls);
+      if (match) {
+        codeLang = match[1];
+        break;
+      }
+    }
+    var grammar = Prism3.languages[codeLang];
+    if (!grammar) {
+      if (codeLang && codeLang !== "none" && Prism3.plugins.autoloader) {
+        var id = "md-" + (/* @__PURE__ */ new Date()).valueOf() + "-" + Math.floor(Math.random() * 1e16);
+        env.attributes["id"] = id;
+        Prism3.plugins.autoloader.loadLanguages(codeLang, function() {
+          var ele = document.getElementById(id);
+          if (ele) {
+            ele.innerHTML = Prism3.highlight(ele.textContent, Prism3.languages[codeLang], codeLang);
+          }
+        });
+      }
+    } else {
+      env.content = Prism3.highlight(textContent(env.content), grammar, codeLang);
+    }
+  });
+  var tagPattern = RegExp(Prism3.languages.markup.tag.pattern.source, "gi");
+  var KNOWN_ENTITY_NAMES = {
+    "amp": "&",
+    "lt": "<",
+    "gt": ">",
+    "quot": '"'
+  };
+  var fromCodePoint = String.fromCodePoint || String.fromCharCode;
+  function textContent(html) {
+    var text = html.replace(tagPattern, "");
+    text = text.replace(/&(\w{1,8}|#x?[\da-f]{1,8});/gi, function(m, code) {
+      code = code.toLowerCase();
+      if (code[0] === "#") {
+        var value;
+        if (code[1] === "x") {
+          value = parseInt(code.slice(2), 16);
+        } else {
+          value = Number(code.slice(1));
+        }
+        return fromCodePoint(value);
+      } else {
+        var known = KNOWN_ENTITY_NAMES[code];
+        if (known) {
+          return known;
+        }
+        return m;
+      }
+    });
+    return text;
+  }
+  Prism3.languages.md = Prism3.languages.markdown;
+})(Prism);
+
+// node_modules/.pnpm/prismjs@1.30.0/node_modules/prismjs/components/prism-yaml.js
+(function(Prism3) {
+  var anchorOrAlias = /[*&][^\s[\]{},]+/;
+  var tag = /!(?:<[\w\-%#;/?:@&=+$,.!~*'()[\]]+>|(?:[a-zA-Z\d-]*!)?[\w\-%#;/?:@&=+$.~*'()]+)?/;
+  var properties = "(?:" + tag.source + "(?:[ 	]+" + anchorOrAlias.source + ")?|" + anchorOrAlias.source + "(?:[ 	]+" + tag.source + ")?)";
+  var plainKey = /(?:[^\s\x00-\x08\x0e-\x1f!"#%&'*,\-:>?@[\]`{|}\x7f-\x84\x86-\x9f\ud800-\udfff\ufffe\uffff]|[?:-]<PLAIN>)(?:[ \t]*(?:(?![#:])<PLAIN>|:<PLAIN>))*/.source.replace(/<PLAIN>/g, function() {
+    return /[^\s\x00-\x08\x0e-\x1f,[\]{}\x7f-\x84\x86-\x9f\ud800-\udfff\ufffe\uffff]/.source;
+  });
+  var string = /"(?:[^"\\\r\n]|\\.)*"|'(?:[^'\\\r\n]|\\.)*'/.source;
+  function createValuePattern(value, flags) {
+    flags = (flags || "").replace(/m/g, "") + "m";
+    var pattern = /([:\-,[{]\s*(?:\s<<prop>>[ \t]+)?)(?:<<value>>)(?=[ \t]*(?:$|,|\]|\}|(?:[\r\n]\s*)?#))/.source.replace(/<<prop>>/g, function() {
+      return properties;
+    }).replace(/<<value>>/g, function() {
+      return value;
+    });
+    return RegExp(pattern, flags);
+  }
+  Prism3.languages.yaml = {
+    "scalar": {
+      pattern: RegExp(/([\-:]\s*(?:\s<<prop>>[ \t]+)?[|>])[ \t]*(?:((?:\r?\n|\r)[ \t]+)\S[^\r\n]*(?:\2[^\r\n]+)*)/.source.replace(/<<prop>>/g, function() {
+        return properties;
+      })),
+      lookbehind: true,
+      alias: "string"
+    },
+    "comment": /#.*/,
+    "key": {
+      pattern: RegExp(/((?:^|[:\-,[{\r\n?])[ \t]*(?:<<prop>>[ \t]+)?)<<key>>(?=\s*:\s)/.source.replace(/<<prop>>/g, function() {
+        return properties;
+      }).replace(/<<key>>/g, function() {
+        return "(?:" + plainKey + "|" + string + ")";
+      })),
+      lookbehind: true,
+      greedy: true,
+      alias: "atrule"
+    },
+    "directive": {
+      pattern: /(^[ \t]*)%.+/m,
+      lookbehind: true,
+      alias: "important"
+    },
+    "datetime": {
+      pattern: createValuePattern(/\d{4}-\d\d?-\d\d?(?:[tT]|[ \t]+)\d\d?:\d{2}:\d{2}(?:\.\d*)?(?:[ \t]*(?:Z|[-+]\d\d?(?::\d{2})?))?|\d{4}-\d{2}-\d{2}|\d\d?:\d{2}(?::\d{2}(?:\.\d*)?)?/.source),
+      lookbehind: true,
+      alias: "number"
+    },
+    "boolean": {
+      pattern: createValuePattern(/false|true/.source, "i"),
+      lookbehind: true,
+      alias: "important"
+    },
+    "null": {
+      pattern: createValuePattern(/null|~/.source, "i"),
+      lookbehind: true,
+      alias: "important"
+    },
+    "string": {
+      pattern: createValuePattern(string),
+      lookbehind: true,
+      greedy: true
+    },
+    "number": {
+      pattern: createValuePattern(/[+-]?(?:0x[\da-f]+|0o[0-7]+|(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?|\.inf|\.nan)/.source, "i"),
+      lookbehind: true
+    },
+    "tag": tag,
+    "important": anchorOrAlias,
+    "punctuation": /---|[:[\]{}\-,|>?]|\.\.\./
+  };
+  Prism3.languages.yml = Prism3.languages.yaml;
+})(Prism);
+
+// node_modules/.pnpm/prismjs@1.30.0/node_modules/prismjs/components/prism-bash.js
+(function(Prism3) {
+  var envVars = "\\b(?:BASH|BASHOPTS|BASH_ALIASES|BASH_ARGC|BASH_ARGV|BASH_CMDS|BASH_COMPLETION_COMPAT_DIR|BASH_LINENO|BASH_REMATCH|BASH_SOURCE|BASH_VERSINFO|BASH_VERSION|COLORTERM|COLUMNS|COMP_WORDBREAKS|DBUS_SESSION_BUS_ADDRESS|DEFAULTS_PATH|DESKTOP_SESSION|DIRSTACK|DISPLAY|EUID|GDMSESSION|GDM_LANG|GNOME_KEYRING_CONTROL|GNOME_KEYRING_PID|GPG_AGENT_INFO|GROUPS|HISTCONTROL|HISTFILE|HISTFILESIZE|HISTSIZE|HOME|HOSTNAME|HOSTTYPE|IFS|INSTANCE|JOB|LANG|LANGUAGE|LC_ADDRESS|LC_ALL|LC_IDENTIFICATION|LC_MEASUREMENT|LC_MONETARY|LC_NAME|LC_NUMERIC|LC_PAPER|LC_TELEPHONE|LC_TIME|LESSCLOSE|LESSOPEN|LINES|LOGNAME|LS_COLORS|MACHTYPE|MAILCHECK|MANDATORY_PATH|NO_AT_BRIDGE|OLDPWD|OPTERR|OPTIND|ORBIT_SOCKETDIR|OSTYPE|PAPERSIZE|PATH|PIPESTATUS|PPID|PS1|PS2|PS3|PS4|PWD|RANDOM|REPLY|SECONDS|SELINUX_INIT|SESSION|SESSIONTYPE|SESSION_MANAGER|SHELL|SHELLOPTS|SHLVL|SSH_AUTH_SOCK|TERM|UID|UPSTART_EVENTS|UPSTART_INSTANCE|UPSTART_JOB|UPSTART_SESSION|USER|WINDOWID|XAUTHORITY|XDG_CONFIG_DIRS|XDG_CURRENT_DESKTOP|XDG_DATA_DIRS|XDG_GREETER_DATA_DIR|XDG_MENU_PREFIX|XDG_RUNTIME_DIR|XDG_SEAT|XDG_SEAT_PATH|XDG_SESSION_DESKTOP|XDG_SESSION_ID|XDG_SESSION_PATH|XDG_SESSION_TYPE|XDG_VTNR|XMODIFIERS)\\b";
+  var commandAfterHeredoc = {
+    pattern: /(^(["']?)\w+\2)[ \t]+\S.*/,
+    lookbehind: true,
+    alias: "punctuation",
+    // this looks reasonably well in all themes
+    inside: null
+    // see below
+  };
+  var insideString = {
+    "bash": commandAfterHeredoc,
+    "environment": {
+      pattern: RegExp("\\$" + envVars),
+      alias: "constant"
+    },
+    "variable": [
+      // [0]: Arithmetic Environment
+      {
+        pattern: /\$?\(\([\s\S]+?\)\)/,
+        greedy: true,
+        inside: {
+          // If there is a $ sign at the beginning highlight $(( and )) as variable
+          "variable": [
+            {
+              pattern: /(^\$\(\([\s\S]+)\)\)/,
+              lookbehind: true
+            },
+            /^\$\(\(/
+          ],
+          "number": /\b0x[\dA-Fa-f]+\b|(?:\b\d+(?:\.\d*)?|\B\.\d+)(?:[Ee]-?\d+)?/,
+          // Operators according to https://www.gnu.org/software/bash/manual/bashref.html#Shell-Arithmetic
+          "operator": /--|\+\+|\*\*=?|<<=?|>>=?|&&|\|\||[=!+\-*/%<>^&|]=?|[?~:]/,
+          // If there is no $ sign at the beginning highlight (( and )) as punctuation
+          "punctuation": /\(\(?|\)\)?|,|;/
+        }
+      },
+      // [1]: Command Substitution
+      {
+        pattern: /\$\((?:\([^)]+\)|[^()])+\)|`[^`]+`/,
+        greedy: true,
+        inside: {
+          "variable": /^\$\(|^`|\)$|`$/
+        }
+      },
+      // [2]: Brace expansion
+      {
+        pattern: /\$\{[^}]+\}/,
+        greedy: true,
+        inside: {
+          "operator": /:[-=?+]?|[!\/]|##?|%%?|\^\^?|,,?/,
+          "punctuation": /[\[\]]/,
+          "environment": {
+            pattern: RegExp("(\\{)" + envVars),
+            lookbehind: true,
+            alias: "constant"
+          }
+        }
+      },
+      /\$(?:\w+|[#?*!@$])/
+    ],
+    // Escape sequences from echo and printf's manuals, and escaped quotes.
+    "entity": /\\(?:[abceEfnrtv\\"]|O?[0-7]{1,3}|U[0-9a-fA-F]{8}|u[0-9a-fA-F]{4}|x[0-9a-fA-F]{1,2})/
+  };
+  Prism3.languages.bash = {
+    "shebang": {
+      pattern: /^#!\s*\/.*/,
+      alias: "important"
+    },
+    "comment": {
+      pattern: /(^|[^"{\\$])#.*/,
+      lookbehind: true
+    },
+    "function-name": [
+      // a) function foo {
+      // b) foo() {
+      // c) function foo() {
+      // but not “foo {”
+      {
+        // a) and c)
+        pattern: /(\bfunction\s+)[\w-]+(?=(?:\s*\(?:\s*\))?\s*\{)/,
+        lookbehind: true,
+        alias: "function"
+      },
+      {
+        // b)
+        pattern: /\b[\w-]+(?=\s*\(\s*\)\s*\{)/,
+        alias: "function"
+      }
+    ],
+    // Highlight variable names as variables in for and select beginnings.
+    "for-or-select": {
+      pattern: /(\b(?:for|select)\s+)\w+(?=\s+in\s)/,
+      alias: "variable",
+      lookbehind: true
+    },
+    // Highlight variable names as variables in the left-hand part
+    // of assignments (“=” and “+=”).
+    "assign-left": {
+      pattern: /(^|[\s;|&]|[<>]\()\w+(?:\.\w+)*(?=\+?=)/,
+      inside: {
+        "environment": {
+          pattern: RegExp("(^|[\\s;|&]|[<>]\\()" + envVars),
+          lookbehind: true,
+          alias: "constant"
+        }
+      },
+      alias: "variable",
+      lookbehind: true
+    },
+    // Highlight parameter names as variables
+    "parameter": {
+      pattern: /(^|\s)-{1,2}(?:\w+:[+-]?)?\w+(?:\.\w+)*(?=[=\s]|$)/,
+      alias: "variable",
+      lookbehind: true
+    },
+    "string": [
+      // Support for Here-documents https://en.wikipedia.org/wiki/Here_document
+      {
+        pattern: /((?:^|[^<])<<-?\s*)(\w+)\s[\s\S]*?(?:\r?\n|\r)\2/,
+        lookbehind: true,
+        greedy: true,
+        inside: insideString
+      },
+      // Here-document with quotes around the tag
+      // → No expansion (so no “inside”).
+      {
+        pattern: /((?:^|[^<])<<-?\s*)(["'])(\w+)\2\s[\s\S]*?(?:\r?\n|\r)\3/,
+        lookbehind: true,
+        greedy: true,
+        inside: {
+          "bash": commandAfterHeredoc
+        }
+      },
+      // “Normal” string
+      {
+        // https://www.gnu.org/software/bash/manual/html_node/Double-Quotes.html
+        pattern: /(^|[^\\](?:\\\\)*)"(?:\\[\s\S]|\$\([^)]+\)|\$(?!\()|`[^`]+`|[^"\\`$])*"/,
+        lookbehind: true,
+        greedy: true,
+        inside: insideString
+      },
+      {
+        // https://www.gnu.org/software/bash/manual/html_node/Single-Quotes.html
+        pattern: /(^|[^$\\])'[^']*'/,
+        lookbehind: true,
+        greedy: true
+      },
+      {
+        // https://www.gnu.org/software/bash/manual/html_node/ANSI_002dC-Quoting.html
+        pattern: /\$'(?:[^'\\]|\\[\s\S])*'/,
+        greedy: true,
+        inside: {
+          "entity": insideString.entity
+        }
+      }
+    ],
+    "environment": {
+      pattern: RegExp("\\$?" + envVars),
+      alias: "constant"
+    },
+    "variable": insideString.variable,
+    "function": {
+      pattern: /(^|[\s;|&]|[<>]\()(?:add|apropos|apt|apt-cache|apt-get|aptitude|aspell|automysqlbackup|awk|basename|bash|bc|bconsole|bg|bzip2|cal|cargo|cat|cfdisk|chgrp|chkconfig|chmod|chown|chroot|cksum|clear|cmp|column|comm|composer|cp|cron|crontab|csplit|curl|cut|date|dc|dd|ddrescue|debootstrap|df|diff|diff3|dig|dir|dircolors|dirname|dirs|dmesg|docker|docker-compose|du|egrep|eject|env|ethtool|expand|expect|expr|fdformat|fdisk|fg|fgrep|file|find|fmt|fold|format|free|fsck|ftp|fuser|gawk|git|gparted|grep|groupadd|groupdel|groupmod|groups|grub-mkconfig|gzip|halt|head|hg|history|host|hostname|htop|iconv|id|ifconfig|ifdown|ifup|import|install|ip|java|jobs|join|kill|killall|less|link|ln|locate|logname|logrotate|look|lpc|lpr|lprint|lprintd|lprintq|lprm|ls|lsof|lynx|make|man|mc|mdadm|mkconfig|mkdir|mke2fs|mkfifo|mkfs|mkisofs|mknod|mkswap|mmv|more|most|mount|mtools|mtr|mutt|mv|nano|nc|netstat|nice|nl|node|nohup|notify-send|npm|nslookup|op|open|parted|passwd|paste|pathchk|ping|pkill|pnpm|podman|podman-compose|popd|pr|printcap|printenv|ps|pushd|pv|quota|quotacheck|quotactl|ram|rar|rcp|reboot|remsync|rename|renice|rev|rm|rmdir|rpm|rsync|scp|screen|sdiff|sed|sendmail|seq|service|sftp|sh|shellcheck|shuf|shutdown|sleep|slocate|sort|split|ssh|stat|strace|su|sudo|sum|suspend|swapon|sync|sysctl|tac|tail|tar|tee|time|timeout|top|touch|tr|traceroute|tsort|tty|umount|uname|unexpand|uniq|units|unrar|unshar|unzip|update-grub|uptime|useradd|userdel|usermod|users|uudecode|uuencode|v|vcpkg|vdir|vi|vim|virsh|vmstat|wait|watch|wc|wget|whereis|which|who|whoami|write|xargs|xdg-open|yarn|yes|zenity|zip|zsh|zypper)(?=$|[)\s;|&])/,
+      lookbehind: true
+    },
+    "keyword": {
+      pattern: /(^|[\s;|&]|[<>]\()(?:case|do|done|elif|else|esac|fi|for|function|if|in|select|then|until|while)(?=$|[)\s;|&])/,
+      lookbehind: true
+    },
+    // https://www.gnu.org/software/bash/manual/html_node/Shell-Builtin-Commands.html
+    "builtin": {
+      pattern: /(^|[\s;|&]|[<>]\()(?:\.|:|alias|bind|break|builtin|caller|cd|command|continue|declare|echo|enable|eval|exec|exit|export|getopts|hash|help|let|local|logout|mapfile|printf|pwd|read|readarray|readonly|return|set|shift|shopt|source|test|times|trap|type|typeset|ulimit|umask|unalias|unset)(?=$|[)\s;|&])/,
+      lookbehind: true,
+      // Alias added to make those easier to distinguish from strings.
+      alias: "class-name"
+    },
+    "boolean": {
+      pattern: /(^|[\s;|&]|[<>]\()(?:false|true)(?=$|[)\s;|&])/,
+      lookbehind: true
+    },
+    "file-descriptor": {
+      pattern: /\B&\d\b/,
+      alias: "important"
+    },
+    "operator": {
+      // Lots of redirections here, but not just that.
+      pattern: /\d?<>|>\||\+=|=[=~]?|!=?|<<[<-]?|[&\d]?>>|\d[<>]&?|[<>][&=]?|&[>&]?|\|[&|]?/,
+      inside: {
+        "file-descriptor": {
+          pattern: /^\d/,
+          alias: "important"
+        }
+      }
+    },
+    "punctuation": /\$?\(\(?|\)\)?|\.\.|[{}[\];\\]/,
+    "number": {
+      pattern: /(^|\s)(?:[1-9]\d*|0)(?:[.,]\d+)?\b/,
+      lookbehind: true
+    }
+  };
+  commandAfterHeredoc.inside = Prism3.languages.bash;
+  var toBeCopied = [
+    "comment",
+    "function-name",
+    "for-or-select",
+    "assign-left",
+    "parameter",
+    "string",
+    "environment",
+    "function",
+    "keyword",
+    "builtin",
+    "boolean",
+    "file-descriptor",
+    "operator",
+    "punctuation",
+    "number"
+  ];
+  var inside = insideString.variable[1].inside;
+  for (var i = 0; i < toBeCopied.length; i++) {
+    inside[toBeCopied[i]] = Prism3.languages.bash[toBeCopied[i]];
+  }
+  Prism3.languages.sh = Prism3.languages.bash;
+  Prism3.languages.shell = Prism3.languages.bash;
+})(Prism);
+
+// node_modules/.pnpm/prismjs@1.30.0/node_modules/prismjs/components/prism-python.js
+Prism.languages.python = {
+  "comment": {
+    pattern: /(^|[^\\])#.*/,
+    lookbehind: true,
+    greedy: true
+  },
+  "string-interpolation": {
+    pattern: /(?:f|fr|rf)(?:("""|''')[\s\S]*?\1|("|')(?:\\.|(?!\2)[^\\\r\n])*\2)/i,
+    greedy: true,
+    inside: {
+      "interpolation": {
+        // "{" <expression> <optional "!s", "!r", or "!a"> <optional ":" format specifier> "}"
+        pattern: /((?:^|[^{])(?:\{\{)*)\{(?!\{)(?:[^{}]|\{(?!\{)(?:[^{}]|\{(?!\{)(?:[^{}])+\})+\})+\}/,
+        lookbehind: true,
+        inside: {
+          "format-spec": {
+            pattern: /(:)[^:(){}]+(?=\}$)/,
+            lookbehind: true
+          },
+          "conversion-option": {
+            pattern: /![sra](?=[:}]$)/,
+            alias: "punctuation"
+          },
+          rest: null
+        }
+      },
+      "string": /[\s\S]+/
+    }
+  },
+  "triple-quoted-string": {
+    pattern: /(?:[rub]|br|rb)?("""|''')[\s\S]*?\1/i,
+    greedy: true,
+    alias: "string"
+  },
+  "string": {
+    pattern: /(?:[rub]|br|rb)?("|')(?:\\.|(?!\1)[^\\\r\n])*\1/i,
+    greedy: true
+  },
+  "function": {
+    pattern: /((?:^|\s)def[ \t]+)[a-zA-Z_]\w*(?=\s*\()/g,
+    lookbehind: true
+  },
+  "class-name": {
+    pattern: /(\bclass\s+)\w+/i,
+    lookbehind: true
+  },
+  "decorator": {
+    pattern: /(^[\t ]*)@\w+(?:\.\w+)*/m,
+    lookbehind: true,
+    alias: ["annotation", "punctuation"],
+    inside: {
+      "punctuation": /\./
+    }
+  },
+  "keyword": /\b(?:_(?=\s*:)|and|as|assert|async|await|break|case|class|continue|def|del|elif|else|except|exec|finally|for|from|global|if|import|in|is|lambda|match|nonlocal|not|or|pass|print|raise|return|try|while|with|yield)\b/,
+  "builtin": /\b(?:__import__|abs|all|any|apply|ascii|basestring|bin|bool|buffer|bytearray|bytes|callable|chr|classmethod|cmp|coerce|compile|complex|delattr|dict|dir|divmod|enumerate|eval|execfile|file|filter|float|format|frozenset|getattr|globals|hasattr|hash|help|hex|id|input|int|intern|isinstance|issubclass|iter|len|list|locals|long|map|max|memoryview|min|next|object|oct|open|ord|pow|property|range|raw_input|reduce|reload|repr|reversed|round|set|setattr|slice|sorted|staticmethod|str|sum|super|tuple|type|unichr|unicode|vars|xrange|zip)\b/,
+  "boolean": /\b(?:False|None|True)\b/,
+  "number": /\b0(?:b(?:_?[01])+|o(?:_?[0-7])+|x(?:_?[a-f0-9])+)\b|(?:\b\d+(?:_\d+)*(?:\.(?:\d+(?:_\d+)*)?)?|\B\.\d+(?:_\d+)*)(?:e[+-]?\d+(?:_\d+)*)?j?(?!\w)/i,
+  "operator": /[-+%=]=?|!=|:=|\*\*?=?|\/\/?=?|<[<=>]?|>[=>]?|[&|^~]/,
+  "punctuation": /[{}[\];(),.:]/
+};
+Prism.languages.python["string-interpolation"].inside["interpolation"].inside.rest = Prism.languages.python;
+Prism.languages.py = Prism.languages.python;
+
+// node_modules/.pnpm/prismjs@1.30.0/node_modules/prismjs/components/prism-go.js
+Prism.languages.go = Prism.languages.extend("clike", {
+  "string": {
+    pattern: /(^|[^\\])"(?:\\.|[^"\\\r\n])*"|`[^`]*`/,
+    lookbehind: true,
+    greedy: true
+  },
+  "keyword": /\b(?:break|case|chan|const|continue|default|defer|else|fallthrough|for|func|go(?:to)?|if|import|interface|map|package|range|return|select|struct|switch|type|var)\b/,
+  "boolean": /\b(?:_|false|iota|nil|true)\b/,
+  "number": [
+    // binary and octal integers
+    /\b0(?:b[01_]+|o[0-7_]+)i?\b/i,
+    // hexadecimal integers and floats
+    /\b0x(?:[a-f\d_]+(?:\.[a-f\d_]*)?|\.[a-f\d_]+)(?:p[+-]?\d+(?:_\d+)*)?i?(?!\w)/i,
+    // decimal integers and floats
+    /(?:\b\d[\d_]*(?:\.[\d_]*)?|\B\.\d[\d_]*)(?:e[+-]?[\d_]+)?i?(?!\w)/i
+  ],
+  "operator": /[*\/%^!=]=?|\+[=+]?|-[=-]?|\|[=|]?|&(?:=|&|\^=?)?|>(?:>=?|=)?|<(?:<=?|=|-)?|:=|\.\.\./,
+  "builtin": /\b(?:append|bool|byte|cap|close|complex|complex(?:64|128)|copy|delete|error|float(?:32|64)|u?int(?:8|16|32|64)?|imag|len|make|new|panic|print(?:ln)?|real|recover|rune|string|uintptr)\b/
+});
+Prism.languages.insertBefore("go", "string", {
+  "char": {
+    pattern: /'(?:\\.|[^'\\\r\n]){0,10}'/,
+    greedy: true
+  }
+});
+delete Prism.languages.go["class-name"];
+
+// node_modules/.pnpm/prismjs@1.30.0/node_modules/prismjs/components/prism-rust.js
+(function(Prism3) {
+  var multilineComment = /\/\*(?:[^*/]|\*(?!\/)|\/(?!\*)|<self>)*\*\//.source;
+  for (var i = 0; i < 2; i++) {
+    multilineComment = multilineComment.replace(/<self>/g, function() {
+      return multilineComment;
+    });
+  }
+  multilineComment = multilineComment.replace(/<self>/g, function() {
+    return /[^\s\S]/.source;
+  });
+  Prism3.languages.rust = {
+    "comment": [
+      {
+        pattern: RegExp(/(^|[^\\])/.source + multilineComment),
+        lookbehind: true,
+        greedy: true
+      },
+      {
+        pattern: /(^|[^\\:])\/\/.*/,
+        lookbehind: true,
+        greedy: true
+      }
+    ],
+    "string": {
+      pattern: /b?"(?:\\[\s\S]|[^\\"])*"|b?r(#*)"(?:[^"]|"(?!\1))*"\1/,
+      greedy: true
+    },
+    "char": {
+      pattern: /b?'(?:\\(?:x[0-7][\da-fA-F]|u\{(?:[\da-fA-F]_*){1,6}\}|.)|[^\\\r\n\t'])'/,
+      greedy: true
+    },
+    "attribute": {
+      pattern: /#!?\[(?:[^\[\]"]|"(?:\\[\s\S]|[^\\"])*")*\]/,
+      greedy: true,
+      alias: "attr-name",
+      inside: {
+        "string": null
+        // see below
+      }
+    },
+    // Closure params should not be confused with bitwise OR |
+    "closure-params": {
+      pattern: /([=(,:]\s*|\bmove\s*)\|[^|]*\||\|[^|]*\|(?=\s*(?:\{|->))/,
+      lookbehind: true,
+      greedy: true,
+      inside: {
+        "closure-punctuation": {
+          pattern: /^\||\|$/,
+          alias: "punctuation"
+        },
+        rest: null
+        // see below
+      }
+    },
+    "lifetime-annotation": {
+      pattern: /'\w+/,
+      alias: "symbol"
+    },
+    "fragment-specifier": {
+      pattern: /(\$\w+:)[a-z]+/,
+      lookbehind: true,
+      alias: "punctuation"
+    },
+    "variable": /\$\w+/,
+    "function-definition": {
+      pattern: /(\bfn\s+)\w+/,
+      lookbehind: true,
+      alias: "function"
+    },
+    "type-definition": {
+      pattern: /(\b(?:enum|struct|trait|type|union)\s+)\w+/,
+      lookbehind: true,
+      alias: "class-name"
+    },
+    "module-declaration": [
+      {
+        pattern: /(\b(?:crate|mod)\s+)[a-z][a-z_\d]*/,
+        lookbehind: true,
+        alias: "namespace"
+      },
+      {
+        pattern: /(\b(?:crate|self|super)\s*)::\s*[a-z][a-z_\d]*\b(?:\s*::(?:\s*[a-z][a-z_\d]*\s*::)*)?/,
+        lookbehind: true,
+        alias: "namespace",
+        inside: {
+          "punctuation": /::/
+        }
+      }
+    ],
+    "keyword": [
+      // https://github.com/rust-lang/reference/blob/master/src/keywords.md
+      /\b(?:Self|abstract|as|async|await|become|box|break|const|continue|crate|do|dyn|else|enum|extern|final|fn|for|if|impl|in|let|loop|macro|match|mod|move|mut|override|priv|pub|ref|return|self|static|struct|super|trait|try|type|typeof|union|unsafe|unsized|use|virtual|where|while|yield)\b/,
+      // primitives and str
+      // https://doc.rust-lang.org/stable/rust-by-example/primitives.html
+      /\b(?:bool|char|f(?:32|64)|[ui](?:8|16|32|64|128|size)|str)\b/
+    ],
+    // functions can technically start with an upper-case letter, but this will introduce a lot of false positives
+    // and Rust's naming conventions recommend snake_case anyway.
+    // https://doc.rust-lang.org/1.0.0/style/style/naming/README.html
+    "function": /\b[a-z_]\w*(?=\s*(?:::\s*<|\())/,
+    "macro": {
+      pattern: /\b\w+!/,
+      alias: "property"
+    },
+    "constant": /\b[A-Z_][A-Z_\d]+\b/,
+    "class-name": /\b[A-Z]\w*\b/,
+    "namespace": {
+      pattern: /(?:\b[a-z][a-z_\d]*\s*::\s*)*\b[a-z][a-z_\d]*\s*::(?!\s*<)/,
+      inside: {
+        "punctuation": /::/
+      }
+    },
+    // Hex, oct, bin, dec numbers with visual separators and type suffix
+    "number": /\b(?:0x[\dA-Fa-f](?:_?[\dA-Fa-f])*|0o[0-7](?:_?[0-7])*|0b[01](?:_?[01])*|(?:(?:\d(?:_?\d)*)?\.)?\d(?:_?\d)*(?:[Ee][+-]?\d+)?)(?:_?(?:f32|f64|[iu](?:8|16|32|64|size)?))?\b/,
+    "boolean": /\b(?:false|true)\b/,
+    "punctuation": /->|\.\.=|\.{1,3}|::|[{}[\];(),:]/,
+    "operator": /[-+*\/%!^]=?|=[=>]?|&[&=]?|\|[|=]?|<<?=?|>>?=?|[@?]/
+  };
+  Prism3.languages.rust["closure-params"].inside.rest = Prism3.languages.rust;
+  Prism3.languages.rust["attribute"].inside["string"] = Prism3.languages.rust["string"];
+})(Prism);
+
+// node_modules/.pnpm/prismjs@1.30.0/node_modules/prismjs/components/prism-sql.js
+Prism.languages.sql = {
+  "comment": {
+    pattern: /(^|[^\\])(?:\/\*[\s\S]*?\*\/|(?:--|\/\/|#).*)/,
+    lookbehind: true
+  },
+  "variable": [
+    {
+      pattern: /@(["'`])(?:\\[\s\S]|(?!\1)[^\\])+\1/,
+      greedy: true
+    },
+    /@[\w.$]+/
+  ],
+  "string": {
+    pattern: /(^|[^@\\])("|')(?:\\[\s\S]|(?!\2)[^\\]|\2\2)*\2/,
+    greedy: true,
+    lookbehind: true
+  },
+  "identifier": {
+    pattern: /(^|[^@\\])`(?:\\[\s\S]|[^`\\]|``)*`/,
+    greedy: true,
+    lookbehind: true,
+    inside: {
+      "punctuation": /^`|`$/
+    }
+  },
+  "function": /\b(?:AVG|COUNT|FIRST|FORMAT|LAST|LCASE|LEN|MAX|MID|MIN|MOD|NOW|ROUND|SUM|UCASE)(?=\s*\()/i,
+  // Should we highlight user defined functions too?
+  "keyword": /\b(?:ACTION|ADD|AFTER|ALGORITHM|ALL|ALTER|ANALYZE|ANY|APPLY|AS|ASC|AUTHORIZATION|AUTO_INCREMENT|BACKUP|BDB|BEGIN|BERKELEYDB|BIGINT|BINARY|BIT|BLOB|BOOL|BOOLEAN|BREAK|BROWSE|BTREE|BULK|BY|CALL|CASCADED?|CASE|CHAIN|CHAR(?:ACTER|SET)?|CHECK(?:POINT)?|CLOSE|CLUSTERED|COALESCE|COLLATE|COLUMNS?|COMMENT|COMMIT(?:TED)?|COMPUTE|CONNECT|CONSISTENT|CONSTRAINT|CONTAINS(?:TABLE)?|CONTINUE|CONVERT|CREATE|CROSS|CURRENT(?:_DATE|_TIME|_TIMESTAMP|_USER)?|CURSOR|CYCLE|DATA(?:BASES?)?|DATE(?:TIME)?|DAY|DBCC|DEALLOCATE|DEC|DECIMAL|DECLARE|DEFAULT|DEFINER|DELAYED|DELETE|DELIMITERS?|DENY|DESC|DESCRIBE|DETERMINISTIC|DISABLE|DISCARD|DISK|DISTINCT|DISTINCTROW|DISTRIBUTED|DO|DOUBLE|DROP|DUMMY|DUMP(?:FILE)?|DUPLICATE|ELSE(?:IF)?|ENABLE|ENCLOSED|END|ENGINE|ENUM|ERRLVL|ERRORS|ESCAPED?|EXCEPT|EXEC(?:UTE)?|EXISTS|EXIT|EXPLAIN|EXTENDED|FETCH|FIELDS|FILE|FILLFACTOR|FIRST|FIXED|FLOAT|FOLLOWING|FOR(?: EACH ROW)?|FORCE|FOREIGN|FREETEXT(?:TABLE)?|FROM|FULL|FUNCTION|GEOMETRY(?:COLLECTION)?|GLOBAL|GOTO|GRANT|GROUP|HANDLER|HASH|HAVING|HOLDLOCK|HOUR|IDENTITY(?:COL|_INSERT)?|IF|IGNORE|IMPORT|INDEX|INFILE|INNER|INNODB|INOUT|INSERT|INT|INTEGER|INTERSECT|INTERVAL|INTO|INVOKER|ISOLATION|ITERATE|JOIN|KEYS?|KILL|LANGUAGE|LAST|LEAVE|LEFT|LEVEL|LIMIT|LINENO|LINES|LINESTRING|LOAD|LOCAL|LOCK|LONG(?:BLOB|TEXT)|LOOP|MATCH(?:ED)?|MEDIUM(?:BLOB|INT|TEXT)|MERGE|MIDDLEINT|MINUTE|MODE|MODIFIES|MODIFY|MONTH|MULTI(?:LINESTRING|POINT|POLYGON)|NATIONAL|NATURAL|NCHAR|NEXT|NO|NONCLUSTERED|NULLIF|NUMERIC|OFF?|OFFSETS?|ON|OPEN(?:DATASOURCE|QUERY|ROWSET)?|OPTIMIZE|OPTION(?:ALLY)?|ORDER|OUT(?:ER|FILE)?|OVER|PARTIAL|PARTITION|PERCENT|PIVOT|PLAN|POINT|POLYGON|PRECEDING|PRECISION|PREPARE|PREV|PRIMARY|PRINT|PRIVILEGES|PROC(?:EDURE)?|PUBLIC|PURGE|QUICK|RAISERROR|READS?|REAL|RECONFIGURE|REFERENCES|RELEASE|RENAME|REPEAT(?:ABLE)?|REPLACE|REPLICATION|REQUIRE|RESIGNAL|RESTORE|RESTRICT|RETURN(?:ING|S)?|REVOKE|RIGHT|ROLLBACK|ROUTINE|ROW(?:COUNT|GUIDCOL|S)?|RTREE|RULE|SAVE(?:POINT)?|SCHEMA|SECOND|SELECT|SERIAL(?:IZABLE)?|SESSION(?:_USER)?|SET(?:USER)?|SHARE|SHOW|SHUTDOWN|SIMPLE|SMALLINT|SNAPSHOT|SOME|SONAME|SQL|START(?:ING)?|STATISTICS|STATUS|STRIPED|SYSTEM_USER|TABLES?|TABLESPACE|TEMP(?:ORARY|TABLE)?|TERMINATED|TEXT(?:SIZE)?|THEN|TIME(?:STAMP)?|TINY(?:BLOB|INT|TEXT)|TOP?|TRAN(?:SACTIONS?)?|TRIGGER|TRUNCATE|TSEQUAL|TYPES?|UNBOUNDED|UNCOMMITTED|UNDEFINED|UNION|UNIQUE|UNLOCK|UNPIVOT|UNSIGNED|UPDATE(?:TEXT)?|USAGE|USE|USER|USING|VALUES?|VAR(?:BINARY|CHAR|CHARACTER|YING)|VIEW|WAITFOR|WARNINGS|WHEN|WHERE|WHILE|WITH(?: ROLLUP|IN)?|WORK|WRITE(?:TEXT)?|YEAR)\b/i,
+  "boolean": /\b(?:FALSE|NULL|TRUE)\b/i,
+  "number": /\b0x[\da-f]+\b|\b\d+(?:\.\d*)?|\B\.\d+\b/i,
+  "operator": /[-+*\/=%^~]|&&?|\|\|?|!=?|<(?:=>?|<|>)?|>[>=]?|\b(?:AND|BETWEEN|DIV|ILIKE|IN|IS|LIKE|NOT|OR|REGEXP|RLIKE|SOUNDS LIKE|XOR)\b/i,
+  "punctuation": /[;[\]()`,.]/
+};
+
+// node_modules/.pnpm/prismjs@1.30.0/node_modules/prismjs/components/prism-docker.js
+(function(Prism3) {
+  var spaceAfterBackSlash = /\\[\r\n](?:\s|\\[\r\n]|#.*(?!.))*(?![\s#]|\\[\r\n])/.source;
+  var space = /(?:[ \t]+(?![ \t])(?:<SP_BS>)?|<SP_BS>)/.source.replace(/<SP_BS>/g, function() {
+    return spaceAfterBackSlash;
+  });
+  var string = /"(?:[^"\\\r\n]|\\(?:\r\n|[\s\S]))*"|'(?:[^'\\\r\n]|\\(?:\r\n|[\s\S]))*'/.source;
+  var option = /--[\w-]+=(?:<STR>|(?!["'])(?:[^\s\\]|\\.)+)/.source.replace(/<STR>/g, function() {
+    return string;
+  });
+  var stringRule = {
+    pattern: RegExp(string),
+    greedy: true
+  };
+  var commentRule = {
+    pattern: /(^[ \t]*)#.*/m,
+    lookbehind: true,
+    greedy: true
+  };
+  function re(source, flags) {
+    source = source.replace(/<OPT>/g, function() {
+      return option;
+    }).replace(/<SP>/g, function() {
+      return space;
+    });
+    return RegExp(source, flags);
+  }
+  Prism3.languages.docker = {
+    "instruction": {
+      pattern: /(^[ \t]*)(?:ADD|ARG|CMD|COPY|ENTRYPOINT|ENV|EXPOSE|FROM|HEALTHCHECK|LABEL|MAINTAINER|ONBUILD|RUN|SHELL|STOPSIGNAL|USER|VOLUME|WORKDIR)(?=\s)(?:\\.|[^\r\n\\])*(?:\\$(?:\s|#.*$)*(?![\s#])(?:\\.|[^\r\n\\])*)*/im,
+      lookbehind: true,
+      greedy: true,
+      inside: {
+        "options": {
+          pattern: re(/(^(?:ONBUILD<SP>)?\w+<SP>)<OPT>(?:<SP><OPT>)*/.source, "i"),
+          lookbehind: true,
+          greedy: true,
+          inside: {
+            "property": {
+              pattern: /(^|\s)--[\w-]+/,
+              lookbehind: true
+            },
+            "string": [
+              stringRule,
+              {
+                pattern: /(=)(?!["'])(?:[^\s\\]|\\.)+/,
+                lookbehind: true
+              }
+            ],
+            "operator": /\\$/m,
+            "punctuation": /=/
+          }
+        },
+        "keyword": [
+          {
+            // https://docs.docker.com/engine/reference/builder/#healthcheck
+            pattern: re(/(^(?:ONBUILD<SP>)?HEALTHCHECK<SP>(?:<OPT><SP>)*)(?:CMD|NONE)\b/.source, "i"),
+            lookbehind: true,
+            greedy: true
+          },
+          {
+            // https://docs.docker.com/engine/reference/builder/#from
+            pattern: re(/(^(?:ONBUILD<SP>)?FROM<SP>(?:<OPT><SP>)*(?!--)[^ \t\\]+<SP>)AS/.source, "i"),
+            lookbehind: true,
+            greedy: true
+          },
+          {
+            // https://docs.docker.com/engine/reference/builder/#onbuild
+            pattern: re(/(^ONBUILD<SP>)\w+/.source, "i"),
+            lookbehind: true,
+            greedy: true
+          },
+          {
+            pattern: /^\w+/,
+            greedy: true
+          }
+        ],
+        "comment": commentRule,
+        "string": stringRule,
+        "variable": /\$(?:\w+|\{[^{}"'\\]*\})/,
+        "operator": /\\$/m
+      }
+    },
+    "comment": commentRule
+  };
+  Prism3.languages.dockerfile = Prism3.languages.docker;
+})(Prism);
+
+// node_modules/.pnpm/prismjs@1.30.0/node_modules/prismjs/components/prism-toml.js
+(function(Prism3) {
+  var key = /(?:[\w-]+|'[^'\n\r]*'|"(?:\\.|[^\\"\r\n])*")/.source;
+  function insertKey(pattern) {
+    return pattern.replace(/__/g, function() {
+      return key;
+    });
+  }
+  Prism3.languages.toml = {
+    "comment": {
+      pattern: /#.*/,
+      greedy: true
+    },
+    "table": {
+      pattern: RegExp(insertKey(/(^[\t ]*\[\s*(?:\[\s*)?)__(?:\s*\.\s*__)*(?=\s*\])/.source), "m"),
+      lookbehind: true,
+      greedy: true,
+      alias: "class-name"
+    },
+    "key": {
+      pattern: RegExp(insertKey(/(^[\t ]*|[{,]\s*)__(?:\s*\.\s*__)*(?=\s*=)/.source), "m"),
+      lookbehind: true,
+      greedy: true,
+      alias: "property"
+    },
+    "string": {
+      pattern: /"""(?:\\[\s\S]|[^\\])*?"""|'''[\s\S]*?'''|'[^'\n\r]*'|"(?:\\.|[^\\"\r\n])*"/,
+      greedy: true
+    },
+    "date": [
+      {
+        // Offset Date-Time, Local Date-Time, Local Date
+        pattern: /\b\d{4}-\d{2}-\d{2}(?:[T\s]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?)?\b/i,
+        alias: "number"
+      },
+      {
+        // Local Time
+        pattern: /\b\d{2}:\d{2}:\d{2}(?:\.\d+)?\b/,
+        alias: "number"
+      }
+    ],
+    "number": /(?:\b0(?:x[\da-zA-Z]+(?:_[\da-zA-Z]+)*|o[0-7]+(?:_[0-7]+)*|b[10]+(?:_[10]+)*))\b|[-+]?\b\d+(?:_\d+)*(?:\.\d+(?:_\d+)*)?(?:[eE][+-]?\d+(?:_\d+)*)?\b|[-+]?\b(?:inf|nan)\b/,
+    "boolean": /\b(?:false|true)\b/,
+    "punctuation": /[.,=[\]{}]/
+  };
+})(Prism);
+
+// packages/ui/src/review/syntax.ts
+var LANGUAGE_BY_EXTENSION = {
+  ts: "typescript",
+  mts: "typescript",
+  cts: "typescript",
+  tsx: "tsx",
+  js: "javascript",
+  mjs: "javascript",
+  cjs: "javascript",
+  jsx: "jsx",
+  json: "json",
+  jsonc: "json",
+  css: "css",
+  scss: "scss",
+  sass: "scss",
+  html: "markup",
+  htm: "markup",
+  xml: "markup",
+  svg: "markup",
+  md: "markdown",
+  markdown: "markdown",
+  mdx: "markdown",
+  yml: "yaml",
+  yaml: "yaml",
+  sh: "bash",
+  bash: "bash",
+  zsh: "bash",
+  shell: "bash",
+  py: "python",
+  go: "go",
+  rs: "rust",
+  sql: "sql",
+  toml: "toml"
+};
+var IDENTIFIER_LANGUAGES = /* @__PURE__ */ new Set(["javascript", "typescript", "python", "go", "rust"]);
+var TOKEN_CLASS = {
+  keyword: "keyword",
+  important: "keyword",
+  atrule: "keyword",
+  builtin: "type",
+  "class-name": "type",
+  "maybe-class-name": "type",
+  "known-class-name": "type",
+  namespace: "type",
+  type: "type",
+  function: "function",
+  "function-variable": "function",
+  method: "function",
+  property: "property",
+  "attr-name": "property",
+  "literal-property": "property",
+  parameter: "variable",
+  variable: "variable",
+  string: "string",
+  char: "string",
+  "template-string": "string",
+  regex: "string",
+  "attr-value": "string",
+  url: "string",
+  comment: "comment",
+  "block-comment": "comment",
+  prolog: "comment",
+  doctype: "comment",
+  cdata: "comment",
+  number: "number",
+  boolean: "constant",
+  constant: "constant",
+  symbol: "constant",
+  operator: "operator",
+  punctuation: "punctuation",
+  tag: "tag",
+  selector: "tag"
+};
+function languageForBasename(basename) {
+  const lower = basename.toLowerCase();
+  if (lower === "dockerfile" || lower.startsWith("dockerfile.")) return "docker";
+  const dot = lower.lastIndexOf(".");
+  if (dot < 0 || dot === lower.length - 1) return null;
+  return LANGUAGE_BY_EXTENSION[lower.slice(dot + 1)] ?? null;
+}
+function languageForPath(path) {
+  const basename = path.slice(path.lastIndexOf("/") + 1);
+  return languageForBasename(basename);
+}
+function classForToken(type) {
+  if (type.startsWith("language-")) return null;
+  if (type.endsWith("class-name")) return "type";
+  return TOKEN_CLASS[type] ?? null;
+}
+function classForStack(types) {
+  for (let index = types.length - 1; index >= 0; index -= 1) {
+    const tokenClass = classForToken(types[index]);
+    if (tokenClass !== null) return tokenClass;
+  }
+  return null;
+}
+function pushSegment(line, text, token) {
+  if (text === "") return;
+  const previous = line[line.length - 1];
+  if (previous !== void 0 && previous.token === token) {
+    previous.text += text;
+    return;
+  }
+  line.push({ text, token });
+}
+function appendText(lines, text, types, highlightIdentifiers) {
+  const token = classForStack(types);
+  const parts = text.split("\n");
+  for (let index = 0; index < parts.length; index += 1) {
+    const part = parts[index];
+    if (part !== "") {
+      const line = lines[lines.length - 1].segments;
+      if (highlightIdentifiers && token === null && types.length === 0) {
+        let offset = 0;
+        for (const match of part.matchAll(/[A-Za-z_$][\w$]*/g)) {
+          const start = match.index ?? 0;
+          pushSegment(line, part.slice(offset, start), null);
+          pushSegment(line, match[0], "variable");
+          offset = start + match[0].length;
+        }
+        pushSegment(line, part.slice(offset), null);
+      } else {
+        pushSegment(line, part, token);
+      }
+    }
+    if (index < parts.length - 1) lines.push({ segments: [] });
+  }
+}
+function appendStream(lines, stream, types, highlightIdentifiers) {
+  for (const item of Array.isArray(stream) ? stream : [stream]) {
+    if (typeof item === "string") {
+      appendText(lines, item, types, highlightIdentifiers);
+      continue;
+    }
+    const aliases = item.alias === void 0 ? [] : Array.isArray(item.alias) ? item.alias : [item.alias];
+    appendStream(
+      lines,
+      item.content,
+      [...types, item.type, ...aliases],
+      highlightIdentifiers
+    );
+  }
+}
+function highlightLines(text, language) {
+  const plainLines = text.split("\n").map((line) => ({
+    segments: line === "" ? [] : [{ text: line, token: null }]
+  }));
+  if (language === null) return plainLines;
+  const grammar = prism_setup_default.languages[language];
+  if (grammar === void 0) return plainLines;
+  try {
+    const lines = [{ segments: [] }];
+    appendStream(lines, prism_setup_default.tokenize(text, grammar), [], IDENTIFIER_LANGUAGES.has(language));
+    return lines;
+  } catch {
+    return plainLines;
+  }
+}
+function highlightHunk(lines, language) {
+  const highlighted = /* @__PURE__ */ new Map();
+  for (const side of ["old", "new"]) {
+    const numbered = lines.map((line) => ({ no: side === "old" ? line.oldNo : line.newNo, text: line.text })).filter((line) => line.no !== null);
+    const syntax = highlightLines(numbered.map((line) => line.text).join("\n"), language);
+    numbered.forEach((line, index) => {
+      highlighted.set(`${side}:${line.no}`, syntax[index] ?? { segments: [] });
+    });
+  }
+  return highlighted;
+}
+
+// packages/ui/src/review/FullFileDialog.tsx
+var import_jsx_runtime18 = require("react/jsx-runtime");
 var MAX_FULL_FILE_LINES = 2e3;
 var EMPTY_FINDING_DECISIONS = /* @__PURE__ */ new Map();
 var numberFormat = new Intl.NumberFormat("en-US");
@@ -2791,7 +5623,12 @@ function FullFileDialog({
     );
   }, [maxLine]);
   const changed = (0, import_react15.useMemo)(() => changedLines(file, activeSide), [file, activeSide]);
-  const shown = lines === void 0 ? [] : showAll ? lines : lines.slice(0, MAX_FULL_FILE_LINES);
+  const shown = (0, import_react15.useMemo)(
+    () => lines === void 0 ? [] : showAll ? lines : lines.slice(0, MAX_FULL_FILE_LINES),
+    [lines, showAll]
+  );
+  const language = (0, import_react15.useMemo)(() => languageForPath(file.path), [file.path]);
+  const syntaxLines = (0, import_react15.useMemo)(() => highlightLines(shown.join("\n"), language), [shown, language]);
   const description = lines === void 0 ? "Full file content is unavailable." : `${sideLabel(activeSide)} version \xB7 ${numberFormat.format(lines.length)} lines \xB7 ${numberFormat.format(changed.size)} changed`;
   const focusLine = selection?.end ?? anchor;
   function commentAtSelection() {
@@ -3031,7 +5868,7 @@ function FullFileDialog({
     if (hasQuestion) return null;
     const items = commentsAtLine(comments, round, file.path, no, activeSide);
     if (items.length === 0 || onReply === void 0 || onState === void 0) return null;
-    return /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { className: "cr-full-file-thread", role: "row", children: /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { className: "cr-full-file-thread-cell", role: "cell", "aria-colspan": 4, children: items.map((comment) => /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "cr-full-file-thread", role: "row", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "cr-full-file-thread-cell", role: "cell", "aria-colspan": 4, children: items.map((comment) => /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
       CommentThread,
       {
         comment,
@@ -3053,7 +5890,7 @@ function FullFileDialog({
     if (activeSide !== "new") return [];
     return findings.filter(
       (finding) => finding.file === file.path && finding.unanchored !== true && finding.lineStart === no
-    ).map((finding) => /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { className: "cr-full-file-finding", role: "row", children: /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
+    ).map((finding) => /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "cr-full-file-finding", role: "row", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
       InlineFinding,
       {
         finding,
@@ -3069,7 +5906,7 @@ function FullFileDialog({
   function questionRows(no) {
     if (activeSide !== "new") return [];
     const lineComments = commentsAtLine(comments, round, file.path, no, "new");
-    return questions.filter((question) => question.file === file.path && question.line === no).map((question) => /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { className: "cr-full-file-question", role: "row", children: /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
+    return questions.filter((question) => question.file === file.path && question.line === no).map((question) => /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "cr-full-file-question", role: "row", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
       InlineQuestion,
       {
         question,
@@ -3084,16 +5921,16 @@ function FullFileDialog({
       }
     ) }, question.id));
   }
-  return /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(Dialog, { open: true, title: file.path, description, onClose: handleDialogClose, children: /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { className: "cr-file-view", children: [
-    touchSelection !== null && onOpenComposer !== void 0 && !readOnly ? /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Dialog, { open: true, title: file.path, description, onClose: handleDialogClose, children: /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "cr-file-view", children: [
+    touchSelection !== null && onOpenComposer !== void 0 && !readOnly ? /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
       "div",
       {
         className: ["cr-touch-comment-bar", touchSelecting ? "cr-touch-comment-bar-active" : ""].filter(Boolean).join(" "),
         role: "status",
         "aria-live": "polite",
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { className: "cr-touch-comment-range", children: touchSelection.start === touchSelection.end ? `Line ${touchSelection.start}` : `Lines ${touchSelection.start}\u2013${touchSelection.end}` }),
-          /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)(
+          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "cr-touch-comment-range", children: touchSelection.start === touchSelection.end ? `Line ${touchSelection.start}` : `Lines ${touchSelection.start}\u2013${touchSelection.end}` }),
+          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
             "button",
             {
               type: "button",
@@ -3110,7 +5947,7 @@ function FullFileDialog({
               ]
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
             "button",
             {
               type: "button",
@@ -3126,8 +5963,8 @@ function FullFileDialog({
         ]
       }
     ) : null,
-    hasCurrent && hasBase ? /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { className: "cr-segmented", role: "group", "aria-label": "File version", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
+    hasCurrent && hasBase ? /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "cr-segmented", role: "group", "aria-label": "File version", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
         "button",
         {
           type: "button",
@@ -3137,7 +5974,7 @@ function FullFileDialog({
           children: "Current"
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
         "button",
         {
           type: "button",
@@ -3148,34 +5985,34 @@ function FullFileDialog({
         }
       )
     ] }) : null,
-    lines === void 0 ? /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("p", { className: "cr-notice cr-notice-warning", children: unavailableMessage(file) }) : lines.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("p", { className: "cr-meta", children: "This file is empty." }) : /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)(import_jsx_runtime17.Fragment, { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { className: "cr-full-file-toolbar", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("p", { className: "cr-meta", children: "Click a line, drag across rows, or focus one and use \u2191/\u2193. Shift-click or Shift+\u2191/\u2193 selects a range." }),
-        selection !== null && onOpenComposer !== void 0 && !readOnly ? /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)(Button, { size: "small", variant: "secondary", onClick: openSelectionComposer, children: [
+    lines === void 0 ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("p", { className: "cr-notice cr-notice-warning", children: unavailableMessage(file) }) : lines.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("p", { className: "cr-meta", children: "This file is empty." }) : /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(import_jsx_runtime18.Fragment, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "cr-full-file-toolbar", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("p", { className: "cr-meta", children: "Click a line, drag across rows, or focus one and use \u2191/\u2193. Shift-click or Shift+\u2191/\u2193 selects a range." }),
+        selection !== null && onOpenComposer !== void 0 && !readOnly ? /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(Button, { size: "small", variant: "secondary", onClick: openSelectionComposer, children: [
           "Comment on ",
           lineLabel(selection.start, selection.end)
         ] }) : null
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)(
+      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
         "div",
         {
           className: "cr-full-file",
           role: "table",
           "aria-label": `Full ${activeSide === "new" ? "current" : "base"} file for ${file.path}`,
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { className: "cr-full-file-head", role: "row", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { className: "cr-full-file-no", role: "columnheader", children: "line" }),
-              /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { role: "columnheader", "aria-hidden": "true" }),
-              /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { role: "columnheader", children: "content" }),
-              /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { role: "columnheader", "aria-hidden": "true" })
+            /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "cr-full-file-head", role: "row", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "cr-full-file-no", role: "columnheader", children: "line" }),
+              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { role: "columnheader", "aria-hidden": "true" }),
+              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { role: "columnheader", children: "content" }),
+              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { role: "columnheader", "aria-hidden": "true" })
             ] }),
             shown.map((text, index) => {
               const no = index + 1;
               const isChanged = changed.has(no);
               const kind = isChanged ? activeSide === "new" ? "added" : "removed" : "unchanged";
               const selected = selection !== null && no >= selection.start && no <= selection.end;
-              return /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { className: "cr-full-file-block", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)(
+              return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "cr-full-file-block", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
                   "div",
                   {
                     id: `full-file-${activeSide}-${no}`,
@@ -3205,10 +6042,10 @@ function FullFileDialog({
                     },
                     onKeyDown: (event) => onLineKeyDown(event, no),
                     children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { className: "cr-full-file-no", role: "cell", "aria-hidden": "true", children: no }),
-                      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { className: "cr-full-file-marker", role: "cell", "aria-hidden": "true", children: isChanged ? activeSide === "new" ? "+" : "\u2212" : " " }),
-                      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("code", { className: "cr-full-file-code", role: "cell", children: text === "" ? " " : text }),
-                      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { className: "cr-full-file-actions-cell", role: "cell", children: !readOnly && onOpenComposer !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
+                      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "cr-full-file-no", role: "cell", "aria-hidden": "true", children: no }),
+                      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "cr-full-file-marker", role: "cell", "aria-hidden": "true", children: isChanged ? activeSide === "new" ? "+" : "\u2212" : " " }),
+                      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("code", { className: "cr-full-file-code", role: "cell", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(CodeText, { text, syntax: syntaxLines[index] }) }),
+                      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "cr-full-file-actions-cell", role: "cell", children: !readOnly && onOpenComposer !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
                         "button",
                         {
                           type: "button",
@@ -3228,27 +6065,27 @@ function FullFileDialog({
                 findingRows(no),
                 questionRows(no),
                 threadFor(no),
-                composer !== null && composer.side === activeSide && composer.lineEnd === no && renderComposer !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { className: "cr-full-file-composer", role: "row", children: /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { className: "cr-full-file-composer-cell", role: "cell", "aria-colspan": 4, children: renderComposer(activeSide, composer.lineStart, composer.lineEnd) }) }) : null
+                composer !== null && composer.side === activeSide && composer.lineEnd === no && renderComposer !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "cr-full-file-composer", role: "row", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "cr-full-file-composer-cell", role: "cell", "aria-colspan": 4, children: renderComposer(activeSide, composer.lineStart, composer.lineEnd) }) }) : null
               ] }, `${activeSide}:${no}`);
             })
           ]
         }
       ),
-      lines.length > MAX_FULL_FILE_LINES && !showAll ? /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { className: "cr-full-file-more", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)(Button, { variant: "secondary", size: "small", onClick: () => setShowAll(true), children: [
+      lines.length > MAX_FULL_FILE_LINES && !showAll ? /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "cr-full-file-more", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(Button, { variant: "secondary", size: "small", onClick: () => setShowAll(true), children: [
           "Show all ",
           numberFormat.format(lines.length),
           " lines"
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { className: "cr-meta", children: "Rendering is capped to keep the dialog responsive." })
+        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "cr-meta", children: "Rendering is capped to keep the dialog responsive." })
       ] }) : null
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { className: "cr-dialog-actions", children: /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(Button, { variant: "secondary", onClick: onClose, children: "Close" }) })
+    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "cr-dialog-actions", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Button, { variant: "secondary", onClick: onClose, children: "Close" }) })
   ] }) });
 }
 
 // packages/ui/src/review/DiffViewer.tsx
-var import_jsx_runtime18 = require("react/jsx-runtime");
+var import_jsx_runtime19 = require("react/jsx-runtime");
 var MAX_DIFF_ROWS = 800;
 var EMPTY_FINDING_DECISIONS2 = /* @__PURE__ */ new Map();
 var TOUCH_LONG_PRESS_MS2 = 450;
@@ -3362,6 +6199,14 @@ function DiffFileSection({
   const ref = (0, import_react16.useRef)(null);
   const shownFile = loaded ?? file;
   const rows = buildDiffRows(shownFile);
+  const language = (0, import_react16.useMemo)(() => languageForPath(shownFile.path), [shownFile.path]);
+  const syntaxByLine = (0, import_react16.useMemo)(() => {
+    const highlighted = /* @__PURE__ */ new Map();
+    for (const hunk of shownFile.hunks) {
+      for (const [key, line] of highlightHunk(hunk.lines, language)) highlighted.set(key, line);
+    }
+    return highlighted;
+  }, [shownFile, language]);
   const first = firstChangedLine(shownFile);
   const needsLoad = loaded === null && file.truncated === true && onLoadDiff !== void 0;
   const load = (0, import_react16.useCallback)(async () => {
@@ -3417,7 +6262,7 @@ function DiffFileSection({
     return () => observer.disconnect();
   }, [visible]);
   const shown = showAll ? rows : rows.slice(0, MAX_DIFF_ROWS);
-  return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
     "section",
     {
       ref,
@@ -3427,8 +6272,8 @@ function DiffFileSection({
       "aria-label": `Diff for ${file.path}`,
       style: { minHeight: visible ? void 0 : fileEstimate(rows) },
       children: [
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("header", { className: "cr-diff-file-head", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("header", { className: "cr-diff-file-head", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             "button",
             {
               type: "button",
@@ -3436,10 +6281,10 @@ function DiffFileSection({
               "aria-expanded": open,
               "aria-label": `${open ? "Collapse" : "Expand"} ${file.path}`,
               onClick: () => setOpen((value) => !value),
-              children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { "aria-hidden": "true", children: open ? "\u2304" : "\u203A" })
+              children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { "aria-hidden": "true", children: open ? "\u2304" : "\u203A" })
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
             "button",
             {
               type: "button",
@@ -3447,32 +6292,32 @@ function DiffFileSection({
               onClick: () => onJump(file.path, first?.line),
               title: file.path,
               children: [
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "cr-diff-path-text", children: file.path }),
-                file.oldPath !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("span", { className: "cr-meta", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "cr-diff-path-text", children: file.path }),
+                file.oldPath !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("span", { className: "cr-meta", children: [
                   "from ",
                   file.oldPath
                 ] }) : null
               ]
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(Badge, { tone: statusTone(file.status), children: [
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(Badge, { tone: statusTone(file.status), children: [
             statusLetter(file.status),
             " ",
             file.status
           ] }),
-          file.conflicted === true ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Badge, { tone: "danger", children: "conflict" }) : null,
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("span", { className: "cr-diff-stat cr-diff-stat-add", children: [
+          file.conflicted === true ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Badge, { tone: "danger", children: "conflict" }) : null,
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("span", { className: "cr-diff-stat cr-diff-stat-add", children: [
             "+",
             shownFile.added
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("span", { className: "cr-diff-stat cr-diff-stat-del", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("span", { className: "cr-diff-stat cr-diff-stat-del", children: [
             "\u2212",
             shownFile.deleted
           ] }),
-          shownFile.binary ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Badge, { tone: "neutral", children: "binary" }) : null,
-          shownFile.truncated === true ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Badge, { tone: "warning", children: "truncated" }) : null,
-          file.ignored === true ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Badge, { tone: "neutral", children: "ignored" }) : null,
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+          shownFile.binary ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Badge, { tone: "neutral", children: "binary" }) : null,
+          shownFile.truncated === true ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Badge, { tone: "warning", children: "truncated" }) : null,
+          file.ignored === true ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Badge, { tone: "neutral", children: "ignored" }) : null,
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
             Button,
             {
               variant: "secondary",
@@ -3490,19 +6335,19 @@ function DiffFileSection({
                 onViewFullFile(shownFile);
               },
               children: [
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(FileIcon, { size: 14 }),
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(FileIcon, { size: 14 }),
                 "Full file"
               ]
             }
           )
         ] }),
-        open ? visible ? loading ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "cr-diff-empty", children: "Loading this file's diff\u2026" }) : loadError !== null ? /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "cr-diff-empty", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("span", { children: [
+        open ? visible ? loading ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "cr-diff-empty", children: "Loading this file's diff\u2026" }) : loadError !== null ? /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "cr-diff-empty", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("span", { children: [
             "Could not load this file's diff: ",
             loadError
           ] }),
           " ",
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             Button,
             {
               variant: "secondary",
@@ -3515,29 +6360,29 @@ function DiffFileSection({
               children: "Retry"
             }
           )
-        ] }) : rows.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "cr-diff-empty", children: shownFile.ignored === true ? "This path is ignored by the review settings." : shownFile.binary ? "Binary changes are not rendered." : shownFile.reason === "diff-truncated" ? "The diff cap cut this file before its contents. The summary is still available." : shownFile.reason === "unreadable" ? "This file could not be read for the snapshot." : `No textual diff is available (${shownFile.added} added, ${shownFile.deleted} deleted).` }) : /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(import_jsx_runtime18.Fragment, { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+        ] }) : rows.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "cr-diff-empty", children: shownFile.ignored === true ? "This path is ignored by the review settings." : shownFile.binary ? "Binary changes are not rendered." : shownFile.reason === "diff-truncated" ? "The diff cap cut this file before its contents. The summary is still available." : shownFile.reason === "unreadable" ? "This file could not be read for the snapshot." : `No textual diff is available (${shownFile.added} added, ${shownFile.deleted} deleted).` }) : /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(import_jsx_runtime19.Fragment, { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
             "div",
             {
               className: "cr-diff-body",
               role: "table",
               "aria-label": `Unified diff for ${file.path}`,
               children: [
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "cr-diff-gutter-head", "aria-hidden": "true", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { children: "old" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { children: "new" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", {}),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", {})
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "cr-diff-gutter-head", "aria-hidden": "true", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { children: "old" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { children: "new" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", {}),
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", {})
                 ] }),
                 shown.map(
-                  (row) => row.type === "hunk" ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "cr-hunk", role: "row", children: (() => {
+                  (row) => row.type === "hunk" ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "cr-hunk", role: "row", children: (() => {
                     const header = row.hunk?.header.trim() ?? "";
                     const raw = header.startsWith("@@");
-                    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(import_jsx_runtime18.Fragment, { children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "cr-hunk-code", role: "cell", children: raw ? header : `@@ -${row.hunk?.oldStart},${row.hunk?.oldLines} +${row.hunk?.newStart},${row.hunk?.newLines} @@` }),
-                      !raw && header !== "" ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "cr-hunk-header", role: "cell", children: header }) : null
+                    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(import_jsx_runtime19.Fragment, { children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "cr-hunk-code", role: "cell", children: raw ? header : `@@ -${row.hunk?.oldStart},${row.hunk?.oldLines} +${row.hunk?.newStart},${row.hunk?.newLines} @@` }),
+                      !raw && header !== "" ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "cr-hunk-header", role: "cell", children: header }) : null
                     ] });
-                  })() }, row.key) : /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                  })() }, row.key) : /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                     DiffLineRow,
                     {
                       file: shownFile,
@@ -3567,7 +6412,8 @@ function DiffFileSection({
                       onCommentJump,
                       onCommentFocus,
                       onAnswerQuestion,
-                      readOnly
+                      readOnly,
+                      syntaxByLine
                     },
                     row.key
                   )
@@ -3575,21 +6421,21 @@ function DiffFileSection({
               ]
             }
           ),
-          rows.length > MAX_DIFF_ROWS && !showAll ? /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "cr-diff-more", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(Button, { variant: "secondary", size: "small", onClick: () => setShowAll(true), children: [
+          rows.length > MAX_DIFF_ROWS && !showAll ? /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "cr-diff-more", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(Button, { variant: "secondary", size: "small", onClick: () => setShowAll(true), children: [
               "Show all ",
               rows.length,
               " diff rows"
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "cr-meta", children: "Rendering is capped to keep the page responsive." })
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "cr-meta", children: "Rendering is capped to keep the page responsive." })
           ] }) : null
-        ] }) : /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "cr-diff-placeholder", "aria-hidden": "true", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Skeleton, { width: "44%", height: 12 }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: { height: 8 } }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Skeleton, { width: "76%", height: 12 }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: { height: 8 } }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Skeleton, { width: "63%", height: 12 }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("span", { className: "cr-visually-hidden", children: [
+        ] }) : /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "cr-diff-placeholder", "aria-hidden": "true", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Skeleton, { width: "44%", height: 12 }),
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { style: { height: 8 } }),
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Skeleton, { width: "76%", height: 12 }),
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { style: { height: 8 } }),
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Skeleton, { width: "63%", height: 12 }),
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("span", { className: "cr-visually-hidden", children: [
             "Loading ",
             file.path
           ] })
@@ -3626,13 +6472,14 @@ function DiffLineRow({
   onCommentJump,
   onCommentFocus,
   onAnswerQuestion,
-  readOnly
+  readOnly,
+  syntaxByLine
 }) {
   const line = row.line;
-  if (line === void 0) return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(import_jsx_runtime18.Fragment, {});
+  if (line === void 0) return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(import_jsx_runtime19.Fragment, {});
   const side = line.kind === "del" ? "old" : "new";
   const no = side === "new" ? line.newNo : line.oldNo;
-  if (no === null) return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(import_jsx_runtime18.Fragment, {});
+  if (no === null) return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(import_jsx_runtime19.Fragment, {});
   const lineComments = commentsAtLine(comments, round, file.path, no, side);
   const lineFindings = findingsOnLine(findings, file.path, side, no);
   const lineQuestions = questionsOnLine(questions, file.path, side, no);
@@ -3640,10 +6487,11 @@ function DiffLineRow({
   const selected = activeLine === no;
   const inDragRange = dragRange !== null && dragRange.path === file.path && dragRange.side === side && no >= dragRange.lineStart && no <= dragRange.lineEnd;
   const range = composer !== null && composer !== void 0 && composer.path === file.path && composer.side === side && no >= composer.lineStart && no <= composer.lineEnd;
+  const syntax = syntaxByLine.get(`${side}:${no}`) ?? null;
   const marker = line.kind === "add" ? "+" : line.kind === "del" ? "\u2212" : " ";
   const label = `line ${no}, ${line.kind === "add" ? "added" : line.kind === "del" ? "removed" : "context"}: ${line.text || "(blank)"}`;
-  return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(import_jsx_runtime18.Fragment, { children: [
-    /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(import_jsx_runtime19.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
       "div",
       {
         id: diffLineId(file.path, side, no),
@@ -3683,10 +6531,10 @@ function DiffLineRow({
           }
         },
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "cr-diff-no", role: "cell", children: line.oldNo ?? "" }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "cr-diff-no", role: "cell", children: line.newNo ?? "" }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "cr-diff-marker", "aria-hidden": "true", children: marker }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "cr-diff-risk-cell", role: "cell", children: highestRisk2 === null ? null : /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "cr-diff-no", role: "cell", children: line.oldNo ?? "" }),
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "cr-diff-no", role: "cell", children: line.newNo ?? "" }),
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "cr-diff-marker", "aria-hidden": "true", children: marker }),
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "cr-diff-risk-cell", role: "cell", children: highestRisk2 === null ? null : /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             "button",
             {
               type: "button",
@@ -3700,9 +6548,9 @@ function DiffLineRow({
               children: severityLetter(highestRisk2.severity)
             }
           ) }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("code", { className: "cr-diff-text", role: "cell", children: line.text === "" ? " " : line.text }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("span", { className: "cr-diff-actions-cell", role: "cell", children: [
-            !readOnly ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("code", { className: "cr-diff-text", role: "cell", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(CodeText, { text: line.text, syntax }) }),
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("span", { className: "cr-diff-actions-cell", role: "cell", children: [
+            !readOnly ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               "button",
               {
                 type: "button",
@@ -3715,12 +6563,12 @@ function DiffLineRow({
                 children: "+"
               }
             ) : null,
-            lineComments.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "cr-diff-comment-count", "aria-label": `${lineComments.length} comments`, children: lineComments.length }) : null
+            lineComments.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "cr-diff-comment-count", "aria-label": `${lineComments.length} comments`, children: lineComments.length }) : null
           ] })
         ]
       }
     ),
-    lineFindings.filter((finding) => finding.lineStart === no).map((finding) => /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "cr-inline-finding-row", role: "row", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    lineFindings.filter((finding) => finding.lineStart === no).map((finding) => /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "cr-inline-finding-row", role: "row", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       InlineFinding,
       {
         finding,
@@ -3732,7 +6580,7 @@ function DiffLineRow({
         onOpenFinding
       }
     ) }, finding.id)),
-    lineQuestions.map((question) => /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "cr-inline-question-row", role: "row", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    lineQuestions.map((question) => /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "cr-inline-question-row", role: "row", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       InlineQuestion,
       {
         question,
@@ -3746,7 +6594,7 @@ function DiffLineRow({
         ...onAnswerQuestion === void 0 ? {} : { onAnswer: (body) => onAnswerQuestion(question, body) }
       }
     ) }, question.id)),
-    lineQuestions.length === 0 && lineComments.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "cr-inline-thread", role: "row", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "cr-inline-thread-cell", role: "cell", children: lineComments.map((comment) => /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    lineQuestions.length === 0 && lineComments.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "cr-inline-thread", role: "row", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "cr-inline-thread-cell", role: "cell", children: lineComments.map((comment) => /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       CommentThread,
       {
         comment,
@@ -3760,7 +6608,7 @@ function DiffLineRow({
       },
       comment.id
     )) }) }) : null,
-    composer !== null && composer !== void 0 && composer.path === file.path && composer.side === side && composer.lineStart === no && renderComposer !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "cr-inline-composer", role: "row", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { role: "cell", children: renderComposer(file, side, composer.lineStart, composer.lineEnd) }) }) : null
+    composer !== null && composer !== void 0 && composer.path === file.path && composer.side === side && composer.lineStart === no && renderComposer !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "cr-inline-composer", role: "row", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { role: "cell", children: renderComposer(file, side, composer.lineStart, composer.lineEnd) }) }) : null
   ] });
 }
 function DiffViewer({
@@ -4089,7 +6937,7 @@ function DiffViewer({
     );
     const highest = highestFinding(items);
     if (highest === null) return null;
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       "span",
       {
         className: `cr-tree-risk cr-risk-${highest.severity}`,
@@ -4100,7 +6948,7 @@ function DiffViewer({
     );
   }
   if (allFiles.length === 0) {
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       EmptyState,
       {
         title: "No changed files",
@@ -4108,14 +6956,14 @@ function DiffViewer({
       }
     );
   }
-  return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
     "div",
     {
       className: ["cr-diff-layout", touchSelecting ? "cr-touch-selecting" : ""].filter(Boolean).join(" "),
       children: [
-        touchSelection !== null && !readOnly ? /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "cr-touch-comment-bar", role: "status", "aria-live": "polite", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "cr-touch-comment-range", children: touchSelection.lineStart === touchSelection.lineEnd ? `Line ${touchSelection.lineStart}` : `Lines ${touchSelection.lineStart}\u2013${touchSelection.lineEnd}` }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+        touchSelection !== null && !readOnly ? /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "cr-touch-comment-bar", role: "status", "aria-live": "polite", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "cr-touch-comment-range", children: touchSelection.lineStart === touchSelection.lineEnd ? `Line ${touchSelection.lineStart}` : `Lines ${touchSelection.lineStart}\u2013${touchSelection.lineEnd}` }),
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
             "button",
             {
               type: "button",
@@ -4137,7 +6985,7 @@ function DiffViewer({
               ]
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             "button",
             {
               type: "button",
@@ -4148,12 +6996,12 @@ function DiffViewer({
             }
           )
         ] }) : null,
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("aside", { className: "cr-file-tree", "aria-label": "Changed files", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "cr-file-tree-head", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "cr-card-title", children: "Files" }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "cr-meta", children: visibleFiles.length })
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("aside", { className: "cr-file-tree", "aria-label": "Changed files", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "cr-file-tree-head", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "cr-card-title", children: "Files" }),
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "cr-meta", children: visibleFiles.length })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             Input,
             {
               label: "Filter files",
@@ -4164,10 +7012,10 @@ function DiffViewer({
               onChange: (event) => setSearch(event.target.value)
             }
           ),
-          filteredFiles.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("p", { className: "cr-meta cr-file-tree-empty", children: "No files match this filter." }) : /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "cr-tree", children: groups.map((group) => {
+          filteredFiles.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("p", { className: "cr-meta cr-file-tree-empty", children: "No files match this filter." }) : /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "cr-tree", children: groups.map((group) => {
             const isCollapsed = collapsed.has(group.directory);
-            return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "cr-tree-group", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+            return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "cr-tree-group", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
                 "button",
                 {
                   type: "button",
@@ -4180,12 +7028,12 @@ function DiffViewer({
                     return next;
                   }),
                   children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { "aria-hidden": "true", children: isCollapsed ? "\u203A" : "\u2304" }),
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "cr-tree-dir-name", children: group.directory })
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { "aria-hidden": "true", children: isCollapsed ? "\u203A" : "\u2304" }),
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "cr-tree-dir-name", children: group.directory })
                   ]
                 }
               ),
-              isCollapsed ? null : group.files.map((file) => /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+              isCollapsed ? null : group.files.map((file) => /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
                 "button",
                 {
                   type: "button",
@@ -4200,7 +7048,7 @@ function DiffViewer({
                   title: file.path,
                   "aria-current": currentFile === file.path ? "true" : void 0,
                   children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                       "span",
                       {
                         className: `cr-tree-status cr-tree-status-${file.status}${file.conflicted === true ? " cr-tree-status-conflict" : ""}`,
@@ -4208,15 +7056,15 @@ function DiffViewer({
                         children: file.conflicted === true ? "U" : statusLetter(file.status)
                       }
                     ),
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "cr-tree-path", children: file.path.slice(
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "cr-tree-path", children: file.path.slice(
                       group.directory === "/" ? 0 : group.directory.length + 1
                     ) }),
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("span", { className: "cr-tree-stat", children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("span", { className: "cr-tree-stat", children: [
                       file.added > 0 ? `+${file.added}` : "",
                       file.deleted > 0 ? ` \u2212${file.deleted}` : ""
                     ] }),
                     riskBadge(file.path),
-                    (openCommentsByPath.get(file.path) ?? 0) > 0 ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                    (openCommentsByPath.get(file.path) ?? 0) > 0 ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                       "span",
                       {
                         className: "cr-tree-comments",
@@ -4232,18 +7080,18 @@ function DiffViewer({
             ] }, group.directory);
           }) })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "cr-diff-main", children: [
-          conflictedFiles.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "cr-conflict-banner", role: "alert", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("strong", { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "cr-diff-main", children: [
+          conflictedFiles.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "cr-conflict-banner", role: "alert", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("strong", { children: [
               "Merge conflicts",
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("span", { className: "cr-conflict-count", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("span", { className: "cr-conflict-count", children: [
                 conflictedFiles.length,
                 " unresolved file",
                 conflictedFiles.length === 1 ? "" : "s"
               ] })
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("p", { children: "Resolve these conflicts in the worktree before merging. The diff may contain conflict markers until the index is clean." }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("ul", { children: conflictedFiles.map((file) => /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("li", { children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("p", { children: "Resolve these conflicts in the worktree before merging. The diff may contain conflict markers until the index is clean." }),
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("ul", { children: conflictedFiles.map((file) => /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("li", { children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               "button",
               {
                 type: "button",
@@ -4253,9 +7101,9 @@ function DiffViewer({
               }
             ) }, file.path)) })
           ] }) : null,
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "cr-diff-toolbar", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "cr-segmented", role: "group", "aria-label": "Diff range", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "cr-diff-toolbar", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "cr-segmented", role: "group", "aria-label": "Diff range", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                 "button",
                 {
                   type: "button",
@@ -4267,7 +7115,7 @@ function DiffViewer({
                   children: "Delta"
                 }
               ),
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                 "button",
                 {
                   type: "button",
@@ -4278,12 +7126,12 @@ function DiffViewer({
                 }
               )
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "cr-meta cr-diff-scope-note", children: delta && canDelta ? `r${round} vs r${round - 1}` : "base \u2192 head" }),
-            !canDelta && deltaHint !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("span", { className: "cr-diff-delta-note", id: "cr-delta-hint", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "cr-meta cr-diff-scope-note", children: delta && canDelta ? `r${round} vs r${round - 1}` : "base \u2192 head" }),
+            !canDelta && deltaHint !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("span", { className: "cr-diff-delta-note", id: "cr-delta-hint", children: [
               deltaHint,
-              round <= 1 && onRequestNextRound !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("button", { type: "button", className: "cr-link-button", onClick: onRequestNextRound, children: "Create the next round" }) : null
+              round <= 1 && onRequestNextRound !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("button", { type: "button", className: "cr-link-button", onClick: onRequestNextRound, children: "Create the next round" }) : null
             ] }) : null,
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "cr-segmented", role: "group", "aria-label": "Code display", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "cr-segmented", role: "group", "aria-label": "Code display", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               "button",
               {
                 type: "button",
@@ -4293,15 +7141,15 @@ function DiffViewer({
                 children: "Wrap lines"
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("span", { className: "cr-meta cr-diff-count", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("span", { className: "cr-meta cr-diff-count", children: [
               filteredFiles.length,
               " file",
               filteredFiles.length === 1 ? "" : "s"
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "cr-meta cr-shortcut-hint", "aria-hidden": "true", children: "j/k files \xB7 c comment" }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("label", { className: "cr-mobile-file-select", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "cr-visually-hidden", children: "Jump to file" }),
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "cr-meta cr-shortcut-hint", "aria-hidden": "true", children: "j/k files \xB7 c comment" }),
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("label", { className: "cr-mobile-file-select", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "cr-visually-hidden", children: "Jump to file" }),
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
                 "select",
                 {
                   value: activeFile ?? "",
@@ -4309,26 +7157,26 @@ function DiffViewer({
                     if (event.target.value !== "") onJump(event.target.value);
                   },
                   children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("option", { value: "", children: "Jump to file\u2026" }),
-                    filteredFiles.map((file) => /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("option", { value: file.path, children: file.path }, file.path))
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("option", { value: "", children: "Jump to file\u2026" }),
+                    filteredFiles.map((file) => /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("option", { value: file.path, children: file.path }, file.path))
                   ]
                 }
               )
             ] })
           ] }),
-          filteredFiles.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          filteredFiles.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             EmptyState,
             {
               title: delta ? "No files changed in this round" : "No files match this filter",
               description: delta ? "Switch to the full diff to review the whole branch." : "Clear the file filter to see the complete diff.",
-              action: delta ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Button, { variant: "secondary", onClick: () => onDeltaChange(false), children: "Show full diff" }) : void 0
+              action: delta ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Button, { variant: "secondary", onClick: () => onDeltaChange(false), children: "Show full diff" }) : void 0
             }
-          ) : /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          ) : /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             "div",
             {
               className: ["cr-diff-files", wrap ? "cr-diff-wrap" : ""].filter(Boolean).join(" "),
               ref: filesRef,
-              children: filteredFiles.map((file) => /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+              children: filteredFiles.map((file) => /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                 DiffFileSection,
                 {
                   file,
@@ -4368,7 +7216,7 @@ function DiffViewer({
             }
           )
         ] }),
-        fullFile !== null ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        fullFile !== null ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           FullFileDialog,
           {
             file: fullFile.file,
@@ -4485,25 +7333,25 @@ function clearDraft(reviewId, storage = storageOrUndefined()) {
 }
 
 // packages/ui/src/review/FixStatusBoard.tsx
-var import_jsx_runtime19 = require("react/jsx-runtime");
+var import_jsx_runtime20 = require("react/jsx-runtime");
 function FixStatusBoard({
   counts,
   active,
   onFilter,
   compact = false
 }) {
-  return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
     "div",
     {
       className: ["cr-fix-board", compact ? "cr-fix-board-compact" : ""].filter(Boolean).join(" "),
       children: [
-        /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "cr-card-head", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "cr-card-title", children: "Fix status" }),
-          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "cr-meta", children: "human + agent signals" })
+        /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { className: "cr-card-head", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { className: "cr-card-title", children: "Fix status" }),
+          /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { className: "cr-meta", children: "human + agent signals" })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "cr-fix-grid", role: "group", "aria-label": "Filter comments by fix status", children: FIX_GROUPS.map((group) => {
+        /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("div", { className: "cr-fix-grid", role: "group", "aria-label": "Filter comments by fix status", children: FIX_GROUPS.map((group) => {
           const selected = active === group.id;
-          return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
+          return /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
             "button",
             {
               type: "button",
@@ -4513,16 +7361,16 @@ function FixStatusBoard({
               title: group.description,
               onClick: () => onFilter(selected ? "all" : group.id),
               children: [
-                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "cr-fix-count", children: counts[group.id] }),
+                /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { className: "cr-fix-count", children: counts[group.id] }),
                 " ",
-                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "cr-fix-label", children: group.label })
+                /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { className: "cr-fix-label", children: group.label })
               ]
             },
             group.id
           );
         }) }),
-        active !== "all" ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("button", { type: "button", className: "cr-link-button", onClick: () => onFilter("all"), children: "Clear filter" }) : null,
-        !compact ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("p", { className: "cr-meta cr-fix-note", children: "Claims and reviewer verification are shown side by side. A human decision wins when set." }) : null
+        active !== "all" ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("button", { type: "button", className: "cr-link-button", onClick: () => onFilter("all"), children: "Clear filter" }) : null,
+        !compact ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("p", { className: "cr-meta cr-fix-note", children: "Claims and reviewer verification are shown side by side. A human decision wins when set." }) : null
       ]
     }
   );
@@ -4533,7 +7381,7 @@ var import_react18 = require("react");
 
 // packages/ui/src/primitives/MultiSelect.tsx
 var import_react17 = require("react");
-var import_jsx_runtime20 = require("react/jsx-runtime");
+var import_jsx_runtime21 = require("react/jsx-runtime");
 function summaryFor(options, selected, allLabel) {
   if (selected.size === 0) return allLabel;
   if (selected.size === 1) {
@@ -4581,7 +7429,7 @@ function MultiSelect({
     else next.add(value);
     onChange(next.size === options.length ? /* @__PURE__ */ new Set() : next);
   }
-  return /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
     "div",
     {
       className: "cr-multi-select",
@@ -4595,8 +7443,8 @@ function MultiSelect({
         }
       },
       children: [
-        /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { className: "cr-label", id: `${id}-label`, children: label }),
-        /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
+        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "cr-label", id: `${id}-label`, children: label }),
+        /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
           "button",
           {
             ref: buttonRef,
@@ -4610,12 +7458,12 @@ function MultiSelect({
             disabled,
             onClick: () => setOpen((value) => !value),
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { children: summary }),
-              /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { className: "cr-multi-select-chevron", "aria-hidden": "true", children: "\u25BE" })
+              /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { children: summary }),
+              /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "cr-multi-select-chevron", "aria-hidden": "true", children: "\u25BE" })
             ]
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
+        /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
           "div",
           {
             className: "cr-multi-select-menu",
@@ -4628,8 +7476,8 @@ function MultiSelect({
               }
             },
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("label", { className: "cr-check cr-multi-select-option", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("label", { className: "cr-check cr-multi-select-option", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
                   "input",
                   {
                     type: "checkbox",
@@ -4638,10 +7486,10 @@ function MultiSelect({
                     onChange: () => onChange(/* @__PURE__ */ new Set())
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { children: allLabel })
+                /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { children: allLabel })
               ] }),
-              options.map((option) => /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("label", { className: "cr-check cr-multi-select-option", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+              options.map((option) => /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("label", { className: "cr-check cr-multi-select-option", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
                   "input",
                   {
                     type: "checkbox",
@@ -4650,7 +7498,7 @@ function MultiSelect({
                     onChange: () => toggleOption(option.value)
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { children: option.label })
+                /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { children: option.label })
               ] }, option.value))
             ]
           }
@@ -4661,7 +7509,7 @@ function MultiSelect({
 }
 
 // packages/ui/src/review/ReportPanel.tsx
-var import_jsx_runtime21 = require("react/jsx-runtime");
+var import_jsx_runtime22 = require("react/jsx-runtime");
 var SEVERITIES = ["blocker", "major", "minor", "nit"];
 var CATEGORIES = [
   "security",
@@ -4700,16 +7548,16 @@ function PaginationBar({
   onPageChange
 }) {
   const title = kind === "report" ? "Report" : "Question";
-  return /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("nav", { className: "cr-report-pagination", "aria-label": `${title} pages (${placement})`, children: [
-    /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("span", { className: "cr-meta", children: [
+  return /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("nav", { className: "cr-report-pagination", "aria-label": `${title} pages (${placement})`, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("span", { className: "cr-meta", children: [
       pageStart + 1,
       "\u2013",
       pageEnd,
       " of ",
       total
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "cr-report-pagination-actions", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "cr-report-pagination-actions", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
         Button,
         {
           size: "small",
@@ -4720,13 +7568,13 @@ function PaginationBar({
           children: "Previous"
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("span", { className: "cr-meta", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("span", { className: "cr-meta", children: [
         "Page ",
         page + 1,
         " of ",
         pageCount
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
         Button,
         {
           size: "small",
@@ -4879,13 +7727,13 @@ function ReportPanel({
     if (questionListRef.current !== null) questionListRef.current.scrollTop = 0;
   }, [currentQuestionPage]);
   if (report === null || report === void 0) {
-    return pending ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+    return pending ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
       EmptyState,
       {
         title: "Waiting for the first shard report",
         description: "Findings appear here as soon as a shard finishes. The final report follows when the reviewer completes."
       }
-    ) : /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+    ) : /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
       EmptyState,
       {
         title: "No reviewer report",
@@ -4926,9 +7774,9 @@ function ReportPanel({
   const bulkCount = bulkFindingIds.length;
   const bulkFindingNoun = bulkCount === 1 ? "finding" : "findings";
   const bulkTitle = `${bulkAction} ${bulkCount} selected ${bulkFindingNoun}?`;
-  return /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "cr-report", children: [
-    partial && liveProgress !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("p", { className: "cr-notice cr-notice-info", role: "status", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("strong", { children: live ? "Live partial report" : "Partial report" }),
+  return /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "cr-report", children: [
+    partial && liveProgress !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("p", { className: "cr-notice cr-notice-info", role: "status", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("strong", { children: live ? "Live partial report" : "Partial report" }),
       " \xB7",
       " ",
       liveProgress.completedShards,
@@ -4936,67 +7784,67 @@ function ReportPanel({
       liveProgress.totalShards,
       " shards reported. Findings are provisional; decisions unlock with the final report."
     ] }) : null,
-    /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("section", { className: "cr-report-summary", "aria-label": "Reviewer summary", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "cr-report-summary-head", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("h2", { className: "cr-card-title", children: "Reviewer summary" }),
-        /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(Badge, { tone: riskTone(report.riskLevel), children: [
+    /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("section", { className: "cr-report-summary", "aria-label": "Reviewer summary", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "cr-report-summary-head", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("h2", { className: "cr-card-title", children: "Reviewer summary" }),
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(Badge, { tone: riskTone(report.riskLevel), children: [
           report.riskLevel,
           " risk"
         ] }),
-        partial ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(Badge, { tone: "info", children: "partial" }) : null,
-        report.skipped === true ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(Badge, { tone: "neutral", children: "skipped" }) : null
+        partial ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(Badge, { tone: "info", children: "partial" }) : null,
+        report.skipped === true ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(Badge, { tone: "neutral", children: "skipped" }) : null
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("p", { className: "cr-report-copy", tabIndex: 0, children: report.summary }),
-      transferredCount > 0 ? /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("p", { className: "cr-report-transferred", role: "status", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(Badge, { tone: "info", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("p", { className: "cr-report-copy", tabIndex: 0, children: report.summary }),
+      transferredCount > 0 ? /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("p", { className: "cr-report-transferred", role: "status", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(Badge, { tone: "info", children: [
           transferredCount,
           " accepted"
         ] }),
         " ",
-        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "cr-meta", children: "moved to comments" }),
-        onOpenConversation !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", className: "cr-link-button", onClick: onOpenConversation, children: "Open Conversation" }) : null
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "cr-meta", children: "moved to comments" }),
+        onOpenConversation !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("button", { type: "button", className: "cr-link-button", onClick: onOpenConversation, children: "Open Conversation" }) : null
       ] }) : null,
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "cr-report-counts", children: [
-        counts.blocker > 0 ? /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(Badge, { tone: "danger", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "cr-report-counts", children: [
+        counts.blocker > 0 ? /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(Badge, { tone: "danger", children: [
           counts.blocker,
           " blocker"
         ] }) : null,
-        counts.major > 0 ? /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(Badge, { tone: "warning", children: [
+        counts.major > 0 ? /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(Badge, { tone: "warning", children: [
           counts.major,
           " major"
         ] }) : null,
-        counts.minor > 0 ? /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(Badge, { tone: "info", children: [
+        counts.minor > 0 ? /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(Badge, { tone: "info", children: [
           counts.minor,
           " minor"
         ] }) : null,
-        counts.nit > 0 ? /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(Badge, { tone: "neutral", children: [
+        counts.nit > 0 ? /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(Badge, { tone: "neutral", children: [
           counts.nit,
           " nit"
         ] }) : null,
-        report.tests.ran ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+        report.tests.ran ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
           Badge,
           {
             tone: report.tests.commands.some((item) => item.result === "fail") ? "danger" : "success",
             children: "tests ran"
           }
-        ) : /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(Badge, { tone: "neutral", children: "tests not run" })
+        ) : /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(Badge, { tone: "neutral", children: "tests not run" })
       ] }),
-      report.dirtyWorktree === true ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("p", { className: "cr-notice cr-notice-warning", children: "The reviewer changed the worktree during the run. Inspect it before merging." }) : null,
-      report.warnings.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("ul", { className: "cr-report-warnings", "aria-label": "Reviewer warnings", children: report.warnings.map((warning) => /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("li", { children: warning }, warning)) }) : null
+      report.dirtyWorktree === true ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("p", { className: "cr-notice cr-notice-warning", children: "The reviewer changed the worktree during the run. Inspect it before merging." }) : null,
+      report.warnings.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("ul", { className: "cr-report-warnings", "aria-label": "Reviewer warnings", children: report.warnings.map((warning) => /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("li", { children: warning }, warning)) }) : null
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("section", { className: "cr-report-browser", "aria-label": "Report findings and questions", children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("section", { className: "cr-report-browser", "aria-label": "Report findings and questions", children: /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
       Tabs,
       {
         items: [
           {
             id: "issues",
-            label: /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(import_jsx_runtime21.Fragment, { children: [
+            label: /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(import_jsx_runtime22.Fragment, { children: [
               "Issues",
-              /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "cr-tab-count", children: activeFindings.length })
+              /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "cr-tab-count", children: activeFindings.length })
             ] }),
-            content: /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "cr-report-issues", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "cr-report-toolbar", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+            content: /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "cr-report-issues", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "cr-report-toolbar", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
                   MultiSelect,
                   {
                     label: "Severity",
@@ -5006,7 +7854,7 @@ function ReportPanel({
                     onChange: setSeverities
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
                   MultiSelect,
                   {
                     label: "Category",
@@ -5016,13 +7864,13 @@ function ReportPanel({
                     onChange: setCategories
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("span", { className: "cr-meta", "aria-live": "polite", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("span", { className: "cr-meta", "aria-live": "polite", children: [
                   findings.length,
                   " of ",
                   activeFindings.length,
                   " findings"
                 ] }),
-                filtered ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+                filtered ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
                   "button",
                   {
                     type: "button",
@@ -5035,15 +7883,15 @@ function ReportPanel({
                   }
                 ) : null
               ] }),
-              showSelection && filteredDecidable.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
+              showSelection && filteredDecidable.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(
                 "div",
                 {
                   className: "cr-report-selection",
                   role: "group",
                   "aria-label": "Finding selection",
                   children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("label", { className: "cr-check cr-report-select-all", children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+                    /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("label", { className: "cr-check cr-report-select-all", children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
                         "input",
                         {
                           type: "checkbox",
@@ -5057,18 +7905,18 @@ function ReportPanel({
                           onChange: toggleAllFiltered
                         }
                       ),
-                      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("span", { children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("span", { children: [
                         "Select all filtered (",
                         filteredDecidable.length,
                         ")"
                       ] })
                     ] }),
-                    selectedCount > 0 ? /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(import_jsx_runtime21.Fragment, { children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("span", { className: "cr-meta", "aria-live": "polite", children: [
+                    selectedCount > 0 ? /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(import_jsx_runtime22.Fragment, { children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("span", { className: "cr-meta", "aria-live": "polite", children: [
                         selectedCount,
                         " selected"
                       ] }),
-                      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+                      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
                         "button",
                         {
                           type: "button",
@@ -5078,14 +7926,14 @@ function ReportPanel({
                           children: "Clear selection"
                         }
                       ),
-                      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
+                      /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(
                         "div",
                         {
                           className: "cr-report-bulk-actions",
                           role: "group",
                           "aria-label": "Selected finding decisions",
                           children: [
-                            /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
+                            /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(
                               Button,
                               {
                                 size: "small",
@@ -5099,7 +7947,7 @@ function ReportPanel({
                                 ]
                               }
                             ),
-                            /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
+                            /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(
                               Button,
                               {
                                 size: "small",
@@ -5120,14 +7968,14 @@ function ReportPanel({
                   ]
                 }
               ) : null,
-              findings.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+              findings.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
                 EmptyState,
                 {
                   title: filtered ? "No findings match these filters" : activeFindings.length === 0 && transferredCount > 0 ? "All findings accepted" : "No findings",
                   description: activeFindings.length === 0 && transferredCount > 0 ? "Accepted findings are available in Conversation." : filtered ? "Clear the severity or category filter to see the reviewer report." : "The reviewer did not report any issues for this round."
                 }
-              ) : /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(import_jsx_runtime21.Fragment, { children: [
-                findings.length > PAGE_SIZE ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+              ) : /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(import_jsx_runtime22.Fragment, { children: [
+                findings.length > PAGE_SIZE ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
                   PaginationBar,
                   {
                     kind: "report",
@@ -5140,30 +7988,30 @@ function ReportPanel({
                     onPageChange: setPage
                   }
                 ) : null,
-                /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { className: "cr-report-scroll", ref: listRef, children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("ol", { className: "cr-findings", "aria-label": "Reviewer findings", children: visibleFindings.map((finding) => {
+                /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("div", { className: "cr-report-scroll", ref: listRef, children: /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("ol", { className: "cr-findings", "aria-label": "Reviewer findings", children: visibleFindings.map((finding) => {
                   const expanded = expandedFindings.has(finding.id);
                   const decision = decisions.get(finding.id);
                   const selected = selectedIds.has(finding.id);
                   const bodyId = `report-finding-body-${finding.id}`;
-                  return /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
+                  return /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(
                     "li",
                     {
                       className: "cr-finding-item",
                       id: `finding-${finding.id}`,
                       tabIndex: -1,
                       children: [
-                        /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
+                        /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(
                           "div",
                           {
                             className: `cr-finding${expanded ? " cr-finding-expanded" : " cr-finding-collapsed"}${selected ? " cr-finding-selected" : ""}`,
                             children: [
-                              /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
+                              /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(
                                 "div",
                                 {
                                   className: "cr-finding-head",
                                   onClick: () => toggleFinding(finding.id),
                                   children: [
-                                    /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+                                    /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
                                       "button",
                                       {
                                         type: "button",
@@ -5175,10 +8023,10 @@ function ReportPanel({
                                           event.stopPropagation();
                                           toggleFinding(finding.id);
                                         },
-                                        children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { "aria-hidden": "true", children: expanded ? "\u25BE" : "\u25B8" })
+                                        children: /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { "aria-hidden": "true", children: expanded ? "\u25BE" : "\u25B8" })
                                       }
                                     ),
-                                    showSelection && finding.kind !== "praise" && decision === void 0 ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+                                    showSelection && finding.kind !== "praise" && decision === void 0 ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
                                       "input",
                                       {
                                         type: "checkbox",
@@ -5190,17 +8038,17 @@ function ReportPanel({
                                         onChange: () => toggleSelection(finding.id)
                                       }
                                     ) : null,
-                                    /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(Badge, { tone: severityTone2(finding.severity), children: finding.severity }),
-                                    /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(Badge, { tone: "neutral", children: finding.category }),
-                                    finding.kind !== "issue" ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(Badge, { tone: "info", children: finding.kind }) : null,
-                                    decision !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+                                    /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(Badge, { tone: severityTone2(finding.severity), children: finding.severity }),
+                                    /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(Badge, { tone: "neutral", children: finding.category }),
+                                    finding.kind !== "issue" ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(Badge, { tone: "info", children: finding.kind }) : null,
+                                    decision !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
                                       Badge,
                                       {
                                         tone: decision.state === "accepted" ? "success" : "neutral",
                                         children: decision.state === "accepted" ? "Accepted" : "Dismissed"
                                       }
                                     ) : null,
-                                    /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
+                                    /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(
                                       "button",
                                       {
                                         type: "button",
@@ -5217,39 +8065,39 @@ function ReportPanel({
                                         ]
                                       }
                                     ),
-                                    /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("span", { className: "cr-meta", children: [
+                                    /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("span", { className: "cr-meta", children: [
                                       finding.confidence,
                                       " confidence"
                                     ] })
                                   ]
                                 }
                               ),
-                              /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("h3", { className: "cr-finding-title", children: finding.title }),
-                              expanded ? /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "cr-finding-body", id: bodyId, children: [
-                                /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("p", { className: "cr-finding-copy", children: finding.rationale }),
-                                finding.evidence !== "" ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("pre", { className: "cr-evidence", "aria-label": "Evidence", children: finding.evidence }) : null,
-                                finding.suggestion !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
+                              /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("h3", { className: "cr-finding-title", children: finding.title }),
+                              expanded ? /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "cr-finding-body", id: bodyId, children: [
+                                /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("p", { className: "cr-finding-copy", children: finding.rationale }),
+                                finding.evidence !== "" ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("pre", { className: "cr-evidence", "aria-label": "Evidence", children: finding.evidence }) : null,
+                                finding.suggestion !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(
                                   "div",
                                   {
                                     className: "cr-suggestion",
                                     "aria-label": "Finding suggestion",
                                     children: [
-                                      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "cr-suggestion-head", children: [
-                                        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "cr-suggestion-label", children: "Suggested change" }),
-                                        finding.unanchored === true ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(Badge, { tone: "warning", children: "unanchored" }) : null
+                                      /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "cr-suggestion-head", children: [
+                                        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "cr-suggestion-label", children: "Suggested change" }),
+                                        finding.unanchored === true ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(Badge, { tone: "warning", children: "unanchored" }) : null
                                       ] }),
-                                      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "cr-suggestion-block cr-suggestion-old", children: [
-                                        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "cr-suggestion-caption", children: "Before" }),
-                                        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("pre", { children: finding.suggestion.original })
+                                      /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "cr-suggestion-block cr-suggestion-old", children: [
+                                        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "cr-suggestion-caption", children: "Before" }),
+                                        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("pre", { children: finding.suggestion.original })
                                       ] }),
-                                      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "cr-suggestion-block cr-suggestion-new", children: [
-                                        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "cr-suggestion-caption", children: "After" }),
-                                        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("pre", { children: finding.suggestion.replacement })
+                                      /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "cr-suggestion-block cr-suggestion-new", children: [
+                                        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "cr-suggestion-caption", children: "After" }),
+                                        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("pre", { children: finding.suggestion.replacement })
                                       ] })
                                     ]
                                   }
                                 ) : null,
-                                /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+                                /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
                                   FindingDecisionControls,
                                   {
                                     finding,
@@ -5265,7 +8113,7 @@ function ReportPanel({
                             ]
                           }
                         ),
-                        expanded ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+                        expanded ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
                           ThreadConversation,
                           {
                             comments: commentsFor(finding.file, finding.lineStart),
@@ -5296,7 +8144,7 @@ function ReportPanel({
                     finding.id
                   );
                 }) }) }),
-                findings.length > PAGE_SIZE ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+                findings.length > PAGE_SIZE ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
                   PaginationBar,
                   {
                     kind: "report",
@@ -5314,18 +8162,18 @@ function ReportPanel({
           },
           {
             id: "questions",
-            label: /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(import_jsx_runtime21.Fragment, { children: [
+            label: /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(import_jsx_runtime22.Fragment, { children: [
               "Questions",
-              /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "cr-tab-count", children: report.questions.length })
+              /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "cr-tab-count", children: report.questions.length })
             ] }),
-            content: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { className: "cr-report-questions", children: questions.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+            content: /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("div", { className: "cr-report-questions", children: questions.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
               EmptyState,
               {
                 title: "No open questions",
                 description: "The reviewer did not ask any questions for this round."
               }
-            ) : /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(import_jsx_runtime21.Fragment, { children: [
-              questions.length > PAGE_SIZE ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+            ) : /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(import_jsx_runtime22.Fragment, { children: [
+              questions.length > PAGE_SIZE ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
                 PaginationBar,
                 {
                   kind: "question",
@@ -5338,8 +8186,8 @@ function ReportPanel({
                   onPageChange: setQuestionPage
                 }
               ) : null,
-              /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { className: "cr-report-scroll", ref: questionListRef, children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("ul", { className: "cr-question-list", "aria-label": "Open questions", children: visibleQuestions.map((question) => /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("li", { children: [
-                /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
+              /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("div", { className: "cr-report-scroll", ref: questionListRef, children: /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("ul", { className: "cr-question-list", "aria-label": "Open questions", children: visibleQuestions.map((question) => /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("li", { children: [
+                /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(
                   "button",
                   {
                     type: "button",
@@ -5356,9 +8204,9 @@ function ReportPanel({
                     ]
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("strong", { children: question.question }),
-                /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("p", { className: "cr-meta", children: question.why }),
-                /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("strong", { children: question.question }),
+                /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("p", { className: "cr-meta", children: question.why }),
+                /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
                   ThreadConversation,
                   {
                     comments: commentsFor(question.file, question.line),
@@ -5385,7 +8233,7 @@ function ReportPanel({
                   }
                 )
               ] }, question.id)) }) }),
-              questions.length > PAGE_SIZE ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+              questions.length > PAGE_SIZE ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
                 PaginationBar,
                 {
                   kind: "question",
@@ -5407,17 +8255,17 @@ function ReportPanel({
         className: "cr-report-tabs"
       }
     ) }),
-    report.verification.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("section", { className: "cr-report-section", "aria-label": "Reviewer verification", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("h2", { className: "cr-card-title", children: "Verification" }),
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("ul", { className: "cr-verification-list", children: report.verification.map((item) => /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("li", { children: [
-        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+    report.verification.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("section", { className: "cr-report-section", "aria-label": "Reviewer verification", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("h2", { className: "cr-card-title", children: "Verification" }),
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("ul", { className: "cr-verification-list", children: report.verification.map((item) => /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("li", { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
           Badge,
           {
             tone: item.status === "fixed" ? "success" : item.status === "not-fixed" ? "danger" : "warning",
             children: item.status
           }
         ),
-        onJumpComment !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+        onJumpComment !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
           "button",
           {
             type: "button",
@@ -5425,25 +8273,25 @@ function ReportPanel({
             onClick: () => onJumpComment(item.commentId),
             children: item.commentId
           }
-        ) : /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "cr-mono", children: item.commentId }),
-        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "cr-meta", children: item.evidence })
+        ) : /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "cr-mono", children: item.commentId }),
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "cr-meta", children: item.evidence })
       ] }, item.commentId)) })
     ] }) : null,
-    report.tests.commands.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("section", { className: "cr-report-section", "aria-label": "Reviewer test commands", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("h2", { className: "cr-card-title", children: "Tests" }),
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("ul", { className: "cr-test-list", children: report.tests.commands.map((command) => /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("li", { children: [
-        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+    report.tests.commands.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("section", { className: "cr-report-section", "aria-label": "Reviewer test commands", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("h2", { className: "cr-card-title", children: "Tests" }),
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("ul", { className: "cr-test-list", children: report.tests.commands.map((command) => /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("li", { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
           Badge,
           {
             tone: command.result === "pass" ? "success" : command.result === "fail" ? "danger" : "warning",
             children: command.result
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "cr-mono", children: command.command }),
-        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "cr-meta", children: command.summary })
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "cr-mono", children: command.command }),
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "cr-meta", children: command.summary })
       ] }, command.command)) })
     ] }) : null,
-    /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
       Dialog,
       {
         open: bulkState !== null,
@@ -5451,8 +8299,8 @@ function ReportPanel({
         description: `This will ${bulkAction.toLowerCase()} ${bulkCount} selected ${bulkFindingNoun} in the current report. Existing decisions and notes stay unchanged.`,
         closeDisabled: bulkPending,
         onClose: closeBulkDialog,
-        actions: /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(import_jsx_runtime21.Fragment, { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+        actions: /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(import_jsx_runtime22.Fragment, { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
             Button,
             {
               size: "small",
@@ -5462,7 +8310,7 @@ function ReportPanel({
               children: "Cancel"
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
+          /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(
             Button,
             {
               size: "small",
@@ -5479,14 +8327,14 @@ function ReportPanel({
             }
           )
         ] }),
-        children: bulkAttempted && bulkError !== null && bulkError !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("p", { className: "cr-error", role: "alert", children: bulkError }) : null
+        children: bulkAttempted && bulkError !== null && bulkError !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("p", { className: "cr-error", role: "alert", children: bulkError }) : null
       }
     )
   ] });
 }
 
 // packages/ui/src/review/SignalsPanel.tsx
-var import_jsx_runtime22 = require("react/jsx-runtime");
+var import_jsx_runtime23 = require("react/jsx-runtime");
 function toneLabel(tone) {
   if (tone === "danger") return "high";
   if (tone === "warning") return "medium";
@@ -5494,7 +8342,7 @@ function toneLabel(tone) {
 }
 function SignalsPanel({ signals, onJump }) {
   if (signals.length === 0) {
-    return /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
       EmptyState,
       {
         title: "No signals",
@@ -5502,21 +8350,21 @@ function SignalsPanel({ signals, onJump }) {
       }
     );
   }
-  return /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "cr-signals", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "cr-signals-head", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("h2", { className: "cr-card-title", children: "Deterministic signals" }),
-      /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("span", { className: "cr-meta", children: [
+  return /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "cr-signals", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "cr-signals-head", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("h2", { className: "cr-card-title", children: "Deterministic signals" }),
+      /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("span", { className: "cr-meta", children: [
         signals.length,
         " patterns found"
       ] })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("p", { className: "cr-meta cr-signals-note", children: "Signals are heuristics, not verdicts. Use them to decide where to look first." }),
-    /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("ul", { className: "cr-signal-list", "aria-label": "Review signals", children: signals.map((signal) => /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("li", { className: "cr-signal", "data-tone": signal.tone, children: [
-      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "cr-signal-mark", "aria-hidden": "true", children: signal.tone === "danger" ? "!" : signal.tone === "warning" ? "\u25B2" : "\u2022" }),
-      /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "cr-signal-main", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "cr-signal-title-row", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("strong", { children: signal.label }),
-          /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("p", { className: "cr-meta cr-signals-note", children: "Signals are heuristics, not verdicts. Use them to decide where to look first." }),
+    /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("ul", { className: "cr-signal-list", "aria-label": "Review signals", children: signals.map((signal) => /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("li", { className: "cr-signal", "data-tone": signal.tone, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "cr-signal-mark", "aria-hidden": "true", children: signal.tone === "danger" ? "!" : signal.tone === "warning" ? "\u25B2" : "\u2022" }),
+      /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "cr-signal-main", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "cr-signal-title-row", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("strong", { children: signal.label }),
+          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
             Badge,
             {
               tone: signal.tone === "danger" ? "danger" : signal.tone === "warning" ? "warning" : "info",
@@ -5524,9 +8372,9 @@ function SignalsPanel({ signals, onJump }) {
             }
           )
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("p", { className: "cr-meta", children: signal.detail })
+        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("p", { className: "cr-meta", children: signal.detail })
       ] }),
-      signal.file !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("button", { type: "button", className: "cr-link-button", onClick: () => onJump(signal), children: [
+      signal.file !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("button", { type: "button", className: "cr-link-button", onClick: () => onJump(signal), children: [
         signal.file,
         signal.line !== void 0 ? `:${signal.line}` : ""
       ] }) : null
@@ -5536,7 +8384,7 @@ function SignalsPanel({ signals, onJump }) {
 
 // packages/ui/src/review/SubmitDialog.tsx
 var import_react19 = require("react");
-var import_jsx_runtime23 = require("react/jsx-runtime");
+var import_jsx_runtime24 = require("react/jsx-runtime");
 var VERDICTS = [
   { value: "approve", label: "Approve", description: "Close the review as approved." },
   {
@@ -5572,16 +8420,16 @@ function SubmitDialog({
     setSummary("");
     setIncludeResolved(false);
   }, [open]);
-  return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
     Dialog,
     {
       open,
       title: "Submit review",
       description: "The feedback package is delivered to the agent session that opened this review.",
       onClose,
-      actions: /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)(import_jsx_runtime23.Fragment, { children: [
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(Button, { variant: "ghost", onClick: onClose, disabled: submitting, children: "Cancel" }),
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+      actions: /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(import_jsx_runtime24.Fragment, { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Button, { variant: "ghost", onClick: onClose, disabled: submitting, children: "Cancel" }),
+        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
           Button,
           {
             loading: submitting,
@@ -5594,15 +8442,15 @@ function SubmitDialog({
           }
         )
       ] }),
-      children: /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "cr-submit", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "cr-recipient-warning", role: "note", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("strong", { children: "Recipient session" }),
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("p", { children: "Sending feedback resumes the agent session that initiated this review. The package includes unresolved comments, findings and verification. Resolved comments are included only when selected below." })
+      children: /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "cr-submit", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "cr-recipient-warning", role: "note", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("strong", { children: "Recipient session" }),
+          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("p", { children: "Sending feedback resumes the agent session that initiated this review. The package includes unresolved comments, findings and verification. Resolved comments are included only when selected below." })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("fieldset", { className: "cr-verdict-field", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("legend", { className: "cr-label", children: "Verdict" }),
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("div", { className: "cr-verdict-options", children: VERDICTS.map((option) => /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("label", { className: "cr-verdict-option", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("fieldset", { className: "cr-verdict-field", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("legend", { className: "cr-label", children: "Verdict" }),
+          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { className: "cr-verdict-options", children: VERDICTS.map((option) => /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("label", { className: "cr-verdict-option", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
               "input",
               {
                 type: "radio",
@@ -5612,13 +8460,13 @@ function SubmitDialog({
                 onChange: () => setVerdict(option.value)
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("span", { children: [
-              /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("strong", { children: option.label }),
-              /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "cr-meta", children: option.description })
+            /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("span", { children: [
+              /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("strong", { children: option.label }),
+              /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: "cr-meta", children: option.description })
             ] })
           ] }, option.value)) })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
           Textarea,
           {
             label: "Summary",
@@ -5628,28 +8476,28 @@ function SubmitDialog({
             placeholder: "What should the agent do next? Context for the feedback package."
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "cr-submit-counts", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)(Badge, { tone: unresolved > 0 ? "warning" : "success", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "cr-submit-counts", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(Badge, { tone: unresolved > 0 ? "warning" : "success", children: [
             unresolved,
             " unresolved"
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)(Badge, { tone: "neutral", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(Badge, { tone: "neutral", children: [
             resolved,
             " resolved"
           ] }),
-          previous ? /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(Badge, { tone: "info", children: "follow-up submission" }) : null
+          previous ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Badge, { tone: "info", children: "follow-up submission" }) : null
         ] }),
-        pending.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("section", { className: "cr-submit-pending", "aria-label": "Pending comments in this submission", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { className: "cr-submit-pending-head", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("h3", { children: "Pending comments" }),
-            /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { children: pending.length })
+        pending.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("section", { className: "cr-submit-pending", "aria-label": "Pending comments in this submission", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "cr-submit-pending-head", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("h3", { children: "Pending comments" }),
+            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { children: pending.length })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("p", { className: "cr-meta", children: "These unresolved threads will be sent to the agent. Double-check them before submitting." }),
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("ol", { className: "cr-submit-pending-list", children: pending.map((comment) => {
+          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("p", { className: "cr-meta", children: "These unresolved threads will be sent to the agent. Double-check them before submitting." }),
+          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("ol", { className: "cr-submit-pending-list", children: pending.map((comment) => {
             const anchor = latestAnchor(comment);
             const body = comment.body.replace(/\s+/g, " ").trim();
             const source = actorSource(comment.author.kind);
-            return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("li", { children: /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)(
+            return /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("li", { children: /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(
               "button",
               {
                 type: "button",
@@ -5657,16 +8505,16 @@ function SubmitDialog({
                 disabled: onJumpComment === void 0,
                 onClick: () => onJumpComment?.(comment.id),
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "cr-submit-pending-path cr-mono", children: anchor === void 0 ? "unanchored" : `${anchor.path}:${anchor.lineStart}` }),
-                  /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(Badge, { tone: source.tone, children: source.label }),
-                  /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { className: "cr-submit-pending-body", children: body })
+                  /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: "cr-submit-pending-path cr-mono", children: anchor === void 0 ? "unanchored" : `${anchor.path}:${anchor.lineStart}` }),
+                  /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Badge, { tone: source.tone, children: source.label }),
+                  /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: "cr-submit-pending-body", children: body })
                 ]
               }
             ) }, comment.id);
           }) })
         ] }) : null,
-        /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("label", { className: "cr-check", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("label", { className: "cr-check", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
             "input",
             {
               type: "checkbox",
@@ -5674,17 +8522,17 @@ function SubmitDialog({
               onChange: (event) => setIncludeResolved(event.target.checked)
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("span", { children: "Include resolved comments in the package" })
+          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { children: "Include resolved comments in the package" })
         ] }),
-        previous ? /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("p", { className: "cr-meta", children: "This review was submitted before. Unresolved comments are sent again; select the option above to include resolved comments as well." }) : null,
-        error !== null && error !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("p", { className: "cr-error", role: "alert", children: error }) : null
+        previous ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("p", { className: "cr-meta", children: "This review was submitted before. Unresolved comments are sent again; select the option above to include resolved comments as well." }) : null,
+        error !== null && error !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("p", { className: "cr-error", role: "alert", children: error }) : null
       ] })
     }
   );
 }
 
 // packages/ui/src/review/ReviewDetail.tsx
-var import_jsx_runtime24 = require("react/jsx-runtime");
+var import_jsx_runtime25 = require("react/jsx-runtime");
 function eventInNativeScope(event) {
   const scope = typeof document === "undefined" ? null : document.querySelector(".cr-native-scope");
   if (scope === null) return true;
@@ -6626,17 +9474,17 @@ function ReviewDetail({ client, id, location, navigate }) {
     return () => window.removeEventListener("keydown", onKeyDown);
   });
   if (loading && view === null) {
-    return /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "cr-detail-loading", "data-testid": "review-detail-loading", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Skeleton, { width: "38%", height: 28 }),
-      /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { style: { height: 12 } }),
-      /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Skeleton, { width: "58%", height: 14 }),
-      /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { style: { height: 24 } }),
-      /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { className: "cr-card", children: /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Skeleton, { width: "100%", height: 160 }) })
+    return /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "cr-detail-loading", "data-testid": "review-detail-loading", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Skeleton, { width: "38%", height: 28 }),
+      /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("div", { style: { height: 12 } }),
+      /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Skeleton, { width: "58%", height: 14 }),
+      /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("div", { style: { height: 24 } }),
+      /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("div", { className: "cr-card", children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Skeleton, { width: "100%", height: 160 }) })
     ] });
   }
   if (notFound || reviewError !== null && view === null) {
-    return /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "cr-detail-error", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "cr-detail-error", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)(
         "a",
         {
           className: "cr-back",
@@ -6646,36 +9494,36 @@ function ReviewDetail({ client, id, location, navigate }) {
             go("/");
           },
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(ArrowLeftIcon, { size: 16 }),
+            /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(ArrowLeftIcon, { size: 16 }),
             " All reviews"
           ]
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "cr-error-panel", role: "alert", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("strong", { children: notFound ? "Review not found" : "Could not load the review" }),
-          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("p", { children: notFound ? `No review exists for ${id}.` : reviewError })
+      /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "cr-error-panel", role: "alert", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("strong", { children: notFound ? "Review not found" : "Could not load the review" }),
+          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("p", { children: notFound ? `No review exists for ${id}.` : reviewError })
         ] }),
-        !notFound ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Button, { variant: "secondary", onClick: reloadReview, children: "Retry" }) : null
+        !notFound ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Button, { variant: "secondary", onClick: reloadReview, children: "Retry" }) : null
       ] })
     ] });
   }
   if (view === null) {
-    return /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { className: "cr-detail-loading" });
+    return /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("div", { className: "cr-detail-loading" });
   }
   const review = view.review;
   const selectedTabLabel = TABS.find((item) => item.id === tab)?.label ?? "Conversation";
-  const showSnapshot = snapshotLoading ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "cr-card cr-diff-loading", "data-testid": "snapshot-loading", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Skeleton, { width: "42%", height: 14 }),
-    /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { style: { height: 10 } }),
-    /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Skeleton, { width: "100%", height: 220 })
-  ] }) : snapshotError !== null ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "cr-error-panel", role: "alert", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("strong", { children: "Could not load this round" }),
-      /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("p", { children: snapshotError })
+  const showSnapshot = snapshotLoading ? /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "cr-card cr-diff-loading", "data-testid": "snapshot-loading", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Skeleton, { width: "42%", height: 14 }),
+    /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("div", { style: { height: 10 } }),
+    /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Skeleton, { width: "100%", height: 220 })
+  ] }) : snapshotError !== null ? /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "cr-error-panel", role: "alert", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("strong", { children: "Could not load this round" }),
+      /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("p", { children: snapshotError })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Button, { variant: "secondary", onClick: reloadReview, children: "Retry" })
-  ] }) : snapshot === null ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(EmptyState, { title: "No snapshot", description: "This review has no rounds yet." }) : /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Button, { variant: "secondary", onClick: reloadReview, children: "Retry" })
+  ] }) : snapshot === null ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(EmptyState, { title: "No snapshot", description: "This review has no rounds yet." }) : /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
     DiffViewer,
     {
       snapshot,
@@ -6713,7 +9561,7 @@ function ReviewDetail({ client, id, location, navigate }) {
       onOpenFinding: openFinding,
       renderComposer: (file, side, lineStart, lineEnd) => {
         const maxLine = fileLineCount(file, side);
-        return /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
           CommentComposer,
           {
             file,
@@ -6741,8 +9589,8 @@ function ReviewDetail({ client, id, location, navigate }) {
       readOnly
     }
   );
-  return /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "cr-detail", "data-testid": "review-detail", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "cr-detail", "data-testid": "review-detail", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)(
       "a",
       {
         className: "cr-back",
@@ -6752,33 +9600,33 @@ function ReviewDetail({ client, id, location, navigate }) {
           go("/");
         },
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(ArrowLeftIcon, { size: 16 }),
+          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(ArrowLeftIcon, { size: 16 }),
           " All reviews"
         ]
       }
     ),
-    /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("header", { className: "cr-detail-header", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "cr-detail-heading", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "cr-detail-eyebrow", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: "cr-mono", children: review.id }),
-          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: "cr-eyebrow-dot", "aria-hidden": "true" }),
-          /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("span", { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("header", { className: "cr-detail-header", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "cr-detail-heading", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "cr-detail-eyebrow", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "cr-mono", children: review.id }),
+          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "cr-eyebrow-dot", "aria-hidden": "true" }),
+          /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("span", { children: [
             "opened ",
             formatAge(review.createdAt)
           ] }),
-          review.createdBy !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("span", { children: [
+          review.createdBy !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("span", { children: [
             "by ",
             review.createdBy.name
           ] }) : null,
-          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Badge, { tone: review.status === "open" ? "success" : "neutral", children: review.status })
+          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Badge, { tone: review.status === "open" ? "success" : "neutral", children: review.status })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("h1", { className: "cr-page-title cr-detail-title", children: review.title }),
-        /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "cr-detail-scope", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(GitBranchIcon, { size: 16 }),
-          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: "cr-mono", children: scope?.label ?? roundLabel }),
-          scope !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(import_jsx_runtime24.Fragment, { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: "cr-scope-separator", "aria-hidden": "true", children: "\xB7" }),
-            /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(
+        /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("h1", { className: "cr-page-title cr-detail-title", children: review.title }),
+        /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "cr-detail-scope", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(GitBranchIcon, { size: 16 }),
+          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "cr-mono", children: scope?.label ?? roundLabel }),
+          scope !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)(import_jsx_runtime25.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "cr-scope-separator", "aria-hidden": "true", children: "\xB7" }),
+            /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)(
               "button",
               {
                 type: "button",
@@ -6792,8 +9640,8 @@ function ReviewDetail({ client, id, location, navigate }) {
                 ]
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { "aria-hidden": "true", children: "\u2192" }),
-            /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(
+            /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { "aria-hidden": "true", children: "\u2192" }),
+            /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)(
               "button",
               {
                 type: "button",
@@ -6808,11 +9656,11 @@ function ReviewDetail({ client, id, location, navigate }) {
               }
             )
           ] }) : null,
-          scope?.worktreeDigestTruncated === true ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Badge, { tone: "warning", children: "digest truncated" }) : null
+          scope?.worktreeDigestTruncated === true ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Badge, { tone: "warning", children: "digest truncated" }) : null
         ] })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "cr-detail-actions", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { className: "cr-round-pills", role: "group", "aria-label": "Review rounds", children: review.rounds.map((item) => /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(
+      /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "cr-detail-actions", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("div", { className: "cr-round-pills", role: "group", "aria-label": "Review rounds", children: review.rounds.map((item) => /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)(
           "button",
           {
             type: "button",
@@ -6821,14 +9669,14 @@ function ReviewDetail({ client, id, location, navigate }) {
             title: `Round ${item.no}, ${roundCommentCount(review, item.no)} comments`,
             onClick: () => changeRound(item.no),
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("span", { children: [
+              /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("span", { children: [
                 "r",
                 item.no
               ] }),
               " ",
-              /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: "cr-round-count", children: roundCommentCount(review, item.no) }),
+              /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "cr-round-count", children: roundCommentCount(review, item.no) }),
               " ",
-              /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("span", { className: "cr-visually-hidden", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("span", { className: "cr-visually-hidden", children: [
                 "Round ",
                 item.no,
                 ", ",
@@ -6839,14 +9687,14 @@ function ReviewDetail({ client, id, location, navigate }) {
           },
           item.no
         )) }),
-        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
           Badge,
           {
             tone: latestVerdict(review) === "approve" ? "success" : latestVerdict(review) === "request-changes" ? "danger" : "info",
             children: latestVerdict(review)
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
           Button,
           {
             variant: "secondary",
@@ -6856,7 +9704,7 @@ function ReviewDetail({ client, id, location, navigate }) {
             children: "Refresh"
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
           Button,
           {
             variant: "secondary",
@@ -6866,31 +9714,31 @@ function ReviewDetail({ client, id, location, navigate }) {
             children: "Edit"
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Button, { variant: "ghost", onClick: () => setDeleteOpen(true), disabled: deletePending, children: "Delete" }),
-        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Button, { onClick: () => setSubmitOpen(true), disabled: readOnly, children: "Submit" })
+        /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Button, { variant: "ghost", onClick: () => setDeleteOpen(true), disabled: deletePending, children: "Delete" }),
+        /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Button, { onClick: () => setSubmitOpen(true), disabled: readOnly, children: "Submit" })
       ] })
     ] }),
-    banner !== null ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "cr-banner", role: "status", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { children: banner }),
-      /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("button", { type: "button", className: "cr-link-button", onClick: () => setBanner(null), children: "Dismiss" })
+    banner !== null ? /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "cr-banner", role: "status", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { children: banner }),
+      /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("button", { type: "button", className: "cr-link-button", onClick: () => setBanner(null), children: "Dismiss" })
     ] }) : null,
-    actionError !== null ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "cr-error-panel", role: "alert", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { children: [
-        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("strong", { children: actionError.title }),
-        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("p", { children: actionError.message })
+    actionError !== null ? /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "cr-error-panel", role: "alert", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("strong", { children: actionError.title }),
+        /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("p", { children: actionError.message })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "cr-inline-actions", children: [
-        actionError.retry === "refresh" && !readOnly ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Button, { variant: "secondary", onClick: () => setRefreshOpen(true), children: "Create a new round" }) : null,
-        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Button, { variant: "ghost", onClick: () => setActionError(null), children: "Dismiss" })
+      /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "cr-inline-actions", children: [
+        actionError.retry === "refresh" && !readOnly ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Button, { variant: "secondary", onClick: () => setRefreshOpen(true), children: "Create a new round" }) : null,
+        /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Button, { variant: "ghost", onClick: () => setActionError(null), children: "Dismiss" })
       ] })
     ] }) : null,
-    review.agent?.status === "failed" ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "cr-error-panel", role: "alert", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { children: [
-        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("strong", { children: "Reviewer failed" }),
-        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("p", { children: review.agent.error ?? "The reviewer did not produce a report." })
+    review.agent?.status === "failed" ? /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "cr-error-panel", role: "alert", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("strong", { children: "Reviewer failed" }),
+        /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("p", { children: review.agent.error ?? "The reviewer did not produce a report." })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "cr-inline-actions", children: [
-        canRetryReviewer ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "cr-inline-actions", children: [
+        canRetryReviewer ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
           Button,
           {
             variant: "secondary",
@@ -6900,14 +9748,14 @@ function ReviewDetail({ client, id, location, navigate }) {
             children: "Retry reviewer"
           }
         ) : null,
-        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Button, { variant: "ghost", onClick: () => setTab("report"), children: "Open report" })
+        /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Button, { variant: "ghost", onClick: () => setTab("report"), children: "Open report" })
       ] })
     ] }) : null,
-    /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: tab === "files" ? "cr-detail-grid cr-detail-grid-wide" : "cr-detail-grid", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "cr-detail-main", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { className: "cr-detail-tabs", role: "tablist", "aria-label": "Review sections", children: TABS.map((item) => {
+    /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: tab === "files" ? "cr-detail-grid cr-detail-grid-wide" : "cr-detail-grid", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "cr-detail-main", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("div", { className: "cr-detail-tabs", role: "tablist", "aria-label": "Review sections", children: TABS.map((item) => {
           const count = item.id === "conversation" ? filteredComments.length : item.id === "files" ? fileCount : item.id === "report" ? report?.findings.length ?? 0 : signals.length;
-          return /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(
+          return /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)(
             "button",
             {
               type: "button",
@@ -6927,13 +9775,13 @@ function ReviewDetail({ client, id, location, navigate }) {
               },
               children: [
                 item.label,
-                /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: "cr-tab-count", children: count })
+                /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "cr-tab-count", children: count })
               ]
             },
             item.id
           );
         }) }),
-        /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(
+        /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)(
           "section",
           {
             className: "cr-tab-panel",
@@ -6942,32 +9790,32 @@ function ReviewDetail({ client, id, location, navigate }) {
             "aria-labelledby": `review-tab-${tab}`,
             tabIndex: 0,
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("span", { className: "cr-visually-hidden", "aria-live": "polite", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("span", { className: "cr-visually-hidden", "aria-live": "polite", children: [
                 selectedTabLabel,
                 " tab"
               ] }),
-              tab === "conversation" ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "cr-conversation", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "cr-section-head", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("h2", { className: "cr-card-title", children: "Conversation" }),
-                    /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("p", { className: "cr-meta", children: [
+              tab === "conversation" ? /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "cr-conversation", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "cr-section-head", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("h2", { className: "cr-card-title", children: "Conversation" }),
+                    /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("p", { className: "cr-meta", children: [
                       filteredComments.length,
                       " thread",
                       filteredComments.length === 1 ? "" : "s",
                       fixFilter === "all" ? "" : ` \xB7 ${fixFilter.replace("-", " ")}`
                     ] })
                   ] }),
-                  fixFilter !== "all" ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Button, { size: "small", variant: "ghost", onClick: () => setFixFilter("all"), children: "Clear filter" }) : null
+                  fixFilter !== "all" ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Button, { size: "small", variant: "ghost", onClick: () => setFixFilter("all"), children: "Clear filter" }) : null
                 ] }),
-                filteredComments.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
+                filteredComments.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
                   EmptyState,
                   {
-                    icon: /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { "aria-hidden": "true", children: "#" }),
+                    icon: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { "aria-hidden": "true", children: "#" }),
                     title: fixFilter === "all" ? "No comments yet" : "No comments in this group",
                     description: fixFilter === "all" ? "Select a line in Files changed and press c, or click the + next to a diff line." : "Switch the fix-status filter to see the other threads.",
-                    action: fixFilter === "all" ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Button, { variant: "secondary", onClick: () => setTab("files"), children: "Open the diff" }) : /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Button, { variant: "secondary", onClick: () => setFixFilter("all"), children: "Show all threads" })
+                    action: fixFilter === "all" ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Button, { variant: "secondary", onClick: () => setTab("files"), children: "Open the diff" }) : /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Button, { variant: "secondary", onClick: () => setFixFilter("all"), children: "Show all threads" })
                   }
-                ) : /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("ol", { className: "cr-thread-list", "aria-label": "Comment threads", children: filteredComments.map((comment) => /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("li", { children: /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
+                ) : /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("ol", { className: "cr-thread-list", "aria-label": "Comment threads", children: filteredComments.map((comment) => /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("li", { children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
                   CommentThread,
                   {
                     comment,
@@ -6983,7 +9831,7 @@ function ReviewDetail({ client, id, location, navigate }) {
                 ) }, comment.id)) })
               ] }) : null,
               tab === "files" ? showSnapshot : null,
-              tab === "report" ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
+              tab === "report" ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
                 ReportPanel,
                 {
                   report,
@@ -7023,7 +9871,7 @@ function ReviewDetail({ client, id, location, navigate }) {
                   }
                 }
               ) : null,
-              tab === "signals" ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
+              tab === "signals" ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
                 SignalsPanel,
                 {
                   signals,
@@ -7036,11 +9884,11 @@ function ReviewDetail({ client, id, location, navigate }) {
           }
         )
       ] }),
-      tab === "files" ? null : /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("aside", { className: "cr-rail", "aria-label": "Review context", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("section", { className: "cr-card cr-rail-card", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "cr-card-head", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: "cr-card-title", children: "Summary" }),
-            report !== null ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
+      tab === "files" ? null : /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("aside", { className: "cr-rail", "aria-label": "Review context", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("section", { className: "cr-card cr-rail-card", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "cr-card-head", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "cr-card-title", children: "Summary" }),
+            report !== null ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
               Badge,
               {
                 tone: report.riskLevel === "critical" || report.riskLevel === "high" ? "danger" : "neutral",
@@ -7048,24 +9896,24 @@ function ReviewDetail({ client, id, location, navigate }) {
               }
             ) : null
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("p", { className: "cr-rail-copy", tabIndex: 0, children: report?.summary ?? "The reviewer has not produced a summary for this round yet." }),
-          /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "cr-rail-meta", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("span", { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("p", { className: "cr-rail-copy", tabIndex: 0, children: report?.summary ?? "The reviewer has not produced a summary for this round yet." }),
+          /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "cr-rail-meta", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("span", { children: [
               review.comments.filter((comment) => comment.deletedAt === void 0).length,
               " ",
               "comments"
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("span", { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("span", { children: [
               unresolvedComments(review).length,
               " open"
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("span", { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("span", { children: [
               review.rounds.length,
               " rounds"
             ] })
           ] })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("section", { className: "cr-card cr-rail-card", children: /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("section", { className: "cr-card cr-rail-card", children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
           FixStatusBoard,
           {
             counts,
@@ -7077,10 +9925,10 @@ function ReviewDetail({ client, id, location, navigate }) {
             compact: true
           }
         ) }),
-        /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("section", { className: "cr-card cr-rail-card", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { className: "cr-card-head", children: /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: "cr-card-title", children: "Diff range" }) }),
-          /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("label", { className: "cr-switch-row", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("section", { className: "cr-card cr-rail-card", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("div", { className: "cr-card-head", children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "cr-card-title", children: "Diff range" }) }),
+          /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("label", { className: "cr-switch-row", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
               "input",
               {
                 type: "checkbox",
@@ -7089,16 +9937,16 @@ function ReviewDetail({ client, id, location, navigate }) {
                 onChange: (event) => setDelta(event.target.checked)
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("span", { children: [
-              /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("strong", { children: "Delta only" }),
-              /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: "cr-meta", children: selectedRound !== null && selectedRound > 1 ? `r${selectedRound} vs r${selectedRound - 1}` : "Available from round 2" })
+            /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("span", { children: [
+              /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("strong", { children: "Delta only" }),
+              /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "cr-meta", children: selectedRound !== null && selectedRound > 1 ? `r${selectedRound} vs r${selectedRound - 1}` : "Available from round 2" })
             ] })
           ] })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("section", { className: "cr-card cr-rail-card", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "cr-card-head", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: "cr-card-title", children: "Reviewer" }),
-            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("section", { className: "cr-card cr-rail-card", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "cr-card-head", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "cr-card-title", children: "Reviewer" }),
+            /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
               Badge,
               {
                 tone: review.agent?.status === "failed" ? "danger" : review.agent?.status === "running" || review.agent?.status === "partial" ? "warning" : review.agent?.status === "done" ? "success" : "neutral",
@@ -7106,10 +9954,10 @@ function ReviewDetail({ client, id, location, navigate }) {
               }
             )
           ] }),
-          review.agent?.coverage !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("p", { className: "cr-meta", children: coverageLabel(review.agent.coverage) }) : null,
-          review.agent?.status === "partial" ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(import_jsx_runtime24.Fragment, { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("p", { className: "cr-notice cr-notice-warning", children: "Coverage is incomplete: the reviewer did not inspect every changed file." }),
-            canRetryReviewer ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
+          review.agent?.coverage !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("p", { className: "cr-meta", children: coverageLabel(review.agent.coverage) }) : null,
+          review.agent?.status === "partial" ? /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)(import_jsx_runtime25.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("p", { className: "cr-notice cr-notice-warning", children: "Coverage is incomplete: the reviewer did not inspect every changed file." }),
+            canRetryReviewer ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
               Button,
               {
                 size: "small",
@@ -7121,15 +9969,15 @@ function ReviewDetail({ client, id, location, navigate }) {
               }
             ) : null
           ] }) : null,
-          review.agent?.status === "running" || review.agent?.status === "queued" ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(import_jsx_runtime24.Fragment, { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("p", { className: "cr-meta", children: [
+          review.agent?.status === "running" || review.agent?.status === "queued" ? /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)(import_jsx_runtime25.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("p", { className: "cr-meta", children: [
               review.agent.status === "queued" ? "Waiting for a worker" : "Working",
               " on round",
               " ",
               review.agent.round ?? selectedRound ?? "\u2014",
               "."
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
               Button,
               {
                 size: "small",
@@ -7139,10 +9987,10 @@ function ReviewDetail({ client, id, location, navigate }) {
                 children: "Cancel reviewer"
               }
             )
-          ] }) : review.agent?.status === "failed" ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(import_jsx_runtime24.Fragment, { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("p", { className: "cr-meta", children: review.agent.error ?? "Reviewer failed." }),
-            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("p", { className: "cr-meta", children: canRetryReviewer ? "Retry unfinished shards from the alert above, or create a new round." : "This reviewer backend cannot be retried in place. Create a new round." }),
-            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
+          ] }) : review.agent?.status === "failed" ? /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)(import_jsx_runtime25.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("p", { className: "cr-meta", children: review.agent.error ?? "Reviewer failed." }),
+            /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("p", { className: "cr-meta", children: canRetryReviewer ? "Retry unfinished shards from the alert above, or create a new round." : "This reviewer backend cannot be retried in place. Create a new round." }),
+            /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
               Button,
               {
                 size: "small",
@@ -7152,7 +10000,7 @@ function ReviewDetail({ client, id, location, navigate }) {
                 children: "Create a new round"
               }
             )
-          ] }) : report !== null ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("p", { className: "cr-meta", children: [
+          ] }) : report !== null ? /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("p", { className: "cr-meta", children: [
             report.findings.length,
             " findings \xB7 ",
             report.backend,
@@ -7160,23 +10008,23 @@ function ReviewDetail({ client, id, location, navigate }) {
             " ",
             report.round,
             reportIsPartial ? " \xB7 partial" : ""
-          ] }) : /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("p", { className: "cr-meta", children: "No reviewer report yet." })
+          ] }) : /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("p", { className: "cr-meta", children: "No reviewer report yet." })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("section", { className: "cr-card cr-rail-card", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "cr-card-head", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: "cr-card-title", children: "Delivery" }),
-            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Badge, { tone: feedback !== null || delivery !== null ? "info" : "neutral", children: feedback !== null || delivery !== null ? "pending" : "not sent" })
+        /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("section", { className: "cr-card cr-rail-card", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "cr-card-head", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "cr-card-title", children: "Delivery" }),
+            /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Badge, { tone: feedback !== null || delivery !== null ? "info" : "neutral", children: feedback !== null || delivery !== null ? "pending" : "not sent" })
           ] }),
-          feedback !== null ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(import_jsx_runtime24.Fragment, { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("p", { className: "cr-meta", children: [
+          feedback !== null ? /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)(import_jsx_runtime25.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("p", { className: "cr-meta", children: [
               "Submitted r",
               feedback.submission.round,
               " \xB7 ",
               feedback.submission.verdict
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("p", { className: "cr-meta", children: "Waiting for the agent session to acknowledge the feedback package." }),
-            /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "cr-inline-actions", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("p", { className: "cr-meta", children: "Waiting for the agent session to acknowledge the feedback package." }),
+            /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "cr-inline-actions", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
                 Button,
                 {
                   size: "small",
@@ -7185,20 +10033,20 @@ function ReviewDetail({ client, id, location, navigate }) {
                   children: "Copy package"
                 }
               ),
-              /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("details", { className: "cr-delivery-details", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("summary", { children: "Preview" }),
-                /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("pre", { className: "cr-code-block", children: feedback.feedback.markdown })
+              /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("details", { className: "cr-delivery-details", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("summary", { children: "Preview" }),
+                /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("pre", { className: "cr-code-block", children: feedback.feedback.markdown })
               ] })
             ] })
-          ] }) : delivery !== null ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(import_jsx_runtime24.Fragment, { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("p", { className: "cr-meta", children: [
+          ] }) : delivery !== null ? /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)(import_jsx_runtime25.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("p", { className: "cr-meta", children: [
               "Round ",
               delivery.round,
               " \xB7 harness ",
               delivery.harness
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("p", { className: "cr-meta", children: "Delivery is queued. The session will be resumed by the bridge." }),
-            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("p", { className: "cr-meta", children: "Delivery is queued. The session will be resumed by the bridge." }),
+            /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
               Button,
               {
                 size: "small",
@@ -7207,18 +10055,18 @@ function ReviewDetail({ client, id, location, navigate }) {
                 children: "Copy delivery key"
               }
             )
-          ] }) : /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("p", { className: "cr-meta", children: "No feedback submitted. Submit a verdict to send unresolved comments back to the agent." })
+          ] }) : /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("p", { className: "cr-meta", children: "No feedback submitted. Submit a verdict to send unresolved comments back to the agent." })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("section", { className: "cr-card cr-rail-card cr-shortcut-card", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "cr-card-head", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: "cr-card-title", children: "Shortcuts" }),
-            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("button", { type: "button", className: "cr-link-button", onClick: () => setHelpOpen(true), children: "?" })
+        /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("section", { className: "cr-card cr-rail-card cr-shortcut-card", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "cr-card-head", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "cr-card-title", children: "Shortcuts" }),
+            /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("button", { type: "button", className: "cr-link-button", onClick: () => setHelpOpen(true), children: "?" })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("p", { className: "cr-meta", children: "c comment \xB7 r resolve \xB7 j/k files \xB7 [ ] rounds" })
+          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("p", { className: "cr-meta", children: "c comment \xB7 r resolve \xB7 j/k files \xB7 [ ] rounds" })
         ] })
       ] })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
       SubmitDialog,
       {
         open: submitOpen,
@@ -7237,7 +10085,7 @@ function ReviewDetail({ client, id, location, navigate }) {
         }
       }
     ),
-    /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
       Dialog,
       {
         open: refreshOpen,
@@ -7246,18 +10094,18 @@ function ReviewDetail({ client, id, location, navigate }) {
         onClose: () => {
           if (!refreshing) setRefreshOpen(false);
         },
-        actions: /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(import_jsx_runtime24.Fragment, { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Button, { variant: "ghost", onClick: () => setRefreshOpen(false), disabled: refreshing, children: "Cancel" }),
-          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Button, { loading: refreshing, onClick: () => void refreshReview(), children: "Create round" })
+        actions: /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)(import_jsx_runtime25.Fragment, { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Button, { variant: "ghost", onClick: () => setRefreshOpen(false), disabled: refreshing, children: "Cancel" }),
+          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Button, { loading: refreshing, onClick: () => void refreshReview(), children: "Create round" })
         ] }),
-        children: /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { className: "cr-refresh", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("p", { children: "This captures a fresh snapshot and re-anchors comments. Outdated quotes stay visible in the Outdated group; nothing is deleted." }),
-          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("p", { className: "cr-meta", children: agentActive ? "The reviewer is active; wait for it to finish or cancel it before creating the next round." : "Refresh is available when the branch has new commits or the worktree changed." }),
-          review.reviewer?.backend === "none" ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("p", { className: "cr-notice cr-notice-warning", children: "This review has no reviewer backend. The new round re-anchors comments but does not run an agent." }) : null
+        children: /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "cr-refresh", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("p", { children: "This captures a fresh snapshot and re-anchors comments. Outdated quotes stay visible in the Outdated group; nothing is deleted." }),
+          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("p", { className: "cr-meta", children: agentActive ? "The reviewer is active; wait for it to finish or cancel it before creating the next round." : "Refresh is available when the branch has new commits or the worktree changed." }),
+          review.reviewer?.backend === "none" ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("p", { className: "cr-notice cr-notice-warning", children: "This review has no reviewer backend. The new round re-anchors comments but does not run an agent." }) : null
         ] })
       }
     ),
-    /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(
+    /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)(
       Dialog,
       {
         open: deleteOpen,
@@ -7266,33 +10114,33 @@ function ReviewDetail({ client, id, location, navigate }) {
         onClose: () => {
           if (!deletePending) setDeleteOpen(false);
         },
-        actions: /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(import_jsx_runtime24.Fragment, { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Button, { variant: "ghost", onClick: () => setDeleteOpen(false), disabled: deletePending, children: "Cancel" }),
-          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Button, { variant: "danger", loading: deletePending, onClick: () => void deleteReview(), children: "Delete review" })
+        actions: /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)(import_jsx_runtime25.Fragment, { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Button, { variant: "ghost", onClick: () => setDeleteOpen(false), disabled: deletePending, children: "Cancel" }),
+          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Button, { variant: "danger", loading: deletePending, onClick: () => void deleteReview(), children: "Delete review" })
         ] }),
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("p", { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("p", { children: [
             "Delete ",
-            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("strong", { children: review.title }),
+            /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("strong", { children: review.title }),
             " (",
             review.id,
             ")? This removes it from the review list, but the append-only event log keeps the audit trail."
           ] }),
-          deleteError !== null ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("p", { className: "cr-error", role: "alert", children: deleteError }) : null
+          deleteError !== null ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("p", { className: "cr-error", role: "alert", children: deleteError }) : null
         ]
       }
     ),
-    /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
       Dialog,
       {
         open: helpOpen,
         title: "Keyboard shortcuts",
         description: "Shortcuts are disabled while typing and can be turned off with data-shortcuts-off.",
         onClose: () => setHelpOpen(false),
-        actions: /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Button, { onClick: () => setHelpOpen(false), children: "Close" }),
-        children: /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("dl", { className: "cr-shortcut-list", children: SHORTCUTS.map(([key, description]) => /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("dt", { children: /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("kbd", { children: key }) }),
-          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("dd", { children: description })
+        actions: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Button, { onClick: () => setHelpOpen(false), children: "Close" }),
+        children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("dl", { className: "cr-shortcut-list", children: SHORTCUTS.map(([key, description]) => /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("dt", { children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("kbd", { children: key }) }),
+          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("dd", { children: description })
         ] }, key)) })
       }
     )
@@ -7321,7 +10169,7 @@ function withBase(path, base = BASE_PATH) {
 }
 
 // packages/web/src/router.tsx
-var import_jsx_runtime25 = require("react/jsx-runtime");
+var import_jsx_runtime26 = require("react/jsx-runtime");
 var RouterContext = (0, import_react21.createContext)(null);
 function createBrowserRouter(base = BASE_PATH) {
   const listeners = /* @__PURE__ */ new Set();
@@ -7382,7 +10230,7 @@ function RouterProvider({
   router,
   children
 }) {
-  return /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(RouterContext.Provider, { value: router, children });
+  return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(RouterContext.Provider, { value: router, children });
 }
 function useRouter() {
   const router = (0, import_react21.useContext)(RouterContext) ?? getBrowserRouter();
@@ -7443,7 +10291,7 @@ function Link({ to, children, onClick, ...rest }) {
     event.preventDefault();
     router.navigate(to);
   }
-  return /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("a", { ...rest, href: router.href(to), onClick: handleClick, children });
+  return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("a", { ...rest, href: router.href(to), onClick: handleClick, children });
 }
 
 // packages/web/src/App.tsx
@@ -7451,21 +10299,21 @@ var import_react31 = require("react");
 
 // packages/web/src/Shell.tsx
 var import_react22 = require("react");
-var import_jsx_runtime26 = require("react/jsx-runtime");
+var import_jsx_runtime27 = require("react/jsx-runtime");
 
 // packages/web/src/pages/ReviewListPage.tsx
 var import_react23 = require("react");
 
 // packages/web/src/components.tsx
-var import_jsx_runtime27 = require("react/jsx-runtime");
+var import_jsx_runtime28 = require("react/jsx-runtime");
 function PageHeader({ eyebrow, title, description, actions }) {
-  return /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("header", { className: "cr-page-head", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("div", { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("p", { className: "cr-eyebrow", children: eyebrow }),
-      /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("h1", { className: "cr-page-title", children: title }),
-      description !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("p", { className: "cr-page-sub", children: description }) : null
+  return /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("header", { className: "cr-page-head", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("p", { className: "cr-eyebrow", children: eyebrow }),
+      /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("h1", { className: "cr-page-title", children: title }),
+      description !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("p", { className: "cr-page-sub", children: description }) : null
     ] }),
-    actions !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("div", { className: "cr-page-actions", children: actions }) : null
+    actions !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("div", { className: "cr-page-actions", children: actions }) : null
   ] });
 }
 function ErrorPanel({
@@ -7474,48 +10322,48 @@ function ErrorPanel({
   onRetry,
   retryLabel = "Retry"
 }) {
-  return /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("div", { className: "cr-error-panel", role: "alert", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("div", { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("strong", { children: title }),
-      /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("p", { children: message })
+  return /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "cr-error-panel", role: "alert", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("strong", { children: title }),
+      /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("p", { children: message })
     ] }),
-    onRetry !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("button", { type: "button", className: "cr-button", "data-variant": "secondary", onClick: onRetry, children: retryLabel }) : null
+    onRetry !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("button", { type: "button", className: "cr-button", "data-variant": "secondary", onClick: onRetry, children: retryLabel }) : null
   ] });
 }
 
 // packages/web/src/pages/ReviewListPage.tsx
-var import_jsx_runtime28 = require("react/jsx-runtime");
+var import_jsx_runtime29 = require("react/jsx-runtime");
 var STATUS_OPTIONS = [
   { value: "all", label: "All statuses" },
   { value: "open", label: "Open" },
   { value: "closed", label: "Closed" }
 ];
 function ListSkeleton() {
-  return /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("div", { className: "cr-list", "aria-hidden": "true", "data-testid": "review-list-loading", children: [0, 1, 2, 3].map((index) => /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "cr-review-row", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "cr-review-main", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Skeleton, { width: `${46 + index * 9}%`, height: 16 }),
-      /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("div", { style: { height: 7 } }),
-      /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Skeleton, { width: "30%", height: 10 })
+  return /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("div", { className: "cr-list", "aria-hidden": "true", "data-testid": "review-list-loading", children: [0, 1, 2, 3].map((index) => /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "cr-review-row", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "cr-review-main", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(Skeleton, { width: `${46 + index * 9}%`, height: 16 }),
+      /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("div", { style: { height: 7 } }),
+      /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(Skeleton, { width: "30%", height: 10 })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Skeleton, { width: "80%", height: 22, radius: 999 }),
-    /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Skeleton, { width: "65%", height: 12 }),
-    /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Skeleton, { width: 52, height: 12 }),
-    /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Skeleton, { width: 62, height: 22, radius: 999 }),
-    /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Skeleton, { width: 56, height: 12 })
+    /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(Skeleton, { width: "80%", height: 22, radius: 999 }),
+    /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(Skeleton, { width: "65%", height: 12 }),
+    /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(Skeleton, { width: 52, height: 12 }),
+    /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(Skeleton, { width: 62, height: 22, radius: 999 }),
+    /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(Skeleton, { width: 56, height: 12 })
   ] }, index)) });
 }
 function ReviewRow({ review }) {
   const notFixed = review.notFixedCount ?? 0;
-  return /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)(Link, { className: "cr-review-row", to: `/review/${encodeURIComponent(review.id)}`, children: [
-    /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "cr-review-main", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "cr-review-title", children: review.title }),
-      /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "cr-review-id", children: review.id })
+  return /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)(Link, { className: "cr-review-row", to: `/review/${encodeURIComponent(review.id)}`, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "cr-review-main", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "cr-review-title", children: review.title }),
+      /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "cr-review-id", children: review.id })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "cr-scope", title: review.scope, children: review.scope ?? "\u2014" }),
-    /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "cr-author", children: review.author ?? "unknown" }),
-    /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("time", { className: "cr-age", dateTime: review.createdAt, children: formatAge(review.createdAt) }),
-    /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Badge, { tone: review.status === "open" ? "success" : "neutral", children: review.status }),
-    /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("span", { className: "cr-not-fixed", "data-zero": notFixed === 0, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "cr-scope", title: review.scope, children: review.scope ?? "\u2014" }),
+    /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "cr-author", children: review.author ?? "unknown" }),
+    /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("time", { className: "cr-age", dateTime: review.createdAt, children: formatAge(review.createdAt) }),
+    /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(Badge, { tone: review.status === "open" ? "success" : "neutral", children: review.status }),
+    /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("span", { className: "cr-not-fixed", "data-zero": notFixed === 0, children: [
       notFixed,
       " not fixed"
     ] })
@@ -7537,8 +10385,8 @@ function ReviewGroup({ repoRoot, reviews, collapsed, onToggle }) {
   const headingId = `${id}-heading`;
   const rowsId = `${id}-rows`;
   const count = reviews.length === 1 ? "1 review" : `${reviews.length} reviews`;
-  return /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("section", { className: "cr-review-group", "aria-labelledby": headingId, children: [
-    /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("h2", { className: "cr-review-group-heading", id: headingId, children: /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("section", { className: "cr-review-group", "aria-labelledby": headingId, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("h2", { className: "cr-review-group-heading", id: headingId, children: /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)(
       "button",
       {
         type: "button",
@@ -7547,14 +10395,14 @@ function ReviewGroup({ repoRoot, reviews, collapsed, onToggle }) {
         "aria-controls": rowsId,
         onClick: () => onToggle(repoRoot),
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "cr-review-group-chevron", "aria-hidden": "true" }),
-          /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "cr-review-group-name", children: repoName(repoRoot) }),
-          /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "cr-review-group-path", title: repoRoot, children: repoRoot }),
-          /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "cr-review-group-count", children: count })
+          /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "cr-review-group-chevron", "aria-hidden": "true" }),
+          /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "cr-review-group-name", children: repoName(repoRoot) }),
+          /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "cr-review-group-path", title: repoRoot, children: repoRoot }),
+          /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "cr-review-group-count", children: count })
         ]
       }
     ) }),
-    /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("div", { className: "cr-review-group-rows", id: rowsId, hidden: collapsed, children: reviews.map((review) => /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(ReviewRow, { review }, review.id)) })
+    /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("div", { className: "cr-review-group-rows", id: rowsId, hidden: collapsed, children: reviews.map((review) => /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(ReviewRow, { review }, review.id)) })
   ] });
 }
 function ReviewListPage({ client }) {
@@ -7616,17 +10464,17 @@ function ReviewListPage({ client }) {
     });
   }, []);
   if (error !== null && reviews === null) {
-    return /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)(import_jsx_runtime28.Fragment, { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)(import_jsx_runtime29.Fragment, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(
         PageHeader,
         {
           eyebrow: "Workspace",
           title: "Reviews",
           description: "Review changes before they merge. Every note stays attached to the line it was written on.",
-          actions: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Button, { onClick: () => navigate("/new"), icon: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { "aria-hidden": "true", children: "+" }), children: "New review" })
+          actions: /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(Button, { onClick: () => navigate("/new"), icon: /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { "aria-hidden": "true", children: "+" }), children: "New review" })
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(
         ErrorPanel,
         {
           title: "The review daemon is unreachable",
@@ -7636,20 +10484,20 @@ function ReviewListPage({ client }) {
       )
     ] });
   }
-  return /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)(import_jsx_runtime28.Fragment, { children: [
-    /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)(import_jsx_runtime29.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(
       PageHeader,
       {
         eyebrow: "Workspace",
         title: "Reviews",
         description: "Review changes before they merge. Every note stays attached to the line it was written on.",
-        actions: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Button, { onClick: () => navigate("/new"), icon: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { "aria-hidden": "true", children: "+" }), children: "New review" })
+        actions: /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(Button, { onClick: () => navigate("/new"), icon: /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { "aria-hidden": "true", children: "+" }), children: "New review" })
       }
     ),
-    /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "cr-toolbar", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "cr-search", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "cr-search-icon", children: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(SearchIcon, { size: 16 }) }),
-        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "cr-toolbar", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "cr-search", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "cr-search-icon", children: /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(SearchIcon, { size: 16 }) }),
+        /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(
           Input,
           {
             label: "Search reviews",
@@ -7663,7 +10511,7 @@ function ReviewListPage({ client }) {
           }
         )
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("div", { className: "cr-field cr-field-select", children: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("div", { className: "cr-field cr-field-select", children: /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(
         Select,
         {
           label: "Filter by status",
@@ -7673,15 +10521,15 @@ function ReviewListPage({ client }) {
           onChange: (event) => setStatus(event.target.value)
         }
       ) }),
-      /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "cr-meta", "aria-live": "polite", children: loading ? "Loading\u2026" : `${filtered.length} of ${total}` })
+      /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "cr-meta", "aria-live": "polite", children: loading ? "Loading\u2026" : `${filtered.length} of ${total}` })
     ] }),
-    loading && reviews === null ? /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(ListSkeleton, {}) : filtered.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("div", { className: "cr-list", children: query.trim() !== "" || status !== "all" ? /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
+    loading && reviews === null ? /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(ListSkeleton, {}) : filtered.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("div", { className: "cr-list", children: query.trim() !== "" || status !== "all" ? /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(
       EmptyState,
       {
-        icon: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(SearchIcon, { size: 20 }),
+        icon: /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(SearchIcon, { size: 20 }),
         title: "No matching reviews",
         description: "Try a different search term or clear the status filter.",
-        action: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
+        action: /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(
           Button,
           {
             variant: "secondary",
@@ -7693,24 +10541,24 @@ function ReviewListPage({ client }) {
           }
         )
       }
-    ) : /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
+    ) : /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(
       EmptyState,
       {
-        icon: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(ReviewsIcon, { size: 22 }),
+        icon: /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(ReviewsIcon, { size: 22 }),
         title: "No reviews yet",
         description: "Start a review when a branch is ready, or ask your agent to create one for the current worktree.",
-        action: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Button, { onClick: () => navigate("/new"), children: "Create the first review" })
+        action: /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(Button, { onClick: () => navigate("/new"), children: "Create the first review" })
       }
-    ) }) : /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "cr-list", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "cr-list-head", "aria-hidden": "true", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { children: "Review" }),
-        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { children: "Scope" }),
-        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { children: "Author" }),
-        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { children: "Age" }),
-        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { children: "Status" }),
-        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { children: "Not fixed" })
+    ) }) : /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "cr-list", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "cr-list-head", "aria-hidden": "true", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { children: "Review" }),
+        /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { children: "Scope" }),
+        /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { children: "Author" }),
+        /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { children: "Age" }),
+        /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { children: "Status" }),
+        /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { children: "Not fixed" })
       ] }),
-      groups.map(([repoRoot, groupReviews]) => /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
+      groups.map(([repoRoot, groupReviews]) => /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(
         ReviewGroup,
         {
           repoRoot,
@@ -7726,7 +10574,7 @@ function ReviewListPage({ client }) {
 
 // packages/web/src/pages/NewReviewPage.tsx
 var import_react24 = require("react");
-var import_jsx_runtime29 = require("react/jsx-runtime");
+var import_jsx_runtime30 = require("react/jsx-runtime");
 var initialForm = {
   repoRoot: "",
   title: "",
@@ -7944,8 +10792,8 @@ function NewReviewPage({
   }
   const hasErrors = Object.keys(errors).length > 0;
   const chosenShas = selectedRange(commits, selected);
-  return /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)(import_jsx_runtime29.Fragment, { children: [
-    /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)(import_jsx_runtime30.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(
       PageHeader,
       {
         eyebrow: "New review",
@@ -7953,25 +10801,25 @@ function NewReviewPage({
         description: "Choose a repository, the branch that carries the changes, and the branch it should merge into. reviewd records the merge-request boundary; it never merges or rewrites a branch."
       }
     ),
-    /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("form", { className: "cr-form", onSubmit: (event) => void onSubmit(event), noValidate: true, children: [
-      /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("datalist", { id: "branch-options", children: branches.map((branch) => /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("option", { value: branch }, branch)) }),
-      submitError !== null ? /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(ErrorPanel, { title: "Could not create the review", message: submitError }) : null,
-      hasErrors ? /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("p", { className: "cr-form-error-summary", role: "alert", children: "Check the highlighted fields before creating the review." }) : null,
-      /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "cr-form-card", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "cr-form-section", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "cr-form-section-head", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { children: [
-              /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("h2", { className: "cr-form-section-title", children: "Repository" }),
-              /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("p", { className: "cr-form-section-copy", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("form", { className: "cr-form", onSubmit: (event) => void onSubmit(event), noValidate: true, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("datalist", { id: "branch-options", children: branches.map((branch) => /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("option", { value: branch }, branch)) }),
+      submitError !== null ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(ErrorPanel, { title: "Could not create the review", message: submitError }) : null,
+      hasErrors ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("p", { className: "cr-form-error-summary", role: "alert", children: "Check the highlighted fields before creating the review." }) : null,
+      /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "cr-form-card", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "cr-form-section", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "cr-form-section-head", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { children: [
+              /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("h2", { className: "cr-form-section-title", children: "Repository" }),
+              /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("p", { className: "cr-form-section-copy", children: [
                 "Paths are resolved on the daemon.",
                 " ",
                 showSettingsLink ? "Manage saved repositories in Settings." : "Manage saved repositories in DSH Settings \u2192 Code Review."
               ] })
             ] }),
-            showSettingsLink ? /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(Link, { className: "cr-link-button", to: "/settings", children: "Manage repositories" }) : null
+            showSettingsLink ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(Link, { className: "cr-link-button", to: "/settings", children: "Manage repositories" }) : null
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "cr-form-grid", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("div", { className: "cr-field", children: /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "cr-form-grid", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { className: "cr-field", children: /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(
               Select,
               {
                 label: "Saved repository",
@@ -8001,9 +10849,9 @@ function NewReviewPage({
                 ]
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "cr-field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("label", { className: "cr-label", htmlFor: "repo-root", children: "Repository path" }),
-              /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "cr-field", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("label", { className: "cr-label", htmlFor: "repo-root", children: "Repository path" }),
+              /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(
                 "input",
                 {
                   id: "repo-root",
@@ -8018,16 +10866,16 @@ function NewReviewPage({
                   required: true
                 }
               ),
-              errors.repoRoot !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "cr-error", id: "repo-root-error", role: "alert", children: errors.repoRoot }) : null
+              errors.repoRoot !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "cr-error", id: "repo-root-error", role: "alert", children: errors.repoRoot }) : null
             ] })
           ] })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "cr-form-section", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("h2", { className: "cr-form-section-title", children: "Review" }),
-          /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "cr-form-grid", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "cr-field", style: { gridColumn: "1 / -1" }, children: [
-              /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("label", { className: "cr-label", htmlFor: "review-title", children: "Title" }),
-              /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "cr-form-section", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("h2", { className: "cr-form-section-title", children: "Review" }),
+          /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "cr-form-grid", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "cr-field", style: { gridColumn: "1 / -1" }, children: [
+              /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("label", { className: "cr-label", htmlFor: "review-title", children: "Title" }),
+              /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(
                 "input",
                 {
                   id: "review-title",
@@ -8040,10 +10888,10 @@ function NewReviewPage({
                   required: true
                 }
               ),
-              errors.title !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "cr-error", id: "review-title-error", role: "alert", children: errors.title }) : null
+              errors.title !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "cr-error", id: "review-title-error", role: "alert", children: errors.title }) : null
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "cr-field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "cr-field", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(
                 Select,
                 {
                   label: "Reviewer",
@@ -8056,9 +10904,9 @@ function NewReviewPage({
                   ]
                 }
               ),
-              /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "cr-hint", children: "Manual reviews accept comments immediately. Agent worker queues a read-only reviewer job." })
+              /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "cr-hint", children: "Manual reviews accept comments immediately. Agent worker queues a read-only reviewer job." })
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("div", { className: "cr-field", children: /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { className: "cr-field", children: /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(
               Select,
               {
                 label: "Diff scope",
@@ -8074,13 +10922,13 @@ function NewReviewPage({
             ) })
           ] })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "cr-form-section", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("h2", { className: "cr-form-section-title", children: "Changes" }),
-          form.kind === "branch" ? /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)(import_jsx_runtime29.Fragment, { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "cr-form-grid", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "cr-field", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("label", { className: "cr-label", htmlFor: "source-ref", children: "Source branch" }),
-                /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "cr-form-section", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("h2", { className: "cr-form-section-title", children: "Changes" }),
+          form.kind === "branch" ? /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)(import_jsx_runtime30.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "cr-form-grid", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "cr-field", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("label", { className: "cr-label", htmlFor: "source-ref", children: "Source branch" }),
+                /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(
                   "input",
                   {
                     id: "source-ref",
@@ -8095,11 +10943,11 @@ function NewReviewPage({
                     "aria-describedby": errors.sourceRef === void 0 ? "source-ref-hint" : "source-ref-error"
                   }
                 ),
-                errors.sourceRef !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "cr-error", id: "source-ref-error", role: "alert", children: errors.sourceRef }) : /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "cr-hint", id: "source-ref-hint", children: "The branch whose commits you want to inspect." })
+                errors.sourceRef !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "cr-error", id: "source-ref-error", role: "alert", children: errors.sourceRef }) : /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "cr-hint", id: "source-ref-hint", children: "The branch whose commits you want to inspect." })
               ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "cr-field", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("label", { className: "cr-label", htmlFor: "target-ref", children: "Target branch" }),
-                /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "cr-field", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("label", { className: "cr-label", htmlFor: "target-ref", children: "Target branch" }),
+                /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(
                   "input",
                   {
                     id: "target-ref",
@@ -8114,15 +10962,15 @@ function NewReviewPage({
                     "aria-describedby": errors.targetRef === void 0 ? "target-ref-hint" : "target-ref-error"
                   }
                 ),
-                errors.targetRef !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "cr-error", id: "target-ref-error", role: "alert", children: errors.targetRef }) : /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "cr-hint", id: "target-ref-hint", children: "The merge destination. Only the boundary is recorded." })
+                errors.targetRef !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "cr-error", id: "target-ref-error", role: "alert", children: errors.targetRef }) : /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "cr-hint", id: "target-ref-hint", children: "The merge destination. Only the boundary is recorded." })
               ] })
             ] }),
-            branchesLoading ? /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("p", { className: "cr-hint", role: "status", children: "Loading branches\u2026" }) : null,
-            branchesError !== null ? /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("p", { className: "cr-error", role: "alert", children: branchesError }) : null,
-            /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("fieldset", { className: "cr-commits-fieldset", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("legend", { className: "cr-label", children: "Commits" }),
-              /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("label", { className: "cr-radio", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(
+            branchesLoading ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("p", { className: "cr-hint", role: "status", children: "Loading branches\u2026" }) : null,
+            branchesError !== null ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("p", { className: "cr-error", role: "alert", children: branchesError }) : null,
+            /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("fieldset", { className: "cr-commits-fieldset", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("legend", { className: "cr-label", children: "Commits" }),
+              /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("label", { className: "cr-radio", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(
                   "input",
                   {
                     type: "radio",
@@ -8139,13 +10987,13 @@ function NewReviewPage({
                     }
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("span", { children: [
+                /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("span", { children: [
                   "All commits in the merge request",
-                  /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "cr-hint", children: "Diffs the source branch against the merge base with the target." })
+                  /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "cr-hint", children: "Diffs the source branch against the merge base with the target." })
                 ] })
               ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("label", { className: "cr-radio", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("label", { className: "cr-radio", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(
                   "input",
                   {
                     type: "radio",
@@ -8155,14 +11003,14 @@ function NewReviewPage({
                     onChange: () => update("commitsMode", "selected")
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("span", { children: [
+                /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("span", { children: [
                   "Choose commits",
-                  /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "cr-hint", children: "The selection is inclusive: commits between the first and last checked commit are included." })
+                  /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "cr-hint", children: "The selection is inclusive: commits between the first and last checked commit are included." })
                 ] })
               ] }),
-              form.commitsMode === "selected" ? /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "cr-commit-picker", children: [
-                commitsLoading ? /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("p", { className: "cr-hint", role: "status", children: "Loading commits\u2026" }) : commitsError !== null ? /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("p", { className: "cr-error", role: "alert", children: commitsError }) : commits.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("p", { className: "cr-hint", children: "No commits found between these branches." }) : /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("ul", { className: "cr-commit-list", children: commits.map((commit) => /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("li", { children: /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("label", { className: "cr-commit-option", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(
+              form.commitsMode === "selected" ? /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "cr-commit-picker", children: [
+                commitsLoading ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("p", { className: "cr-hint", role: "status", children: "Loading commits\u2026" }) : commitsError !== null ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("p", { className: "cr-error", role: "alert", children: commitsError }) : commits.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("p", { className: "cr-hint", children: "No commits found between these branches." }) : /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("ul", { className: "cr-commit-list", children: commits.map((commit) => /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("li", { children: /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("label", { className: "cr-commit-option", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(
                     "input",
                     {
                       type: "checkbox",
@@ -8170,24 +11018,24 @@ function NewReviewPage({
                       onChange: () => toggleCommit(commit.sha)
                     }
                   ),
-                  /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "cr-commit-sha", children: commit.shortSha }),
+                  /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "cr-commit-sha", children: commit.shortSha }),
                   " ",
-                  /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "cr-commit-subject", children: commit.subject }),
+                  /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "cr-commit-subject", children: commit.subject }),
                   " ",
-                  /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "cr-commit-author", children: commit.author })
+                  /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "cr-commit-author", children: commit.author })
                 ] }) }, commit.sha)) }),
-                chosenShas.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("p", { className: "cr-hint", role: "status", children: [
+                chosenShas.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("p", { className: "cr-hint", role: "status", children: [
                   chosenShas.length,
                   " commit",
                   chosenShas.length === 1 ? "" : "s",
                   " will be reviewed."
                 ] }) : null,
-                errors.commits !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "cr-error", role: "alert", children: errors.commits }) : null
+                errors.commits !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "cr-error", role: "alert", children: errors.commits }) : null
               ] }) : null
             ] })
-          ] }) : form.kind === "worktree" ? /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "cr-field", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("label", { className: "cr-label", htmlFor: "worktree-base", children: "Base branch" }),
-            /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(
+          ] }) : form.kind === "worktree" ? /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "cr-field", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("label", { className: "cr-label", htmlFor: "worktree-base", children: "Base branch" }),
+            /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(
               "input",
               {
                 id: "worktree-base",
@@ -8201,11 +11049,11 @@ function NewReviewPage({
                 "aria-invalid": errors.baseRef === void 0 ? void 0 : true
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "cr-hint", children: "Compares the base commit with the current worktree, including untracked files." }),
-            errors.baseRef !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "cr-error", role: "alert", children: errors.baseRef }) : null
-          ] }) : /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "cr-field", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("label", { className: "cr-label", htmlFor: "commit-sha", children: "Commit SHA" }),
-            /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "cr-hint", children: "Compares the base commit with the current worktree, including untracked files." }),
+            errors.baseRef !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "cr-error", role: "alert", children: errors.baseRef }) : null
+          ] }) : /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "cr-field", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("label", { className: "cr-label", htmlFor: "commit-sha", children: "Commit SHA" }),
+            /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(
               "input",
               {
                 id: "commit-sha",
@@ -8219,12 +11067,12 @@ function NewReviewPage({
                 "aria-describedby": errors.sha === void 0 ? void 0 : "commit-sha-error"
               }
             ),
-            errors.sha !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "cr-error", id: "commit-sha-error", role: "alert", children: errors.sha }) : null
+            errors.sha !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { className: "cr-error", id: "commit-sha-error", role: "alert", children: errors.sha }) : null
           ] })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "cr-form-actions", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(Button, { type: "submit", loading: submitting, children: "Create review" }),
-          /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(Button, { type: "button", variant: "secondary", onClick: () => navigate("/"), children: "Cancel" })
+        /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "cr-form-actions", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(Button, { type: "submit", loading: submitting, children: "Create review" }),
+          /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(Button, { type: "button", variant: "secondary", onClick: () => navigate("/"), children: "Cancel" })
         ] })
       ] })
     ] })
@@ -8233,7 +11081,7 @@ function NewReviewPage({
 
 // packages/web/src/pages/AuthPage.tsx
 var import_react25 = require("react");
-var import_jsx_runtime30 = require("react/jsx-runtime");
+var import_jsx_runtime31 = require("react/jsx-runtime");
 function nextPath() {
   const params = new URLSearchParams(window.location.search);
   const next = params.get("next");
@@ -8263,8 +11111,8 @@ function AuthPage({ client }) {
       setSubmitting(false);
     }
   }
-  return /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "cr-auth-page", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { className: "cr-auth-page", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(
       PageHeader,
       {
         eyebrow: "Authentication",
@@ -8272,8 +11120,8 @@ function AuthPage({ client }) {
         description: "Paste the shared token from the daemon configuration. It is exchanged for an HttpOnly session cookie and never stored in this browser."
       }
     ),
-    /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("form", { className: "cr-form", onSubmit: (event) => void onSubmit(event), noValidate: true, children: /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "cr-form-card", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("form", { className: "cr-form", onSubmit: (event) => void onSubmit(event), noValidate: true, children: /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { className: "cr-form-card", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(
         Input,
         {
           label: "Access token",
@@ -8286,9 +11134,9 @@ function AuthPage({ client }) {
           required: true
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { className: "cr-form-actions", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(Button, { type: "submit", loading: submitting, children: "Sign in" }),
-        /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(Button, { type: "button", variant: "secondary", onClick: () => navigate("/"), children: "Back to reviews" })
+      /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { className: "cr-form-actions", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(Button, { type: "submit", loading: submitting, children: "Sign in" }),
+        /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(Button, { type: "button", variant: "secondary", onClick: () => navigate("/"), children: "Back to reviews" })
       ] })
     ] }) })
   ] });
@@ -8296,7 +11144,7 @@ function AuthPage({ client }) {
 
 // packages/web/src/pages/HealthPage.tsx
 var import_react26 = require("react");
-var import_jsx_runtime31 = require("react/jsx-runtime");
+var import_jsx_runtime32 = require("react/jsx-runtime");
 function HealthPage({ client }) {
   const [health, setHealth] = (0, import_react26.useState)(null);
   const [error, setError] = (0, import_react26.useState)(null);
@@ -8322,31 +11170,31 @@ function HealthPage({ client }) {
     void load(controller.signal);
     return () => controller.abort();
   }, [load, reloadKey]);
-  return /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { className: "cr-health-page", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("div", { className: "cr-health-page", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(
       PageHeader,
       {
         eyebrow: "Operations",
         title: "Daemon health",
         description: "A public, unauthenticated read of the reviewd process and its store.",
-        actions: /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(Button, { variant: "secondary", onClick: () => setReloadKey((value) => value + 1), children: "Refresh" })
+        actions: /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(Button, { variant: "secondary", onClick: () => setReloadKey((value) => value + 1), children: "Refresh" })
       }
     ),
-    error !== null ? /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(
+    error !== null ? /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(
       ErrorPanel,
       {
         title: "Health check failed",
         message: error,
         onRetry: () => setReloadKey((value) => value + 1)
       }
-    ) : loading && health === null ? /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { className: "cr-form-card", "aria-label": "Loading health", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(Skeleton, { width: "40%", height: 18 }),
-      /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(Skeleton, { width: "100%", height: 12 }),
-      /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(Skeleton, { width: "72%", height: 12 })
-    ] }) : health !== null ? /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)(import_jsx_runtime31.Fragment, { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("div", { className: "cr-form-card", style: { marginBottom: 16 }, children: /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { style: { display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }, children: [
-        /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(Badge, { tone: health.status === "ok" ? "success" : "danger", children: health.status }),
-        /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("span", { className: "cr-meta", children: [
+    ) : loading && health === null ? /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("div", { className: "cr-form-card", "aria-label": "Loading health", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(Skeleton, { width: "40%", height: 18 }),
+      /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(Skeleton, { width: "100%", height: 12 }),
+      /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(Skeleton, { width: "72%", height: 12 })
+    ] }) : health !== null ? /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)(import_jsx_runtime32.Fragment, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("div", { className: "cr-form-card", style: { marginBottom: 16 }, children: /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("div", { style: { display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(Badge, { tone: health.status === "ok" ? "success" : "danger", children: health.status }),
+        /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("span", { className: "cr-meta", children: [
           "store ",
           health.store.writable ? "writable" : "read-only",
           " \xB7 git",
@@ -8355,7 +11203,7 @@ function HealthPage({ client }) {
           health.version === void 0 ? "" : ` \xB7 v${health.version}`
         ] })
       ] }) }),
-      /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("pre", { className: "cr-code-block", "aria-label": "Raw health response", children: JSON.stringify(health, null, 2) })
+      /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("pre", { className: "cr-code-block", "aria-label": "Raw health response", children: JSON.stringify(health, null, 2) })
     ] }) : null
   ] });
 }
@@ -8365,7 +11213,7 @@ var import_react29 = require("react");
 
 // packages/web/src/pages/FolderPickerDialog.tsx
 var import_react27 = require("react");
-var import_jsx_runtime32 = require("react/jsx-runtime");
+var import_jsx_runtime33 = require("react/jsx-runtime");
 function FolderPickerDialog({
   client,
   initialPath,
@@ -8418,20 +11266,20 @@ function FolderPickerDialog({
     const last = listing.breadcrumbs[listing.breadcrumbs.length - 1]?.name;
     onSelect(listing.path, last === void 0 || last === "/" ? "" : last);
   }
-  return /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)(
     Dialog,
     {
       open: true,
       title: "Choose a repository folder",
       description: "Browse folders on the daemon. A folder is valid when it contains a checkout with a .git entry.",
       onClose,
-      actions: /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)(import_jsx_runtime32.Fragment, { children: [
-        /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(Button, { type: "button", variant: "ghost", onClick: onClose, children: "Cancel" }),
-        /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(Button, { type: "button", onClick: selectCurrent, disabled: listing === null || loading, children: "Use this folder" })
+      actions: /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)(import_jsx_runtime33.Fragment, { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(Button, { type: "button", variant: "ghost", onClick: onClose, children: "Cancel" }),
+        /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(Button, { type: "button", onClick: selectCurrent, disabled: listing === null || loading, children: "Use this folder" })
       ] }),
       children: [
-        /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("form", { className: "cr-folder-path-form", onSubmit: openTypedPath, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("form", { className: "cr-folder-path-form", onSubmit: openTypedPath, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
             Input,
             {
               label: "Folder path",
@@ -8444,10 +11292,10 @@ function FolderPickerDialog({
               className: "cr-mono"
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(Button, { type: "submit", variant: "secondary", children: "Open" })
+          /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(Button, { type: "submit", variant: "secondary", children: "Open" })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("div", { className: "cr-folder-nav", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { className: "cr-folder-nav", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
             Button,
             {
               type: "button",
@@ -8462,11 +11310,11 @@ function FolderPickerDialog({
               children: "Up"
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("nav", { className: "cr-folder-breadcrumbs", "aria-label": "Breadcrumb", children: listing?.breadcrumbs.map((crumb, index) => {
+          /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("nav", { className: "cr-folder-breadcrumbs", "aria-label": "Breadcrumb", children: listing?.breadcrumbs.map((crumb, index) => {
             const last = index === listing.breadcrumbs.length - 1;
-            return /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("span", { className: "cr-folder-crumb", children: [
-              index > 0 ? /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { "aria-hidden": "true", className: "cr-folder-separator", children: "/" }) : null,
-              /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(
+            return /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("span", { className: "cr-folder-crumb", children: [
+              index > 0 ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { "aria-hidden": "true", className: "cr-folder-separator", children: "/" }) : null,
+              /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
                 "button",
                 {
                   type: "button",
@@ -8478,9 +11326,9 @@ function FolderPickerDialog({
               )
             ] }, crumb.path);
           }) }),
-          isGitRepository ? /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { className: "cr-folder-git-badge", children: "git repo" }) : null
+          isGitRepository ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { className: "cr-folder-git-badge", children: "git repo" }) : null
         ] }),
-        error !== null ? /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(
+        error !== null ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
           ErrorPanel,
           {
             title: "Could not open this folder",
@@ -8491,11 +11339,11 @@ function FolderPickerDialog({
               setRequestKey((value) => value + 1);
             }
           }
-        ) : loading && listing === null ? /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("p", { className: "cr-muted", role: "status", children: "Reading folders\u2026" }) : listing === null ? null : subfolders.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("p", { className: "cr-muted", children: "This folder has no subfolders. You can still choose it." }) : /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("ul", { className: "cr-folder-list", "aria-label": "Folders", children: subfolders.map((entry) => /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("li", { children: /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("button", { type: "button", className: "cr-folder-entry", onClick: () => setPath(entry.path), children: [
-          /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { className: "cr-folder-entry-name", children: entry.name }),
-          entry.isGit ? /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { className: "cr-folder-git-badge", children: "git repo" }) : null
+        ) : loading && listing === null ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("p", { className: "cr-muted", role: "status", children: "Reading folders\u2026" }) : listing === null ? null : subfolders.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("p", { className: "cr-muted", children: "This folder has no subfolders. You can still choose it." }) : /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("ul", { className: "cr-folder-list", "aria-label": "Folders", children: subfolders.map((entry) => /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("li", { children: /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("button", { type: "button", className: "cr-folder-entry", onClick: () => setPath(entry.path), children: [
+          /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { className: "cr-folder-entry-name", children: entry.name }),
+          entry.isGit ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { className: "cr-folder-git-badge", children: "git repo" }) : null
         ] }) }, entry.path)) }),
-        listing?.truncated === true ? /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("p", { className: "cr-hint", children: "Showing the first 500 folders. Type a path to jump deeper." }) : null
+        listing?.truncated === true ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("p", { className: "cr-hint", children: "Showing the first 500 folders. Type a path to jump deeper." }) : null
       ]
     }
   );
@@ -8503,7 +11351,7 @@ function FolderPickerDialog({
 
 // packages/web/src/pages/RepositoryBranchSelect.tsx
 var import_react28 = require("react");
-var import_jsx_runtime33 = require("react/jsx-runtime");
+var import_jsx_runtime34 = require("react/jsx-runtime");
 var BRANCH_DEBOUNCE_MS = 300;
 function RepositoryBranchSelect({
   client,
@@ -8568,9 +11416,9 @@ function RepositoryBranchSelect({
     for (const branch of available) options.push({ value: branch, label: branch });
     hint = available.length === 0 ? "This repository has no branches yet." : "Preselected when starting a review.";
   }
-  return /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { className: "cr-field", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("label", { className: "cr-label", htmlFor: id, children: "Default target branch" }),
-    /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("div", { className: "cr-field", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("label", { className: "cr-label", htmlFor: id, children: "Default target branch" }),
+    /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
       "select",
       {
         id,
@@ -8581,16 +11429,16 @@ function RepositoryBranchSelect({
         "aria-busy": loading || void 0,
         "aria-describedby": error === null ? hintId : errorId,
         onChange: (event) => onChange(event.target.value),
-        children: options.map((option) => /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("option", { value: option.value, children: option.label }, option.value))
+        children: options.map((option) => /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("option", { value: option.value, children: option.label }, option.value))
       }
     ),
-    error === null ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { className: "cr-hint", id: hintId, children: hint }) : /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { className: "cr-branch-feedback", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("span", { className: "cr-error", id: errorId, role: "alert", children: [
+    error === null ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("span", { className: "cr-hint", id: hintId, children: hint }) : /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("div", { className: "cr-branch-feedback", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("span", { className: "cr-error", id: errorId, role: "alert", children: [
         hint,
         " ",
         error
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
         Button,
         {
           type: "button",
@@ -8609,7 +11457,7 @@ function RepositoryBranchSelect({
 }
 
 // packages/web/src/pages/SettingsPage.tsx
-var import_jsx_runtime34 = require("react/jsx-runtime");
+var import_jsx_runtime35 = require("react/jsx-runtime");
 function SettingsPage({ client }) {
   const [drafts, setDrafts] = (0, import_react29.useState)([]);
   const [errors, setErrors] = (0, import_react29.useState)({});
@@ -8739,14 +11587,14 @@ function SettingsPage({ client }) {
       setSaving(false);
     }
   }
-  return /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)(import_jsx_runtime34.Fragment, { children: [
-    /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)(import_jsx_runtime35.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
       PageHeader,
       {
         eyebrow: "Settings",
         title: "Repositories",
         description: "Register the local checkouts that reviewd may inspect. Paths are resolved on the daemon.",
-        actions: /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+        actions: /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
           Button,
           {
             type: "button",
@@ -8758,14 +11606,14 @@ function SettingsPage({ client }) {
         )
       }
     ),
-    loadError !== null ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+    loadError !== null ? /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
       ErrorPanel,
       {
         title: "Could not load repositories",
         message: loadError,
         onRetry: () => setReloadKey((value) => value + 1)
       }
-    ) : loading ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("p", { className: "cr-muted", role: "status", children: "Loading repositories\u2026" }) : /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)(
+    ) : loading ? /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("p", { className: "cr-muted", role: "status", children: "Loading repositories\u2026" }) : /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)(
       "form",
       {
         className: "cr-settings-form",
@@ -8775,19 +11623,19 @@ function SettingsPage({ client }) {
         },
         noValidate: true,
         children: [
-          saveError !== null ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(ErrorPanel, { title: "Could not save repositories", message: saveError }) : null,
-          notice !== null ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("p", { className: "cr-settings-notice", role: "status", children: notice }) : null,
-          drafts.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("div", { className: "cr-empty", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("h2", { children: "No repositories yet" }),
-            /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("p", { children: "Add a checkout to start reviewing merge requests from it." }),
-            /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(Button, { type: "button", variant: "secondary", onClick: addRepository, children: "Add repository" })
-          ] }) : /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("ol", { className: "cr-repo-list", children: drafts.map((draft, index) => {
+          saveError !== null ? /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(ErrorPanel, { title: "Could not save repositories", message: saveError }) : null,
+          notice !== null ? /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("p", { className: "cr-settings-notice", role: "status", children: notice }) : null,
+          drafts.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("div", { className: "cr-empty", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("h2", { children: "No repositories yet" }),
+            /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("p", { children: "Add a checkout to start reviewing merge requests from it." }),
+            /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(Button, { type: "button", variant: "secondary", onClick: addRepository, children: "Add repository" })
+          ] }) : /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("ol", { className: "cr-repo-list", children: drafts.map((draft, index) => {
             const draftErrors = errors[draft.key] ?? {};
-            return /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("li", { className: "cr-repo-row", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("div", { className: "cr-repo-fields", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("div", { className: "cr-field", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("label", { className: "cr-label", htmlFor: `repo-${draft.key}-name`, children: "Repository name" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+            return /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("li", { className: "cr-repo-row", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("div", { className: "cr-repo-fields", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("div", { className: "cr-field", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("label", { className: "cr-label", htmlFor: `repo-${draft.key}-name`, children: "Repository name" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
                     "input",
                     {
                       id: `repo-${draft.key}-name`,
@@ -8800,7 +11648,7 @@ function SettingsPage({ client }) {
                       "aria-describedby": draftErrors.name === void 0 ? void 0 : `repo-${draft.key}-name-error`
                     }
                   ),
-                  draftErrors.name !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+                  draftErrors.name !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
                     "span",
                     {
                       className: "cr-error",
@@ -8810,10 +11658,10 @@ function SettingsPage({ client }) {
                     }
                   ) : null
                 ] }),
-                /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("div", { className: "cr-field", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("label", { className: "cr-label", htmlFor: `repo-${draft.key}-path`, children: "Path on daemon" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("div", { className: "cr-path-control", children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("div", { className: "cr-field", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("label", { className: "cr-label", htmlFor: `repo-${draft.key}-path`, children: "Path on daemon" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("div", { className: "cr-path-control", children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
                       "input",
                       {
                         id: `repo-${draft.key}-path`,
@@ -8828,18 +11676,18 @@ function SettingsPage({ client }) {
                         "aria-describedby": draftErrors.path === void 0 ? void 0 : `repo-${draft.key}-path-error`
                       }
                     ),
-                    /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(Tooltip, { label: "Browse folders", children: /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+                    /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(Tooltip, { label: "Browse folders", children: /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
                       IconButton,
                       {
                         label: `Browse folders for repository ${draft.name.trim() || draft.path.trim() || index + 1}`,
                         className: "cr-path-browse",
                         disabled: saving,
                         onClick: () => setPicker({ key: draft.key, path: draft.path.trim() }),
-                        children: /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(FolderIcon, {})
+                        children: /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(FolderIcon, {})
                       }
                     ) })
                   ] }),
-                  draftErrors.path !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+                  draftErrors.path !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
                     "span",
                     {
                       className: "cr-error",
@@ -8849,7 +11697,7 @@ function SettingsPage({ client }) {
                     }
                   ) : null
                 ] }),
-                /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
                   RepositoryBranchSelect,
                   {
                     client,
@@ -8861,7 +11709,7 @@ function SettingsPage({ client }) {
                   }
                 )
               ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
                 Button,
                 {
                   type: "button",
@@ -8875,11 +11723,11 @@ function SettingsPage({ client }) {
               )
             ] }, draft.key);
           }) }),
-          drafts.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(Button, { type: "button", variant: "secondary", onClick: addRepository, disabled: saving, children: "Add repository" }) : null
+          drafts.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(Button, { type: "button", variant: "secondary", onClick: addRepository, disabled: saving, children: "Add repository" }) : null
         ]
       }
     ),
-    picker !== null ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+    picker !== null ? /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
       FolderPickerDialog,
       {
         client,
@@ -8893,16 +11741,16 @@ function SettingsPage({ client }) {
 }
 
 // packages/web/src/pages/ReviewDetailPage.tsx
-var import_jsx_runtime35 = require("react/jsx-runtime");
+var import_jsx_runtime36 = require("react/jsx-runtime");
 function ReviewDetailPage({ client, id }) {
   const location = useLocation();
   const navigate = useNavigate();
-  return /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(ReviewDetail, { client, id, location, navigate });
+  return /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(ReviewDetail, { client, id, location, navigate });
 }
 
 // packages/web/src/pages/EditReviewPage.tsx
 var import_react30 = require("react");
-var import_jsx_runtime36 = require("react/jsx-runtime");
+var import_jsx_runtime37 = require("react/jsx-runtime");
 var SCOPE_OPTIONS = [
   { value: "range", label: "Merge request (branches)" },
   { value: "worktree", label: "Working tree" },
@@ -9069,12 +11917,12 @@ function EditReviewPage({ client, id }) {
     }
   }
   if (loading) {
-    return /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("div", { className: "cr-form-loading", "data-testid": "edit-review-loading", children: /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("p", { className: "cr-hint", role: "status", children: "Loading the review\u2026" }) });
+    return /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("div", { className: "cr-form-loading", "data-testid": "edit-review-loading", children: /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("p", { className: "cr-hint", role: "status", children: "Loading the review\u2026" }) });
   }
   if (loadError !== null || view === null || form === null || initial === null) {
-    return /* @__PURE__ */ (0, import_jsx_runtime36.jsxs)(import_jsx_runtime36.Fragment, { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(PageHeader, { eyebrow: "Edit review", title: "Edit the request" }),
-      /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime37.jsxs)(import_jsx_runtime37.Fragment, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(PageHeader, { eyebrow: "Edit review", title: "Edit the request" }),
+      /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(
         ErrorPanel,
         {
           title: "Could not load the review",
@@ -9082,11 +11930,11 @@ function EditReviewPage({ client, id }) {
           onRetry: () => setSubmitError(null)
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(Button, { variant: "secondary", onClick: () => navigate("/"), children: "Back to reviews" })
+      /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(Button, { variant: "secondary", onClick: () => navigate("/"), children: "Back to reviews" })
     ] });
   }
-  return /* @__PURE__ */ (0, import_jsx_runtime36.jsxs)(import_jsx_runtime36.Fragment, { children: [
-    /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime37.jsxs)(import_jsx_runtime37.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(
       PageHeader,
       {
         eyebrow: "Edit review",
@@ -9094,14 +11942,14 @@ function EditReviewPage({ client, id }) {
         description: "Correct the title, reviewer or diff boundary. The repository cannot be changed; create a new review for a different repository."
       }
     ),
-    /* @__PURE__ */ (0, import_jsx_runtime36.jsxs)("form", { className: "cr-form", onSubmit: (event) => void onSubmit(event), noValidate: true, children: [
-      /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("datalist", { id: "edit-branch-options", children: branches.map((branch) => /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("option", { value: branch }, branch)) }),
-      closed ? /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("p", { className: "cr-notice cr-notice-warning", children: "Closed reviews cannot be edited. You can still delete this review from its page." }) : null,
-      submitError !== null ? /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(ErrorPanel, { title: "Could not update the review", message: submitError }) : null,
-      /* @__PURE__ */ (0, import_jsx_runtime36.jsxs)("div", { className: "cr-form-card", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime36.jsxs)("div", { className: "cr-form-section", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("h2", { className: "cr-form-section-title", children: "Repository" }),
-          /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("div", { className: "cr-form-grid", children: /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("div", { className: "cr-field", style: { gridColumn: "1 / -1" }, children: /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime37.jsxs)("form", { className: "cr-form", onSubmit: (event) => void onSubmit(event), noValidate: true, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("datalist", { id: "edit-branch-options", children: branches.map((branch) => /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("option", { value: branch }, branch)) }),
+      closed ? /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("p", { className: "cr-notice cr-notice-warning", children: "Closed reviews cannot be edited. You can still delete this review from its page." }) : null,
+      submitError !== null ? /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(ErrorPanel, { title: "Could not update the review", message: submitError }) : null,
+      /* @__PURE__ */ (0, import_jsx_runtime37.jsxs)("div", { className: "cr-form-card", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime37.jsxs)("div", { className: "cr-form-section", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("h2", { className: "cr-form-section-title", children: "Repository" }),
+          /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("div", { className: "cr-form-grid", children: /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("div", { className: "cr-field", style: { gridColumn: "1 / -1" }, children: /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(
             Input,
             {
               label: "Repository path",
@@ -9113,10 +11961,10 @@ function EditReviewPage({ client, id }) {
             }
           ) }) })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime36.jsxs)("div", { className: "cr-form-section", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("h2", { className: "cr-form-section-title", children: "Review" }),
-          /* @__PURE__ */ (0, import_jsx_runtime36.jsxs)("div", { className: "cr-form-grid", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("div", { className: "cr-field", style: { gridColumn: "1 / -1" }, children: /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime37.jsxs)("div", { className: "cr-form-section", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("h2", { className: "cr-form-section-title", children: "Review" }),
+          /* @__PURE__ */ (0, import_jsx_runtime37.jsxs)("div", { className: "cr-form-grid", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("div", { className: "cr-field", style: { gridColumn: "1 / -1" }, children: /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(
               Input,
               {
                 label: "Title",
@@ -9126,8 +11974,8 @@ function EditReviewPage({ client, id }) {
                 required: true
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime36.jsxs)("div", { className: "cr-field", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime37.jsxs)("div", { className: "cr-field", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(
                 Select,
                 {
                   label: "Reviewer",
@@ -9137,9 +11985,9 @@ function EditReviewPage({ client, id }) {
                   options: reviewerOptions
                 }
               ),
-              /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("span", { className: "cr-hint", children: "Manual reviews accept comments immediately. Agent worker queues a read-only reviewer job." })
+              /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("span", { className: "cr-hint", children: "Manual reviews accept comments immediately. Agent worker queues a read-only reviewer job." })
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("div", { className: "cr-field", children: /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("div", { className: "cr-field", children: /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(
               Select,
               {
                 label: "Diff scope",
@@ -9151,14 +11999,14 @@ function EditReviewPage({ client, id }) {
             ) })
           ] })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime36.jsxs)("div", { className: "cr-form-section", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("h2", { className: "cr-form-section-title", children: "Changes" }),
-          /* @__PURE__ */ (0, import_jsx_runtime36.jsxs)("p", { className: "cr-meta", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime37.jsxs)("div", { className: "cr-form-section", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("h2", { className: "cr-form-section-title", children: "Changes" }),
+          /* @__PURE__ */ (0, import_jsx_runtime37.jsxs)("p", { className: "cr-meta", children: [
             "Current scope: ",
-            /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("span", { className: "cr-mono", children: initial.currentLabel })
+            /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("span", { className: "cr-mono", children: initial.currentLabel })
           ] }),
-          !initial.hasSnapshot ? /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("p", { className: "cr-hint", children: "This review has no snapshot to edit." }) : form.kind === "range" ? /* @__PURE__ */ (0, import_jsx_runtime36.jsxs)("div", { className: "cr-form-grid", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("div", { className: "cr-field", children: /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(
+          !initial.hasSnapshot ? /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("p", { className: "cr-hint", children: "This review has no snapshot to edit." }) : form.kind === "range" ? /* @__PURE__ */ (0, import_jsx_runtime37.jsxs)("div", { className: "cr-form-grid", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("div", { className: "cr-field", children: /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(
               Input,
               {
                 label: "Target branch",
@@ -9169,7 +12017,7 @@ function EditReviewPage({ client, id }) {
                 className: "cr-mono"
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("div", { className: "cr-field", children: /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("div", { className: "cr-field", children: /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(
               Input,
               {
                 label: "Source branch",
@@ -9180,7 +12028,7 @@ function EditReviewPage({ client, id }) {
                 className: "cr-mono"
               }
             ) })
-          ] }) : form.kind === "worktree" ? /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("div", { className: "cr-field", children: /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(
+          ] }) : form.kind === "worktree" ? /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("div", { className: "cr-field", children: /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(
             Input,
             {
               label: "Base branch",
@@ -9190,7 +12038,7 @@ function EditReviewPage({ client, id }) {
               list: "edit-branch-options",
               className: "cr-mono"
             }
-          ) }) : form.kind === "commit" ? /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("div", { className: "cr-field", children: /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(
+          ) }) : form.kind === "commit" ? /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("div", { className: "cr-field", children: /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(
             Input,
             {
               label: "Commit SHA",
@@ -9199,7 +12047,7 @@ function EditReviewPage({ client, id }) {
               disabled: closed,
               className: "cr-mono"
             }
-          ) }) : /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("div", { className: "cr-field", children: /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(
+          ) }) : /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("div", { className: "cr-field", children: /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(
             Input,
             {
               label: "Commits (oldest first)",
@@ -9210,15 +12058,15 @@ function EditReviewPage({ client, id }) {
               hint: "Space-separated commit SHAs; the range is inclusive and ordered oldest first."
             }
           ) }),
-          scopeChanged && !closed ? /* @__PURE__ */ (0, import_jsx_runtime36.jsxs)("p", { className: "cr-notice cr-notice-warning", "data-testid": "scope-warning", children: [
+          scopeChanged && !closed ? /* @__PURE__ */ (0, import_jsx_runtime37.jsxs)("p", { className: "cr-notice cr-notice-warning", "data-testid": "scope-warning", children: [
             "Changing the scope creates round ",
             nextRound,
             " from a new snapshot and re-anchors every comment. Previous rounds and comments stay available in history."
           ] }) : null
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime36.jsxs)("div", { className: "cr-form-actions", children: [
-          !closed ? /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(Button, { type: "submit", loading: saving, disabled: !dirty, children: "Save changes" }) : null,
-          /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime37.jsxs)("div", { className: "cr-form-actions", children: [
+          !closed ? /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(Button, { type: "submit", loading: saving, disabled: !dirty, children: "Save changes" }) : null,
+          /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(
             Button,
             {
               type: "button",
@@ -9235,22 +12083,22 @@ function EditReviewPage({ client, id }) {
 }
 
 // packages/web/src/pages/NotFoundPage.tsx
-var import_jsx_runtime37 = require("react/jsx-runtime");
+var import_jsx_runtime38 = require("react/jsx-runtime");
 function NotFoundPage({ path }) {
   const navigate = useNavigate();
-  return /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("div", { className: "cr-placeholder", children: /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime38.jsx)("div", { className: "cr-placeholder", children: /* @__PURE__ */ (0, import_jsx_runtime38.jsx)(
     PageHeader,
     {
       eyebrow: "404",
       title: "That page does not exist",
       description: `No route matches ${path}. The review list is still one click away.`,
-      actions: /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(Button, { onClick: () => navigate("/"), children: "Back to reviews" })
+      actions: /* @__PURE__ */ (0, import_jsx_runtime38.jsx)(Button, { onClick: () => navigate("/"), children: "Back to reviews" })
     }
   ) });
 }
 
 // packages/web/src/App.tsx
-var import_jsx_runtime38 = require("react/jsx-runtime");
+var import_jsx_runtime39 = require("react/jsx-runtime");
 function ReviewRoot({
   client,
   showSettingsLink = true
@@ -9270,15 +12118,15 @@ function ReviewRoot({
   (0, import_react31.useEffect)(() => {
     if (AUTH_MODE === "dsh" && route.name === "auth") navigate("/", { replace: true });
   }, [navigate, route.name]);
-  return /* @__PURE__ */ (0, import_jsx_runtime38.jsxs)(import_jsx_runtime38.Fragment, { children: [
-    route.name === "list" ? /* @__PURE__ */ (0, import_jsx_runtime38.jsx)(ReviewListPage, { client: activeClient }) : null,
-    route.name === "new" ? /* @__PURE__ */ (0, import_jsx_runtime38.jsx)(NewReviewPage, { client: activeClient, showSettingsLink }) : null,
-    route.name === "auth" && AUTH_MODE === "token" ? /* @__PURE__ */ (0, import_jsx_runtime38.jsx)(AuthPage, { client: activeClient }) : null,
-    route.name === "health" ? /* @__PURE__ */ (0, import_jsx_runtime38.jsx)(HealthPage, { client: activeClient }) : null,
-    route.name === "settings" ? /* @__PURE__ */ (0, import_jsx_runtime38.jsx)(SettingsPage, { client: activeClient }) : null,
-    route.name === "review" ? /* @__PURE__ */ (0, import_jsx_runtime38.jsx)(ReviewDetailPage, { client: activeClient, id: route.id }) : null,
-    route.name === "edit-review" ? /* @__PURE__ */ (0, import_jsx_runtime38.jsx)(EditReviewPage, { client: activeClient, id: route.id }) : null,
-    route.name === "not-found" ? /* @__PURE__ */ (0, import_jsx_runtime38.jsx)(NotFoundPage, { path: route.path }) : null
+  return /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)(import_jsx_runtime39.Fragment, { children: [
+    route.name === "list" ? /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(ReviewListPage, { client: activeClient }) : null,
+    route.name === "new" ? /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(NewReviewPage, { client: activeClient, showSettingsLink }) : null,
+    route.name === "auth" && AUTH_MODE === "token" ? /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(AuthPage, { client: activeClient }) : null,
+    route.name === "health" ? /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(HealthPage, { client: activeClient }) : null,
+    route.name === "settings" ? /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(SettingsPage, { client: activeClient }) : null,
+    route.name === "review" ? /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(ReviewDetailPage, { client: activeClient, id: route.id }) : null,
+    route.name === "edit-review" ? /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(EditReviewPage, { client: activeClient, id: route.id }) : null,
+    route.name === "not-found" ? /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(NotFoundPage, { path: route.path }) : null
   ] });
 }
 function ReviewProviders({
@@ -9295,7 +12143,7 @@ function ReviewProviders({
     ...theme?.persist === void 0 ? {} : { persist: theme.persist },
     ...theme?.targetRef === void 0 ? {} : { targetRef: theme.targetRef }
   };
-  return /* @__PURE__ */ (0, import_jsx_runtime38.jsx)(RouterProvider, { router: activeRouter, children: /* @__PURE__ */ (0, import_jsx_runtime38.jsx)(ThemeProvider, { ...themeProps, children: /* @__PURE__ */ (0, import_jsx_runtime38.jsx)(ToastProvider, { children: portalContainer === void 0 ? children : /* @__PURE__ */ (0, import_jsx_runtime38.jsx)(PortalContainerProvider, { container: portalContainer, children }) }) }) });
+  return /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(RouterProvider, { router: activeRouter, children: /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(ThemeProvider, { ...themeProps, children: /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(ToastProvider, { children: portalContainer === void 0 ? children : /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(PortalContainerProvider, { container: portalContainer, children }) }) }) });
 }
 function ReviewApp({
   client,
@@ -9306,15 +12154,15 @@ function ReviewApp({
   showSettingsLink = true,
   contentClassName
 }) {
-  return /* @__PURE__ */ (0, import_jsx_runtime38.jsxs)(ReviewProviders, { router, theme, portalContainer, children: [
+  return /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)(ReviewProviders, { router, theme, portalContainer, children: [
     header,
-    /* @__PURE__ */ (0, import_jsx_runtime38.jsx)("main", { className: contentClassName, children: /* @__PURE__ */ (0, import_jsx_runtime38.jsx)(ReviewRoot, { client, showSettingsLink }) })
+    /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("main", { className: contentClassName, children: /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(ReviewRoot, { client, showSettingsLink }) })
   ] });
 }
 
 // packages/dsh/src/client/ErrorBoundary.tsx
 var import_react32 = require("react");
-var import_jsx_runtime39 = require("react/jsx-runtime");
+var import_jsx_runtime40 = require("react/jsx-runtime");
 var ErrorBoundary = class extends import_react32.Component {
   state = { error: null };
   static getDerivedStateFromError(error) {
@@ -9325,10 +12173,10 @@ var ErrorBoundary = class extends import_react32.Component {
   }
   render() {
     if (this.state.error !== null) {
-      return /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)("div", { className: "cr-native-error", role: "alert", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("h1", { children: this.props.title ?? "Code review failed to render" }),
-        /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("p", { children: this.state.error.message }),
-        /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("button", { type: "button", onClick: () => this.setState({ error: null }), children: "Try again" })
+      return /* @__PURE__ */ (0, import_jsx_runtime40.jsxs)("div", { className: "cr-native-error", role: "alert", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("h1", { children: this.props.title ?? "Code review failed to render" }),
+        /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("p", { children: this.state.error.message }),
+        /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("button", { type: "button", onClick: () => this.setState({ error: null }), children: "Try again" })
       ] });
     }
     return this.props.children;
@@ -9336,7 +12184,7 @@ var ErrorBoundary = class extends import_react32.Component {
 };
 
 // packages/dsh/src/client/NativePanel.tsx
-var import_jsx_runtime40 = require("react/jsx-runtime");
+var import_jsx_runtime41 = require("react/jsx-runtime");
 var ROUTE_STORAGE_KEY = "cr-dsh-route";
 function readHostTheme() {
   return typeof document !== "undefined" && document.body.hasAttribute("data-ds-dark-theme") ? "dark" : "light";
@@ -9344,11 +12192,11 @@ function readHostTheme() {
 function NativeHeader() {
   const route = parseRoute(useLocation());
   const active = route.name === "new" ? "/new" : route.name === "health" ? "/health" : "/";
-  return /* @__PURE__ */ (0, import_jsx_runtime40.jsxs)("header", { className: "cr-native-bar", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "cr-native-brand", children: "Code review" }),
-    /* @__PURE__ */ (0, import_jsx_runtime40.jsxs)("nav", { className: "cr-native-nav", "aria-label": "Code review sections", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(Link, { className: "cr-native-tab", to: "/", "aria-current": active === "/" ? "page" : void 0, children: "Reviews" }),
-      /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime41.jsxs)("header", { className: "cr-native-bar", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("span", { className: "cr-native-brand", children: "Code review" }),
+    /* @__PURE__ */ (0, import_jsx_runtime41.jsxs)("nav", { className: "cr-native-nav", "aria-label": "Code review sections", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(Link, { className: "cr-native-tab", to: "/", "aria-current": active === "/" ? "page" : void 0, children: "Reviews" }),
+      /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(
         Link,
         {
           className: "cr-native-tab",
@@ -9357,7 +12205,7 @@ function NativeHeader() {
           children: "New review"
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(
         Link,
         {
           className: "cr-native-tab",
@@ -9407,20 +12255,20 @@ function NativePanel({
     syncSelection();
     return () => observer.disconnect();
   }, []);
-  return /* @__PURE__ */ (0, import_jsx_runtime40.jsxs)("div", { ref: scopeRef, className: "cr-native-scope cr-native-panel", "data-theme": theme, children: [
-    /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(ErrorBoundary, { title: "Code review failed to render", children: /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime41.jsxs)("div", { ref: scopeRef, className: "cr-native-scope cr-native-panel", "data-theme": theme, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(ErrorBoundary, { title: "Code review failed to render", children: /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(
       ReviewApp,
       {
         client: activeClient,
         router: panelRouter,
-        header: /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(NativeHeader, {}),
+        header: /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(NativeHeader, {}),
         theme: { initialTheme: theme, persist: false, targetRef: scopeRef },
         portalContainer: portalRef,
         showSettingsLink: false,
         contentClassName: "cr-native-main"
       }
     ) }),
-    /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("div", { ref: portalRef })
+    /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("div", { ref: portalRef })
   ] });
 }
 
@@ -9429,9 +12277,9 @@ var import_react35 = require("react");
 
 // packages/dsh/src/client/NativeFolderPicker.tsx
 var import_react34 = require("react");
-var import_jsx_runtime41 = require("react/jsx-runtime");
+var import_jsx_runtime42 = require("react/jsx-runtime");
 function FolderGlyph() {
-  return /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("svg", { width: "15", height: "15", viewBox: "0 0 16 16", fill: "none", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("svg", { width: "15", height: "15", viewBox: "0 0 16 16", fill: "none", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
     "path",
     {
       d: "M2.5 4.5c0-.55.45-1 1-1h2.6c.27 0 .52.1.7.29l.72.71h5c.55 0 1 .45 1 1v5.5c0 .55-.45 1-1 1h-9c-.55 0-1-.45-1-1v-6.5Z",
@@ -9507,7 +12355,7 @@ function NativeFolderPicker({
     const last = listing.breadcrumbs[listing.breadcrumbs.length - 1]?.name;
     onSelect(listing.path, last === void 0 || last === "/" ? "" : last);
   }
-  return /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
     "div",
     {
       className: "cr-dsh-picker-layer",
@@ -9515,7 +12363,7 @@ function NativeFolderPicker({
       onMouseDown: (event) => {
         if (event.target === event.currentTarget) onClose();
       },
-      children: /* @__PURE__ */ (0, import_jsx_runtime41.jsxs)(
+      children: /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)(
         "div",
         {
           ref: panelRef,
@@ -9525,12 +12373,12 @@ function NativeFolderPicker({
           "aria-labelledby": "cr-dsh-picker-title",
           tabIndex: -1,
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime41.jsxs)("header", { className: "cr-dsh-picker-head", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime41.jsxs)("div", { children: [
-                /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("h2", { id: "cr-dsh-picker-title", children: "Choose a repository folder" }),
-                /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("p", { children: "A folder is valid when it contains a checkout with a .git entry." })
+            /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)("header", { className: "cr-dsh-picker-head", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)("div", { children: [
+                /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("h2", { id: "cr-dsh-picker-title", children: "Choose a repository folder" }),
+                /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("p", { children: "A folder is valid when it contains a checkout with a .git entry." })
               ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
                 "button",
                 {
                   type: "button",
@@ -9538,7 +12386,7 @@ function NativeFolderPicker({
                   "aria-label": "Close folder picker",
                   title: "Close",
                   onClick: onClose,
-                  children: /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "none", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(
+                  children: /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("svg", { width: "14", height: "14", viewBox: "0 0 16 16", fill: "none", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
                     "path",
                     {
                       d: "m4 4 8 8M12 4l-8 8",
@@ -9550,10 +12398,10 @@ function NativeFolderPicker({
                 }
               )
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime41.jsxs)("form", { className: "cr-dsh-picker-path", onSubmit: openTypedPath, children: [
-              /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("label", { className: "cr-dsh-label", htmlFor: "cr-dsh-picker-path", children: "Path" }),
-              /* @__PURE__ */ (0, import_jsx_runtime41.jsxs)("div", { className: "cr-dsh-inline", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)("form", { className: "cr-dsh-picker-path", onSubmit: openTypedPath, children: [
+              /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("label", { className: "cr-dsh-label", htmlFor: "cr-dsh-picker-path", children: "Path" }),
+              /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)("div", { className: "cr-dsh-inline", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
                   "input",
                   {
                     id: "cr-dsh-picker-path",
@@ -9566,11 +12414,11 @@ function NativeFolderPicker({
                     spellCheck: false
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("button", { type: "submit", className: "cr-dsh-button", children: "Open" })
+                /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("button", { type: "submit", className: "cr-dsh-button", children: "Open" })
               ] })
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime41.jsxs)("div", { className: "cr-dsh-picker-nav", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)("div", { className: "cr-dsh-picker-nav", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
                 "button",
                 {
                   type: "button",
@@ -9584,11 +12432,11 @@ function NativeFolderPicker({
                   children: "Up"
                 }
               ),
-              /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("nav", { className: "cr-dsh-breadcrumbs", "aria-label": "Breadcrumb", children: listing?.breadcrumbs.map((crumb, index) => {
+              /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("nav", { className: "cr-dsh-breadcrumbs", "aria-label": "Breadcrumb", children: listing?.breadcrumbs.map((crumb, index) => {
                 const last = index === listing.breadcrumbs.length - 1;
-                return /* @__PURE__ */ (0, import_jsx_runtime41.jsxs)("span", { className: "cr-dsh-crumb", children: [
-                  index > 0 ? /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("span", { "aria-hidden": "true", className: "cr-dsh-crumb-separator", children: "/" }) : null,
-                  /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(
+                return /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)("span", { className: "cr-dsh-crumb", children: [
+                  index > 0 ? /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("span", { "aria-hidden": "true", className: "cr-dsh-crumb-separator", children: "/" }) : null,
+                  /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
                     "button",
                     {
                       type: "button",
@@ -9600,14 +12448,14 @@ function NativeFolderPicker({
                   )
                 ] }, crumb.path);
               }) }),
-              isGitRepository ? /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("span", { className: "cr-dsh-badge", children: "git repo" }) : null
+              isGitRepository ? /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("span", { className: "cr-dsh-badge", children: "git repo" }) : null
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("div", { className: "cr-dsh-picker-list", children: error !== null ? /* @__PURE__ */ (0, import_jsx_runtime41.jsxs)("div", { className: "cr-dsh-picker-state", role: "alert", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime41.jsxs)("span", { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("div", { className: "cr-dsh-picker-list", children: error !== null ? /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)("div", { className: "cr-dsh-picker-state", role: "alert", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)("span", { children: [
                 "Could not open this folder: ",
                 error
               ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
                 "button",
                 {
                   type: "button",
@@ -9619,23 +12467,23 @@ function NativeFolderPicker({
                   children: "Go to home"
                 }
               )
-            ] }) : loading && listing === null ? /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("p", { className: "cr-dsh-muted", role: "status", children: "Reading folders\u2026" }) : listing === null ? null : subfolders.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("p", { className: "cr-dsh-muted", children: "This folder has no subfolders. You can still choose it." }) : /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("ul", { className: "cr-dsh-picker-entries", "aria-label": "Folders", children: subfolders.map((entry) => /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("li", { children: /* @__PURE__ */ (0, import_jsx_runtime41.jsxs)(
+            ] }) : loading && listing === null ? /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("p", { className: "cr-dsh-muted", role: "status", children: "Reading folders\u2026" }) : listing === null ? null : subfolders.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("p", { className: "cr-dsh-muted", children: "This folder has no subfolders. You can still choose it." }) : /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("ul", { className: "cr-dsh-picker-entries", "aria-label": "Folders", children: subfolders.map((entry) => /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("li", { children: /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)(
               "button",
               {
                 type: "button",
                 className: "cr-dsh-picker-entry",
                 onClick: () => setPath(entry.path),
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(FolderGlyph, {}),
-                  /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("span", { className: "cr-dsh-picker-entry-name", children: entry.name }),
-                  entry.isGit ? /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("span", { className: "cr-dsh-badge", children: "git repo" }) : null
+                  /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(FolderGlyph, {}),
+                  /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("span", { className: "cr-dsh-picker-entry-name", children: entry.name }),
+                  entry.isGit ? /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("span", { className: "cr-dsh-badge", children: "git repo" }) : null
                 ]
               }
             ) }, entry.path)) }) }),
-            listing?.truncated === true ? /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("p", { className: "cr-dsh-muted cr-dsh-picker-hint", children: "Showing the first 500 folders. Type a path to jump deeper." }) : null,
-            /* @__PURE__ */ (0, import_jsx_runtime41.jsxs)("footer", { className: "cr-dsh-picker-actions", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("button", { type: "button", className: "cr-dsh-button", onClick: onClose, children: "Cancel" }),
-              /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(
+            listing?.truncated === true ? /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("p", { className: "cr-dsh-muted cr-dsh-picker-hint", children: "Showing the first 500 folders. Type a path to jump deeper." }) : null,
+            /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)("footer", { className: "cr-dsh-picker-actions", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("button", { type: "button", className: "cr-dsh-button", onClick: onClose, children: "Cancel" }),
+              /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
                 "button",
                 {
                   type: "button",
@@ -9654,13 +12502,13 @@ function NativeFolderPicker({
 }
 
 // packages/dsh/src/client/SettingsSection.tsx
-var import_jsx_runtime42 = require("react/jsx-runtime");
+var import_jsx_runtime43 = require("react/jsx-runtime");
 var BRANCH_DEBOUNCE_MS2 = 300;
 function readHostTheme2() {
   return document.body.hasAttribute("data-ds-dark-theme") ? "dark" : "light";
 }
 function FolderGlyph2() {
-  return /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("svg", { width: "15", height: "15", viewBox: "0 0 16 16", fill: "none", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime43.jsx)("svg", { width: "15", height: "15", viewBox: "0 0 16 16", fill: "none", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime43.jsx)(
     "path",
     {
       d: "M2.5 4.5c0-.55.45-1 1-1h2.6c.27 0 .52.1.7.29l.72.71h5c.55 0 1 .45 1 1v5.5c0 .55-.45 1-1 1h-9c-.55 0-1-.45-1-1v-6.5Z",
@@ -9726,10 +12574,10 @@ function NativeBranchSelect({
     }
     for (const branch of available) options.push({ value: branch, label: branch });
   }
-  return /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)("div", { className: "cr-dsh-field", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("label", { className: "cr-dsh-label", htmlFor: id, children: "Default branch" }),
-    /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)("div", { className: "cr-dsh-inline", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime43.jsxs)("div", { className: "cr-dsh-field", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime43.jsx)("label", { className: "cr-dsh-label", htmlFor: id, children: "Default branch" }),
+    /* @__PURE__ */ (0, import_jsx_runtime43.jsxs)("div", { className: "cr-dsh-inline", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime43.jsx)(
         "select",
         {
           id,
@@ -9739,10 +12587,10 @@ function NativeBranchSelect({
           "aria-invalid": error === null ? void 0 : true,
           "aria-busy": loading || void 0,
           onChange: (event) => onChange(event.target.value),
-          children: options.map((option) => /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("option", { value: option.value, children: option.label }, option.value))
+          children: options.map((option) => /* @__PURE__ */ (0, import_jsx_runtime43.jsx)("option", { value: option.value, children: option.label }, option.value))
         }
       ),
-      error === null ? null : /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
+      error === null ? null : /* @__PURE__ */ (0, import_jsx_runtime43.jsx)(
         "button",
         {
           type: "button",
@@ -9895,21 +12743,21 @@ function SettingsSection({ client }) {
     }
   }
   const saveDisabled = loading || saving || loadError !== null;
-  return /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime43.jsxs)(
     "div",
     {
       ref: scopeRef,
       className: "cr-native-scope cr-dsh-settings-scope",
       "data-theme": readHostTheme2(),
       children: [
-        /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(ErrorBoundary, { title: "Could not load repository settings", children: /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(ThemeProvider, { initialTheme: readHostTheme2(), persist: false, targetRef: scopeRef, children: /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(ToastProvider, { children: /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)(PortalContainerProvider, { container: portalRef, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)("section", { className: "cr-dsh-settings", "aria-labelledby": "cr-dsh-settings-title", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)("header", { className: "cr-dsh-settings-head", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)("div", { className: "cr-dsh-settings-copy", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("h2", { id: "cr-dsh-settings-title", children: "Repositories" }),
-                /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("p", { children: "Local checkouts that reviewd may inspect. Paths resolve on the daemon." })
+        /* @__PURE__ */ (0, import_jsx_runtime43.jsx)(ErrorBoundary, { title: "Could not load repository settings", children: /* @__PURE__ */ (0, import_jsx_runtime43.jsx)(ThemeProvider, { initialTheme: readHostTheme2(), persist: false, targetRef: scopeRef, children: /* @__PURE__ */ (0, import_jsx_runtime43.jsx)(ToastProvider, { children: /* @__PURE__ */ (0, import_jsx_runtime43.jsxs)(PortalContainerProvider, { container: portalRef, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime43.jsxs)("section", { className: "cr-dsh-settings", "aria-labelledby": "cr-dsh-settings-title", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime43.jsxs)("header", { className: "cr-dsh-settings-head", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime43.jsxs)("div", { className: "cr-dsh-settings-copy", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime43.jsx)("h2", { id: "cr-dsh-settings-title", children: "Repositories" }),
+                /* @__PURE__ */ (0, import_jsx_runtime43.jsx)("p", { children: "Local checkouts that reviewd may inspect. Paths resolve on the daemon." })
               ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime43.jsx)(
                 "button",
                 {
                   type: "button",
@@ -9920,12 +12768,12 @@ function SettingsSection({ client }) {
                 }
               )
             ] }),
-            loadError !== null ? /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)("div", { className: "cr-dsh-banner cr-dsh-banner-error", role: "alert", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)("span", { children: [
+            loadError !== null ? /* @__PURE__ */ (0, import_jsx_runtime43.jsxs)("div", { className: "cr-dsh-banner cr-dsh-banner-error", role: "alert", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime43.jsxs)("span", { children: [
                 "Could not load repositories: ",
                 loadError
               ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime43.jsx)(
                 "button",
                 {
                   type: "button",
@@ -9934,7 +12782,7 @@ function SettingsSection({ client }) {
                   children: "Retry"
                 }
               )
-            ] }) : loading ? /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("p", { className: "cr-dsh-muted", role: "status", children: "Loading repositories\u2026" }) : /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)(
+            ] }) : loading ? /* @__PURE__ */ (0, import_jsx_runtime43.jsx)("p", { className: "cr-dsh-muted", role: "status", children: "Loading repositories\u2026" }) : /* @__PURE__ */ (0, import_jsx_runtime43.jsxs)(
               "form",
               {
                 className: "cr-dsh-form",
@@ -9944,21 +12792,21 @@ function SettingsSection({ client }) {
                   void save();
                 },
                 children: [
-                  saveError !== null ? /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)("p", { className: "cr-dsh-banner cr-dsh-banner-error", role: "alert", children: [
+                  saveError !== null ? /* @__PURE__ */ (0, import_jsx_runtime43.jsxs)("p", { className: "cr-dsh-banner cr-dsh-banner-error", role: "alert", children: [
                     "Could not save repositories: ",
                     saveError
                   ] }) : null,
-                  notice !== null ? /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("p", { className: "cr-dsh-banner cr-dsh-banner-success", role: "status", children: notice }) : null,
-                  drafts.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)("div", { className: "cr-dsh-empty", children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("p", { children: "No repositories configured." }),
-                    /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("p", { className: "cr-dsh-muted", children: "Add a checkout to start reviewing worktrees from it." })
-                  ] }) : /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("div", { className: "cr-dsh-repos", children: drafts.map((draft, index) => {
+                  notice !== null ? /* @__PURE__ */ (0, import_jsx_runtime43.jsx)("p", { className: "cr-dsh-banner cr-dsh-banner-success", role: "status", children: notice }) : null,
+                  drafts.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime43.jsxs)("div", { className: "cr-dsh-empty", children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime43.jsx)("p", { children: "No repositories configured." }),
+                    /* @__PURE__ */ (0, import_jsx_runtime43.jsx)("p", { className: "cr-dsh-muted", children: "Add a checkout to start reviewing worktrees from it." })
+                  ] }) : /* @__PURE__ */ (0, import_jsx_runtime43.jsx)("div", { className: "cr-dsh-repos", children: drafts.map((draft, index) => {
                     const draftErrors = errors[draft.key] ?? {};
                     const label = draft.name.trim() || draft.path.trim() || index + 1;
-                    return /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)("div", { className: "cr-dsh-repo", children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)("div", { className: "cr-dsh-field", children: [
-                        /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("label", { className: "cr-dsh-label", htmlFor: `repo-${draft.key}-name`, children: "Name" }),
-                        /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
+                    return /* @__PURE__ */ (0, import_jsx_runtime43.jsxs)("div", { className: "cr-dsh-repo", children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime43.jsxs)("div", { className: "cr-dsh-field", children: [
+                        /* @__PURE__ */ (0, import_jsx_runtime43.jsx)("label", { className: "cr-dsh-label", htmlFor: `repo-${draft.key}-name`, children: "Name" }),
+                        /* @__PURE__ */ (0, import_jsx_runtime43.jsx)(
                           "input",
                           {
                             id: `repo-${draft.key}-name`,
@@ -9971,7 +12819,7 @@ function SettingsSection({ client }) {
                             "aria-describedby": draftErrors.name === void 0 ? void 0 : `repo-${draft.key}-name-error`
                           }
                         ),
-                        draftErrors.name === void 0 ? null : /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
+                        draftErrors.name === void 0 ? null : /* @__PURE__ */ (0, import_jsx_runtime43.jsx)(
                           "span",
                           {
                             className: "cr-dsh-error",
@@ -9981,10 +12829,10 @@ function SettingsSection({ client }) {
                           }
                         )
                       ] }),
-                      /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)("div", { className: "cr-dsh-field", children: [
-                        /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("label", { className: "cr-dsh-label", htmlFor: `repo-${draft.key}-path`, children: "Path" }),
-                        /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)("div", { className: "cr-dsh-inline", children: [
-                          /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
+                      /* @__PURE__ */ (0, import_jsx_runtime43.jsxs)("div", { className: "cr-dsh-field", children: [
+                        /* @__PURE__ */ (0, import_jsx_runtime43.jsx)("label", { className: "cr-dsh-label", htmlFor: `repo-${draft.key}-path`, children: "Path" }),
+                        /* @__PURE__ */ (0, import_jsx_runtime43.jsxs)("div", { className: "cr-dsh-inline", children: [
+                          /* @__PURE__ */ (0, import_jsx_runtime43.jsx)(
                             "input",
                             {
                               id: `repo-${draft.key}-path`,
@@ -9999,7 +12847,7 @@ function SettingsSection({ client }) {
                               "aria-describedby": draftErrors.path === void 0 ? void 0 : `repo-${draft.key}-path-error`
                             }
                           ),
-                          /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
+                          /* @__PURE__ */ (0, import_jsx_runtime43.jsx)(
                             "button",
                             {
                               type: "button",
@@ -10008,11 +12856,11 @@ function SettingsSection({ client }) {
                               title: "Browse folders",
                               disabled: saving,
                               onClick: () => setPicker({ key: draft.key, path: draft.path.trim() }),
-                              children: /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(FolderGlyph2, {})
+                              children: /* @__PURE__ */ (0, import_jsx_runtime43.jsx)(FolderGlyph2, {})
                             }
                           )
                         ] }),
-                        draftErrors.path === void 0 ? null : /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
+                        draftErrors.path === void 0 ? null : /* @__PURE__ */ (0, import_jsx_runtime43.jsx)(
                           "span",
                           {
                             className: "cr-dsh-error",
@@ -10022,7 +12870,7 @@ function SettingsSection({ client }) {
                           }
                         )
                       ] }),
-                      /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
+                      /* @__PURE__ */ (0, import_jsx_runtime43.jsx)(
                         NativeBranchSelect,
                         {
                           client: activeClient,
@@ -10033,7 +12881,7 @@ function SettingsSection({ client }) {
                           onChange: (value) => update(draft.key, { defaultTarget: value })
                         }
                       ),
-                      /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
+                      /* @__PURE__ */ (0, import_jsx_runtime43.jsx)(
                         "button",
                         {
                           type: "button",
@@ -10042,7 +12890,7 @@ function SettingsSection({ client }) {
                           title: "Remove repository",
                           disabled: saving,
                           onClick: () => removeRepository(draft.key),
-                          children: /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
+                          children: /* @__PURE__ */ (0, import_jsx_runtime43.jsx)(
                             "svg",
                             {
                               width: "14",
@@ -10050,7 +12898,7 @@ function SettingsSection({ client }) {
                               viewBox: "0 0 16 16",
                               fill: "none",
                               "aria-hidden": "true",
-                              children: /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
+                              children: /* @__PURE__ */ (0, import_jsx_runtime43.jsx)(
                                 "path",
                                 {
                                   d: "m4 4 8 8M12 4l-8 8",
@@ -10065,7 +12913,7 @@ function SettingsSection({ client }) {
                       )
                     ] }, draft.key);
                   }) }),
-                  /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)(
+                  /* @__PURE__ */ (0, import_jsx_runtime43.jsxs)(
                     "button",
                     {
                       type: "button",
@@ -10073,7 +12921,7 @@ function SettingsSection({ client }) {
                       disabled: saving,
                       onClick: addRepository,
                       children: [
-                        /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("span", { "aria-hidden": "true", children: "+" }),
+                        /* @__PURE__ */ (0, import_jsx_runtime43.jsx)("span", { "aria-hidden": "true", children: "+" }),
                         " Add repository"
                       ]
                     }
@@ -10082,7 +12930,7 @@ function SettingsSection({ client }) {
               }
             )
           ] }),
-          picker !== null ? /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
+          picker !== null ? /* @__PURE__ */ (0, import_jsx_runtime43.jsx)(
             NativeFolderPicker,
             {
               client: activeClient,
@@ -10093,17 +12941,17 @@ function SettingsSection({ client }) {
             picker.key
           ) : null
         ] }) }) }) }),
-        /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("div", { ref: portalRef })
+        /* @__PURE__ */ (0, import_jsx_runtime43.jsx)("div", { ref: portalRef })
       ]
     }
   );
 }
 
 // packages/dsh/src/client.tsx
-var import_jsx_runtime43 = require("react/jsx-runtime");
+var import_jsx_runtime44 = require("react/jsx-runtime");
 var PANEL_ID = "code-review";
 function Icon({ size = 18 }) {
-  return /* @__PURE__ */ (0, import_jsx_runtime43.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime44.jsxs)(
     "svg",
     {
       width: size,
@@ -10113,8 +12961,8 @@ function Icon({ size = 18 }) {
       "aria-hidden": "true",
       style: { display: "block" },
       children: [
-        /* @__PURE__ */ (0, import_jsx_runtime43.jsx)("rect", { x: "2", y: "4", width: "20", height: "16", rx: "4", stroke: "currentColor", strokeWidth: "1.6" }),
-        /* @__PURE__ */ (0, import_jsx_runtime43.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime44.jsx)("rect", { x: "2", y: "4", width: "20", height: "16", rx: "4", stroke: "currentColor", strokeWidth: "1.6" }),
+        /* @__PURE__ */ (0, import_jsx_runtime44.jsx)(
           "path",
           {
             d: "M6 9h9M6 13h12M6 17h6",
@@ -10123,8 +12971,8 @@ function Icon({ size = 18 }) {
             strokeLinecap: "round"
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime43.jsx)("circle", { cx: "18", cy: "16", r: "4.5", fill: "var(--dsw-alias-state-success-primary, #22c55e)" }),
-        /* @__PURE__ */ (0, import_jsx_runtime43.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime44.jsx)("circle", { cx: "18", cy: "16", r: "4.5", fill: "var(--dsw-alias-state-success-primary, #22c55e)" }),
+        /* @__PURE__ */ (0, import_jsx_runtime44.jsx)(
           "path",
           {
             d: "m16.3 16 1.2 1.2 2.2-2.6",
@@ -10143,7 +12991,7 @@ function apply(ctx) {
   ctx.effect?.(() => {
     const style = document.createElement("style");
     style.dataset.reviewdNative = "true";
-    style.textContent = "/*\n * Code review design tokens. Dark is the default; light is a derived theme.\n * Every text/border pair used by the UI is checked in tokens.test.ts.\n */\n.cr-native-scope,\n.cr-native-scope[data-theme='dark'],\n.cr-native-scope .theme-dark {\n  color-scheme: dark;\n  --cr-bg: #0d1117;\n  --cr-surface: #161b22;\n  --cr-surface-raised: #21262d;\n  --cr-text: #e6edf3;\n  --cr-text-muted: #9da7b3;\n  --cr-border: #5b6572;\n  --cr-primary: #58a6ff;\n  --cr-on-primary: #08111f;\n  --cr-danger: #ff7b72;\n  --cr-on-danger: #2b0b0b;\n  --cr-warning: #e3b341;\n  --cr-info: #79c0ff;\n  --cr-success: #56d364;\n  --cr-added-bg: #10261a;\n  --cr-removed-bg: #2b1518;\n  --cr-added-accent: #56d364;\n  --cr-removed-accent: #ff7b72;\n  --cr-word-added-bg: #1b4729;\n  --cr-word-removed-bg: #4a2024;\n  --cr-selection: #1f6feb;\n  --cr-on-selection: #ffffff;\n  --cr-selection-bg: #162b45;\n  --cr-selection-accent: #79c0ff;\n  --cr-focus: #58a6ff;\n  --cr-overlay: rgb(3 7 12 / 76%);\n  --cr-shadow: 0 18px 48px rgb(0 0 0 / 42%);\n}\n\n.cr-native-scope[data-theme='light'],\n.cr-native-scope .theme-light {\n  color-scheme: light;\n  /*\n   * The page is deliberately off-white: a pure-white canvas glares when\n   * switching from the dark theme. Cards stay a touch lighter than the page.\n   */\n  --cr-bg: #f4f6f8;\n  --cr-surface: #fbfcfd;\n  --cr-surface-raised: #eaeef2;\n  --cr-text: #1f2328;\n  --cr-text-muted: #57606a;\n  /* Neutral border chosen for a \u22653:1 boundary on both page and surface. */\n  --cr-border: #7d8590;\n  --cr-primary: #0969da;\n  --cr-on-primary: #ffffff;\n  --cr-danger: #b42318;\n  --cr-on-danger: #ffffff;\n  --cr-warning: #7a4d00;\n  --cr-info: #1d4ed8;\n  --cr-success: #116d32;\n  --cr-added-bg: #eaffef;\n  --cr-removed-bg: #ffefed;\n  --cr-added-accent: #116d32;\n  --cr-removed-accent: #b42318;\n  --cr-word-added-bg: #ccffd8;\n  --cr-word-removed-bg: #ffd7d5;\n  --cr-selection: #0969da;\n  --cr-on-selection: #ffffff;\n  --cr-selection-bg: #ddf4ff;\n  --cr-selection-accent: #0969da;\n  --cr-focus: #0969da;\n  --cr-overlay: rgb(31 35 40 / 48%);\n  --cr-shadow: 0 18px 48px rgb(31 35 40 / 18%);\n}\n\n.cr-native-scope {\n  --cr-space-1: 4px;\n  --cr-space-2: 8px;\n  --cr-space-3: 12px;\n  --cr-space-4: 16px;\n  --cr-space-5: 20px;\n  --cr-space-6: 24px;\n  --cr-space-8: 32px;\n  --cr-space-10: 40px;\n  --cr-space-12: 48px;\n  --cr-radius-control: 6px;\n  --cr-radius-card: 10px;\n  --cr-radius-pill: 999px;\n  --cr-font-ui:\n    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell,\n    'Helvetica Neue', Arial, sans-serif;\n  --cr-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;\n  --cr-text-body: 16px;\n  --cr-leading-body: 1.5;\n  --cr-text-control: 14px;\n  --cr-leading-control: 1.4;\n  --cr-text-meta: 13px;\n  --cr-text-code: 12.5px;\n  --cr-leading-code: 20px;\n  --cr-motion-press: 120ms;\n  --cr-motion-tabs: 150ms;\n  --cr-motion-collapse: 180ms;\n  --cr-motion-dialog: 240ms;\n  --cr-sidebar: 280px;\n  --cr-rail: 320px;\n  --cr-summary-max-height: clamp(14rem, 40vh, 28rem);\n  --cr-focus-ring: 0 0 0 2px var(--cr-bg), 0 0 0 4px var(--cr-focus);\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .cr-native-scope {\n    --cr-motion-press: 0ms;\n    --cr-motion-tabs: 0ms;\n    --cr-motion-collapse: 0ms;\n    --cr-motion-dialog: 0ms;\n  }\n}\n\n.cr-native-scope *,\n.cr-native-scope *::before,\n.cr-native-scope *::after {\n  box-sizing: border-box;\n}\n\n.cr-native-scope {\n  min-height: 100%;\n}\n\n.cr-native-scope {\n  background: var(--cr-bg);\n  color: var(--cr-text);\n  font-family: var(--cr-font-ui);\n  font-size: var(--cr-text-body);\n  line-height: var(--cr-leading-body);\n  -webkit-font-smoothing: antialiased;\n  text-rendering: optimizeLegibility;\n}\n\n.cr-native-scope {\n  margin: 0;\n  background: var(--cr-bg);\n  color: var(--cr-text);\n}\n\n.cr-native-scope button,\n.cr-native-scope input,\n.cr-native-scope textarea,\n.cr-native-scope select {\n  font: inherit;\n  color: inherit;\n}\n\n.cr-native-scope a {\n  color: var(--cr-primary);\n  text-underline-offset: 3px;\n}\n\n.cr-native-scope a:hover {\n  text-decoration-thickness: 2px;\n}\n\n.cr-native-scope :focus-visible {\n  outline: 2px solid var(--cr-focus);\n  outline-offset: 2px;\n}\n\n.cr-native-scope ::selection {\n  background: var(--cr-selection);\n  color: var(--cr-on-selection);\n}\n\n.cr-native-scope.cr-selecting-lines {\n  cursor: row-resize;\n  user-select: none;\n}\n\n.cr-native-scope .cr-visually-hidden {\n  position: absolute !important;\n  width: 1px !important;\n  height: 1px !important;\n  padding: 0 !important;\n  margin: -1px !important;\n  overflow: hidden !important;\n  clip: rect(0 0 0 0) !important;\n  white-space: nowrap !important;\n  border: 0 !important;\n}\n\n.cr-native-scope .cr-skip-link {\n  position: fixed;\n  z-index: 100;\n  top: 8px;\n  left: 8px;\n  padding: 8px 12px;\n  border-radius: var(--cr-radius-control);\n  background: var(--cr-primary);\n  color: var(--cr-on-primary);\n  transform: translateY(-160%);\n  transition: transform var(--cr-motion-collapse) ease;\n}\n\n.cr-native-scope .cr-skip-link:focus-visible {\n  transform: translateY(0);\n}\n\n.cr-native-scope .cr-mono {\n  font-family: var(--cr-font-mono);\n  font-size: var(--cr-text-code);\n  line-height: var(--cr-leading-code);\n}\n\n.cr-native-scope .cr-meta {\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-meta);\n  line-height: 1.4;\n}\n\n/* App shell */\n.cr-native-scope .cr-shell {\n  display: grid;\n  grid-template-columns: var(--cr-sidebar) minmax(0, 1fr);\n  min-height: 100vh;\n  background: var(--cr-bg);\n}\n\n.cr-native-scope .cr-sidebar {\n  position: sticky;\n  top: 0;\n  display: flex;\n  flex-direction: column;\n  gap: var(--cr-space-6);\n  height: 100vh;\n  padding: var(--cr-space-5) var(--cr-space-4);\n  border-right: 1px solid var(--cr-border);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-sidebar-head {\n  display: flex;\n  min-width: 0;\n  align-items: center;\n  justify-content: space-between;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-sidebar-head .cr-brand {\n  min-width: 0;\n  flex: 1 1 auto;\n}\n\n.cr-native-scope .cr-sidebar-toggle {\n  flex: 0 0 40px;\n}\n\n.cr-native-scope .cr-brand {\n  display: flex;\n  align-items: center;\n  gap: var(--cr-space-3);\n  padding: var(--cr-space-1) var(--cr-space-2);\n  color: var(--cr-text);\n  text-decoration: none;\n}\n\n.cr-native-scope .cr-brand-mark {\n  display: grid;\n  place-items: center;\n  width: 34px;\n  height: 34px;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n  color: var(--cr-on-primary);\n  background: var(--cr-primary);\n  font-family: var(--cr-font-mono);\n  font-size: 16px;\n  font-weight: 700;\n  letter-spacing: -0.08em;\n}\n\n.cr-native-scope .cr-brand-copy {\n  display: grid;\n  gap: 1px;\n}\n\n.cr-native-scope .cr-brand-name {\n  font-family: var(--cr-font-mono);\n  font-size: 15px;\n  font-weight: 600;\n  letter-spacing: -0.02em;\n}\n\n.cr-native-scope .cr-brand-sub {\n  color: var(--cr-text-muted);\n  font-size: 11px;\n  letter-spacing: 0.06em;\n  text-transform: uppercase;\n}\n\n.cr-native-scope .cr-nav {\n  display: grid;\n  gap: var(--cr-space-1);\n}\n\n.cr-native-scope .cr-nav-label {\n  padding: 0 var(--cr-space-2) var(--cr-space-2);\n  color: var(--cr-text-muted);\n  font-size: 11px;\n  font-weight: 600;\n  letter-spacing: 0.08em;\n  text-transform: uppercase;\n}\n\n.cr-native-scope .cr-nav-link {\n  display: flex;\n  align-items: center;\n  gap: var(--cr-space-3);\n  min-height: 40px;\n  padding: var(--cr-space-2) var(--cr-space-3);\n  border: 1px solid transparent;\n  border-radius: var(--cr-radius-control);\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-control);\n  font-weight: 500;\n  text-decoration: none;\n  transition:\n    background var(--cr-motion-press) ease,\n    color var(--cr-motion-press) ease;\n}\n\n.cr-native-scope .cr-nav-link:hover {\n  background: var(--cr-surface-raised);\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-nav-link[aria-current='page'] {\n  border-color: var(--cr-border);\n  background: var(--cr-surface-raised);\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-nav-icon {\n  display: grid;\n  place-items: center;\n  width: 20px;\n  height: 20px;\n  flex: 0 0 20px;\n}\n\n.cr-native-scope .cr-sidebar-footer {\n  display: grid;\n  gap: var(--cr-space-3);\n  margin-top: auto;\n  padding-top: var(--cr-space-4);\n  border-top: 1px solid var(--cr-border);\n}\n\n.cr-native-scope .cr-theme-row {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-daemon {\n  display: flex;\n  align-items: center;\n  gap: var(--cr-space-2);\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-meta);\n}\n\n.cr-native-scope .cr-dot {\n  width: 7px;\n  height: 7px;\n  border-radius: var(--cr-radius-pill);\n  background: var(--cr-success);\n  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cr-success) 18%, transparent);\n}\n\n.cr-native-scope .cr-main {\n  display: flex;\n  flex-direction: column;\n  min-width: 0;\n}\n\n.cr-native-scope .cr-topbar {\n  display: none;\n  align-items: center;\n  gap: var(--cr-space-3);\n  min-height: 56px;\n  padding: var(--cr-space-2) var(--cr-space-4);\n  border-bottom: 1px solid var(--cr-border);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-content {\n  width: 100%;\n  max-width: 1320px;\n  margin: 0 auto;\n  padding: var(--cr-space-8) var(--cr-space-8) var(--cr-space-12);\n}\n\n.cr-native-scope .cr-page-head {\n  display: flex;\n  align-items: flex-start;\n  justify-content: space-between;\n  gap: var(--cr-space-6);\n  margin-bottom: var(--cr-space-6);\n}\n\n.cr-native-scope .cr-eyebrow {\n  margin: 0 0 var(--cr-space-2);\n  color: var(--cr-primary);\n  font-family: var(--cr-font-mono);\n  font-size: 11px;\n  font-weight: 600;\n  letter-spacing: 0.1em;\n  text-transform: uppercase;\n}\n\n.cr-native-scope .cr-page-title {\n  margin: 0;\n  font-size: clamp(26px, 3vw, 34px);\n  font-weight: 650;\n  letter-spacing: -0.035em;\n  line-height: 1.15;\n}\n\n.cr-native-scope .cr-page-sub {\n  max-width: 62ch;\n  margin: var(--cr-space-2) 0 0;\n  color: var(--cr-text-muted);\n  font-size: 15px;\n}\n\n.cr-native-scope .cr-page-actions {\n  display: flex;\n  flex-wrap: wrap;\n  gap: var(--cr-space-2);\n}\n\n/* Toolbar and table */\n.cr-native-scope .cr-toolbar {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: flex-end;\n  gap: var(--cr-space-3);\n  padding: var(--cr-space-4);\n  border: 1px solid var(--cr-border);\n  border-bottom: 0;\n  border-radius: var(--cr-radius-card) var(--cr-radius-card) 0 0;\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-toolbar > .cr-field,\n.cr-native-scope .cr-toolbar > .cr-search {\n  flex: 1 1 220px;\n}\n\n.cr-native-scope .cr-search {\n  position: relative;\n  min-width: 0;\n}\n\n.cr-native-scope .cr-search-icon {\n  position: absolute;\n  z-index: 1;\n  top: 50%;\n  left: 11px;\n  color: var(--cr-text-muted);\n  pointer-events: none;\n  transform: translateY(-50%);\n}\n\n.cr-native-scope .cr-search .cr-input {\n  padding-left: 34px;\n}\n\n.cr-native-scope .cr-toolbar > .cr-field-select {\n  flex: 0 1 190px;\n}\n\n.cr-native-scope .cr-list {\n  /* The review list lives directly in the panel flex column; without this it shrinks\n     to the leftover viewport height and clips every row past the first screen. */\n  flex-shrink: 0;\n  overflow: hidden;\n  border: 1px solid var(--cr-border);\n  border-radius: 0 0 var(--cr-radius-card) var(--cr-radius-card);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-list-head {\n  display: grid;\n  grid-template-columns: minmax(0, 2.6fr) minmax(90px, 1fr) minmax(80px, 0.7fr) 76px 84px 86px;\n  gap: var(--cr-space-4);\n  padding: var(--cr-space-3) var(--cr-space-4);\n  border-bottom: 1px solid var(--cr-border);\n  color: var(--cr-text-muted);\n  font-size: 11px;\n  font-weight: 600;\n  letter-spacing: 0.08em;\n  text-transform: uppercase;\n}\n\n/* Repository groups in the reviews list (client-side only). */\n\n.cr-native-scope .cr-review-group {\n  min-width: 0;\n}\n\n.cr-native-scope .cr-review-group + .cr-review-group {\n  border-top: 1px solid var(--cr-border);\n}\n\n.cr-native-scope .cr-review-group-heading {\n  margin: 0;\n  font: inherit;\n}\n\n.cr-native-scope .cr-review-group-toggle {\n  display: flex;\n  width: 100%;\n  min-width: 0;\n  align-items: center;\n  gap: var(--cr-space-2);\n  padding: var(--cr-space-3) var(--cr-space-4);\n  border: 0;\n  background: color-mix(in srgb, var(--cr-surface-raised) 45%, var(--cr-surface));\n  color: var(--cr-text);\n  cursor: pointer;\n  text-align: left;\n}\n\n.cr-native-scope .cr-review-group-toggle:hover {\n  background: var(--cr-surface-raised);\n}\n\n.cr-native-scope .cr-review-group-toggle:focus-visible {\n  outline-offset: -2px;\n}\n\n.cr-native-scope .cr-review-group-chevron {\n  width: 0;\n  height: 0;\n  flex: none;\n  border-top: 5px solid transparent;\n  border-bottom: 5px solid transparent;\n  border-left: 6px solid currentColor;\n  transform: rotate(90deg);\n  transition: transform var(--cr-motion-collapse) ease;\n}\n\n.cr-native-scope .cr-review-group-toggle[aria-expanded='false'] .cr-review-group-chevron {\n  transform: rotate(0deg);\n}\n\n.cr-native-scope .cr-review-group-name {\n  overflow: hidden;\n  min-width: 0;\n  font-size: 14px;\n  font-weight: 600;\n  letter-spacing: -0.01em;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-review-group-path {\n  overflow: hidden;\n  min-width: 0;\n  color: var(--cr-text-muted);\n  font-family: var(--cr-font-mono);\n  font-size: 11px;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-review-group-count {\n  flex: none;\n  margin-left: auto;\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-meta);\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-review-group-rows[hidden] {\n  display: none;\n}\n\n.cr-native-scope .cr-review-row {\n  display: grid;\n  grid-template-columns: minmax(0, 2.6fr) minmax(90px, 1fr) minmax(80px, 0.7fr) 76px 84px 86px;\n  gap: var(--cr-space-4);\n  align-items: center;\n  min-height: 64px;\n  padding: var(--cr-space-3) var(--cr-space-4);\n  border-bottom: 1px solid color-mix(in srgb, var(--cr-border) 55%, transparent);\n  color: var(--cr-text);\n  text-decoration: none;\n  transition: background var(--cr-motion-press) ease;\n}\n\n.cr-native-scope .cr-review-row:last-child {\n  border-bottom: 0;\n}\n\n.cr-native-scope .cr-review-row:hover {\n  background: var(--cr-surface-raised);\n}\n\n.cr-native-scope .cr-review-title {\n  display: block;\n  overflow: hidden;\n  font-size: 15px;\n  font-weight: 600;\n  letter-spacing: -0.01em;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-review-id {\n  display: block;\n  overflow: hidden;\n  margin-top: 3px;\n  color: var(--cr-text-muted);\n  font-family: var(--cr-font-mono);\n  font-size: 11px;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-scope {\n  display: inline-flex;\n  max-width: 100%;\n  align-items: center;\n  gap: 6px;\n  overflow: hidden;\n  padding: 3px 8px;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-pill);\n  color: var(--cr-text-muted);\n  font-family: var(--cr-font-mono);\n  font-size: 11px;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-author {\n  overflow: hidden;\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-control);\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-age {\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-meta);\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-not-fixed {\n  color: var(--cr-warning);\n  font-size: var(--cr-text-meta);\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-not-fixed[data-zero='true'] {\n  color: var(--cr-text-muted);\n}\n\n/* Forms */\n.cr-native-scope .cr-form {\n  display: grid;\n  gap: var(--cr-space-5);\n  max-width: 760px;\n}\n\n.cr-native-scope .cr-form-card {\n  display: grid;\n  gap: var(--cr-space-5);\n  padding: var(--cr-space-6);\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-form-section {\n  display: grid;\n  gap: var(--cr-space-2);\n  padding-bottom: var(--cr-space-4);\n  border-bottom: 1px solid color-mix(in srgb, var(--cr-border) 55%, transparent);\n}\n\n.cr-native-scope .cr-form-section:last-child {\n  padding-bottom: 0;\n  border-bottom: 0;\n}\n\n.cr-native-scope .cr-form-section-title {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 600;\n}\n\n.cr-native-scope .cr-form-section-copy {\n  margin: 0;\n  color: var(--cr-text-muted);\n  font-size: 14px;\n}\n\n.cr-native-scope .cr-form-grid {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: var(--cr-space-4);\n}\n\n.cr-native-scope .cr-form-actions {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-3);\n}\n\n.cr-native-scope .cr-field {\n  display: grid;\n  align-content: start;\n  gap: 6px;\n  min-width: 0;\n}\n\n.cr-native-scope .cr-label {\n  color: var(--cr-text);\n  font-size: var(--cr-text-control);\n  font-weight: 550;\n}\n\n.cr-native-scope .cr-hint {\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-meta);\n}\n\n.cr-native-scope .cr-error {\n  color: var(--cr-danger);\n  font-size: var(--cr-text-meta);\n}\n\n.cr-native-scope .cr-input,\n.cr-native-scope .cr-textarea,\n.cr-native-scope .cr-select {\n  width: 100%;\n  min-height: 40px;\n  padding: 8px 10px;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n  background: var(--cr-bg);\n  color: var(--cr-text);\n  font-size: var(--cr-text-control);\n  line-height: var(--cr-leading-control);\n  transition:\n    border-color var(--cr-motion-press) ease,\n    background var(--cr-motion-press) ease;\n}\n\n.cr-native-scope .cr-textarea {\n  min-height: 112px;\n  resize: vertical;\n}\n\n.cr-native-scope .cr-input::placeholder,\n.cr-native-scope .cr-textarea::placeholder {\n  color: var(--cr-text-muted);\n  opacity: 0.8;\n}\n\n.cr-native-scope .cr-input:hover,\n.cr-native-scope .cr-textarea:hover,\n.cr-native-scope .cr-select:hover {\n  border-color: var(--cr-text-muted);\n}\n\n.cr-native-scope .cr-input:focus-visible,\n.cr-native-scope .cr-textarea:focus-visible,\n.cr-native-scope .cr-select:focus-visible {\n  border-color: var(--cr-primary);\n  outline: 2px solid var(--cr-focus);\n  outline-offset: 2px;\n}\n\n.cr-native-scope .cr-input[aria-invalid='true'],\n.cr-native-scope .cr-textarea[aria-invalid='true'],\n.cr-native-scope .cr-select[aria-invalid='true'] {\n  border-color: var(--cr-danger);\n}\n\n.cr-native-scope .cr-input:disabled,\n.cr-native-scope .cr-textarea:disabled,\n.cr-native-scope .cr-select:disabled {\n  cursor: not-allowed;\n  opacity: 0.55;\n}\n\n.cr-native-scope .cr-select {\n  appearance: none;\n  padding-right: 32px;\n  background-image:\n    linear-gradient(45deg, transparent 50%, currentColor 50%),\n    linear-gradient(135deg, currentColor 50%, transparent 50%);\n  background-position:\n    calc(100% - 16px) 17px,\n    calc(100% - 11px) 17px;\n  background-repeat: no-repeat;\n  background-size: 5px 5px;\n}\n\n/* Buttons */\n.cr-native-scope .cr-button {\n  display: inline-flex;\n  min-height: 40px;\n  align-items: center;\n  justify-content: center;\n  gap: var(--cr-space-2);\n  padding: 8px 14px;\n  border: 1px solid transparent;\n  border-radius: var(--cr-radius-control);\n  font-size: var(--cr-text-control);\n  font-weight: 600;\n  line-height: 1.2;\n  text-decoration: none;\n  cursor: pointer;\n  transition:\n    background var(--cr-motion-press) ease,\n    border-color var(--cr-motion-press) ease,\n    transform var(--cr-motion-press) ease;\n}\n\n.cr-native-scope .cr-button:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.cr-native-scope .cr-button:disabled,\n.cr-native-scope .cr-button[aria-disabled='true'] {\n  cursor: not-allowed;\n  opacity: 0.55;\n}\n\n.cr-native-scope .cr-button[data-variant='primary'] {\n  background: var(--cr-primary);\n  color: var(--cr-on-primary);\n}\n\n.cr-native-scope .cr-button[data-variant='primary']:hover:not(:disabled) {\n  background: color-mix(in srgb, var(--cr-primary) 88%, var(--cr-text));\n}\n\n.cr-native-scope .cr-button[data-variant='secondary'] {\n  border-color: var(--cr-border);\n  background: var(--cr-surface-raised);\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-button[data-variant='secondary']:hover:not(:disabled) {\n  border-color: var(--cr-text-muted);\n  background: color-mix(in srgb, var(--cr-surface-raised) 70%, var(--cr-border));\n}\n\n.cr-native-scope .cr-button[data-variant='ghost'] {\n  background: transparent;\n  color: var(--cr-text-muted);\n}\n\n.cr-native-scope .cr-button[data-variant='ghost']:hover:not(:disabled) {\n  background: var(--cr-surface-raised);\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-button[data-variant='danger'] {\n  background: var(--cr-danger);\n  color: var(--cr-on-danger);\n}\n\n.cr-native-scope .cr-icon-button {\n  display: inline-grid;\n  width: 40px;\n  height: 40px;\n  flex: 0 0 40px;\n  place-items: center;\n  padding: 0;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n  background: transparent;\n  color: var(--cr-text-muted);\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-icon-button:hover:not(:disabled) {\n  background: var(--cr-surface-raised);\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-icon-button:disabled {\n  cursor: not-allowed;\n  opacity: 0.55;\n}\n\n.cr-native-scope .cr-spinner {\n  width: 14px;\n  height: 14px;\n  border: 2px solid currentColor;\n  border-right-color: transparent;\n  border-radius: var(--cr-radius-pill);\n  animation: cr-spin 700ms linear infinite;\n}\n\n@keyframes cr-spin {\n  to {\n    transform: rotate(360deg);\n  }\n}\n\n/* Badges, skeleton, empty state */\n.cr-native-scope .cr-badge {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  padding: 2px 9px;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-pill);\n  color: var(--cr-text-muted);\n  font-family: var(--cr-font-mono);\n  font-size: 11px;\n  font-weight: 600;\n  letter-spacing: 0.02em;\n  line-height: 1.6;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-badge[data-tone='success'] {\n  border-color: color-mix(in srgb, var(--cr-success) 45%, var(--cr-border));\n  background: color-mix(in srgb, var(--cr-success) 10%, transparent);\n  color: var(--cr-success);\n}\n\n.cr-native-scope .cr-badge[data-tone='danger'] {\n  border-color: color-mix(in srgb, var(--cr-danger) 45%, var(--cr-border));\n  background: color-mix(in srgb, var(--cr-danger) 10%, transparent);\n  color: var(--cr-danger);\n}\n\n.cr-native-scope .cr-badge[data-tone='warning'] {\n  border-color: color-mix(in srgb, var(--cr-warning) 45%, var(--cr-border));\n  color: var(--cr-warning);\n}\n\n.cr-native-scope .cr-skeleton {\n  display: block;\n  overflow: hidden;\n  border-radius: var(--cr-radius-control);\n  background: var(--cr-surface-raised);\n  position: relative;\n}\n\n.cr-native-scope .cr-skeleton::after {\n  position: absolute;\n  inset: 0;\n  background: linear-gradient(\n    90deg,\n    transparent,\n    color-mix(in srgb, var(--cr-border) 30%, transparent),\n    transparent\n  );\n  animation: cr-shimmer 1200ms ease-in-out infinite;\n  content: '';\n  transform: translateX(-100%);\n}\n\n@keyframes cr-shimmer {\n  to {\n    transform: translateX(100%);\n  }\n}\n\n.cr-native-scope .cr-empty {\n  display: grid;\n  justify-items: center;\n  gap: var(--cr-space-3);\n  padding: var(--cr-space-12) var(--cr-space-6);\n  text-align: center;\n}\n\n.cr-native-scope .cr-empty-icon {\n  display: grid;\n  width: 48px;\n  height: 48px;\n  place-items: center;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface-raised);\n  color: var(--cr-text-muted);\n  font-family: var(--cr-font-mono);\n  font-size: 20px;\n}\n\n.cr-native-scope .cr-empty-title {\n  margin: 0;\n  font-size: 17px;\n  font-weight: 600;\n}\n\n.cr-native-scope .cr-empty-copy {\n  max-width: 46ch;\n  margin: 0;\n  color: var(--cr-text-muted);\n  font-size: 14px;\n}\n\n.cr-native-scope .cr-error-panel {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  justify-content: space-between;\n  gap: var(--cr-space-3);\n  padding: var(--cr-space-4);\n  border: 1px solid color-mix(in srgb, var(--cr-danger) 45%, var(--cr-border));\n  border-radius: var(--cr-radius-card);\n  background: color-mix(in srgb, var(--cr-danger) 8%, var(--cr-surface));\n}\n\n.cr-native-scope .cr-error-panel strong {\n  display: block;\n  font-size: 14px;\n}\n\n.cr-native-scope .cr-error-panel p {\n  margin: 2px 0 0;\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-meta);\n}\n\n/* Dialog, tabs, tooltip, toast */\n.cr-native-scope .cr-overlay {\n  position: fixed;\n  z-index: 40;\n  inset: 0;\n  display: grid;\n  place-items: center;\n  padding: var(--cr-space-4);\n  background: var(--cr-overlay);\n  animation: cr-fade var(--cr-motion-dialog) ease both;\n}\n\n.cr-native-scope .cr-dialog {\n  width: min(520px, 100%);\n  max-height: min(80vh, 720px);\n  overflow: auto;\n  overscroll-behavior: contain;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface);\n  box-shadow: var(--cr-shadow);\n  animation: cr-dialog-in var(--cr-motion-dialog) ease both;\n}\n\n.cr-native-scope .cr-dialog-head {\n  display: flex;\n  align-items: flex-start;\n  justify-content: space-between;\n  gap: var(--cr-space-4);\n  padding: var(--cr-space-5) var(--cr-space-5) var(--cr-space-3);\n}\n\n.cr-native-scope .cr-dialog-title {\n  margin: 0;\n  font-size: 18px;\n  font-weight: 650;\n  letter-spacing: -0.02em;\n}\n\n.cr-native-scope .cr-dialog-copy {\n  margin: var(--cr-space-2) 0 0;\n  color: var(--cr-text-muted);\n  font-size: 14px;\n}\n\n.cr-native-scope .cr-dialog-body {\n  display: grid;\n  gap: var(--cr-space-4);\n  padding: 0 var(--cr-space-5) var(--cr-space-5);\n  overscroll-behavior: contain;\n}\n\n.cr-native-scope .cr-dialog-actions {\n  display: flex;\n  flex-wrap: wrap;\n  justify-content: flex-end;\n  gap: var(--cr-space-2);\n  padding-top: var(--cr-space-2);\n}\n\n@keyframes cr-fade {\n  from {\n    opacity: 0;\n  }\n}\n\n@keyframes cr-dialog-in {\n  from {\n    opacity: 0;\n    transform: translateY(8px) scale(0.985);\n  }\n}\n\n.cr-native-scope .cr-tabs {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 2px;\n  border-bottom: 1px solid var(--cr-border);\n}\n\n.cr-native-scope .cr-tab {\n  position: relative;\n  min-height: 40px;\n  padding: 8px 12px;\n  border: 0;\n  border-radius: var(--cr-radius-control) var(--cr-radius-control) 0 0;\n  background: transparent;\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-control);\n  font-weight: 550;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-tab:hover {\n  background: var(--cr-surface-raised);\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-tab[aria-selected='true'] {\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-tab[aria-selected='true']::after {\n  position: absolute;\n  right: 8px;\n  bottom: -1px;\n  left: 8px;\n  height: 2px;\n  background: var(--cr-primary);\n  content: '';\n  transition: transform var(--cr-motion-tabs) ease;\n}\n\n.cr-native-scope .cr-tooltip-wrap {\n  position: relative;\n  display: inline-flex;\n}\n\n.cr-native-scope .cr-tooltip {\n  position: absolute;\n  z-index: 30;\n  bottom: calc(100% + 6px);\n  left: 50%;\n  width: max-content;\n  max-width: 240px;\n  padding: 5px 8px;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n  background: var(--cr-surface-raised);\n  color: var(--cr-text);\n  font-size: 12px;\n  line-height: 1.35;\n  opacity: 0;\n  pointer-events: none;\n  transform: translate(-50%, 2px);\n  transition:\n    opacity var(--cr-motion-press) ease,\n    transform var(--cr-motion-press) ease;\n}\n\n.cr-native-scope .cr-tooltip-wrap:hover .cr-tooltip,\n.cr-native-scope .cr-tooltip-wrap:focus-within .cr-tooltip,\n.cr-native-scope .cr-tooltip[data-open='true'] {\n  opacity: 1;\n  transform: translate(-50%, 0);\n}\n\n.cr-native-scope .cr-toast-region {\n  position: fixed;\n  z-index: 60;\n  right: var(--cr-space-4);\n  bottom: var(--cr-space-4);\n  display: grid;\n  width: min(380px, calc(100vw - 32px));\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-toast {\n  display: flex;\n  align-items: flex-start;\n  justify-content: space-between;\n  gap: var(--cr-space-3);\n  padding: var(--cr-space-3) var(--cr-space-4);\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface-raised);\n  box-shadow: var(--cr-shadow);\n  font-size: 14px;\n  animation: cr-toast-in var(--cr-motion-dialog) ease both;\n}\n\n.cr-native-scope .cr-toast[data-tone='danger'] {\n  border-color: color-mix(in srgb, var(--cr-danger) 55%, var(--cr-border));\n}\n\n@keyframes cr-toast-in {\n  from {\n    opacity: 0;\n    transform: translateY(8px);\n  }\n}\n\n/* Routes */\n.cr-native-scope .cr-auth-page,\n.cr-native-scope .cr-health-page,\n.cr-native-scope .cr-placeholder {\n  max-width: 720px;\n}\n\n.cr-native-scope .cr-code-block {\n  overflow: auto;\n  max-height: 60vh;\n  margin: 0;\n  padding: var(--cr-space-4);\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface);\n  font-family: var(--cr-font-mono);\n  font-size: var(--cr-text-code);\n  line-height: var(--cr-leading-code);\n  white-space: pre-wrap;\n}\n\n.cr-native-scope .cr-back {\n  display: inline-flex;\n  min-height: 40px;\n  align-items: center;\n  gap: 6px;\n  color: var(--cr-text-muted);\n  font-size: 14px;\n  text-decoration: none;\n}\n\n.cr-native-scope .cr-back:hover {\n  color: var(--cr-text);\n}\n\n/* Responsive shell */\n.cr-native-scope .cr-menu-button {\n  display: none;\n}\n\n@media (min-width: 1025px) {\n  .cr-native-scope .cr-shell[data-sidebar='collapsed'] {\n    --cr-sidebar: 76px;\n  }\n\n  .cr-native-scope .cr-shell[data-sidebar='collapsed'] .cr-sidebar {\n    align-items: center;\n    padding: var(--cr-space-4) var(--cr-space-1);\n  }\n\n  .cr-native-scope .cr-shell[data-sidebar='collapsed'] .cr-sidebar-head {\n    flex-direction: column;\n    width: 100%;\n    gap: var(--cr-space-3);\n  }\n\n  .cr-native-scope .cr-shell[data-sidebar='collapsed'] .cr-sidebar .cr-brand {\n    justify-content: center;\n    padding: 0;\n  }\n\n  .cr-native-scope .cr-shell[data-sidebar='collapsed'] .cr-sidebar .cr-brand-copy,\n  .cr-native-scope .cr-shell[data-sidebar='collapsed'] .cr-nav-label,\n  .cr-native-scope .cr-shell[data-sidebar='collapsed'] .cr-nav-text,\n  .cr-native-scope .cr-shell[data-sidebar='collapsed'] .cr-theme-label,\n  .cr-native-scope .cr-shell[data-sidebar='collapsed'] .cr-daemon span {\n    display: none;\n  }\n\n  .cr-native-scope .cr-shell[data-sidebar='collapsed'] .cr-nav {\n    justify-items: center;\n  }\n\n  .cr-native-scope .cr-shell[data-sidebar='collapsed'] .cr-nav-link {\n    width: 44px;\n    height: 44px;\n    justify-content: center;\n    padding: 0;\n  }\n\n  .cr-native-scope .cr-shell[data-sidebar='collapsed'] .cr-sidebar-footer {\n    align-self: stretch;\n    justify-items: center;\n  }\n\n  .cr-native-scope .cr-shell[data-sidebar='collapsed'] .cr-theme-row,\n  .cr-native-scope .cr-shell[data-sidebar='collapsed'] .cr-daemon {\n    justify-content: center;\n  }\n}\n\n@media (max-width: 1024px) {\n  .cr-native-scope .cr-sidebar-toggle {\n    display: none;\n  }\n\n  .cr-native-scope {\n    --cr-sidebar: 76px;\n  }\n\n  .cr-native-scope .cr-sidebar {\n    align-items: center;\n    padding: var(--cr-space-4) var(--cr-space-2);\n  }\n\n  .cr-native-scope .cr-brand {\n    padding: 0;\n  }\n\n  .cr-native-scope .cr-brand-copy,\n  .cr-native-scope .cr-nav-label,\n  .cr-native-scope .cr-nav-text,\n  .cr-native-scope .cr-sidebar-footer .cr-theme-label,\n  .cr-native-scope .cr-daemon span {\n    display: none;\n  }\n\n  .cr-native-scope .cr-nav-link {\n    width: 44px;\n    height: 44px;\n    justify-content: center;\n    padding: 0;\n  }\n\n  .cr-native-scope .cr-content {\n    padding: var(--cr-space-6) var(--cr-space-6) var(--cr-space-10);\n  }\n}\n\n@media (max-width: 768px) {\n  .cr-native-scope {\n    --cr-sidebar: 0px;\n  }\n\n  .cr-native-scope .cr-shell {\n    display: block;\n  }\n\n  .cr-native-scope .cr-sidebar {\n    position: fixed;\n    z-index: 50;\n    top: 0;\n    bottom: 0;\n    left: 0;\n    width: 280px;\n    height: 100dvh;\n    align-items: stretch;\n    padding: var(--cr-space-5) var(--cr-space-4);\n    border-right: 1px solid var(--cr-border);\n    transform: translateX(-100%);\n    transition: transform var(--cr-motion-collapse) ease;\n  }\n\n  .cr-native-scope .cr-shell[data-drawer='open'] .cr-sidebar {\n    transform: translateX(0);\n  }\n\n  .cr-native-scope .cr-brand-copy,\n  .cr-native-scope .cr-nav-label,\n  .cr-native-scope .cr-nav-text,\n  .cr-native-scope .cr-sidebar-footer .cr-theme-label,\n  .cr-native-scope .cr-daemon span {\n    display: initial;\n  }\n\n  .cr-native-scope .cr-nav-link {\n    width: auto;\n    height: auto;\n    justify-content: flex-start;\n    padding: var(--cr-space-2) var(--cr-space-3);\n  }\n\n  .cr-native-scope .cr-topbar {\n    display: flex;\n    position: sticky;\n    z-index: 20;\n    top: 0;\n  }\n\n  .cr-native-scope .cr-menu-button {\n    display: inline-grid;\n  }\n\n  .cr-native-scope .cr-content {\n    padding: var(--cr-space-5) var(--cr-space-4) var(--cr-space-10);\n  }\n\n  .cr-native-scope .cr-page-head {\n    align-items: stretch;\n    flex-direction: column;\n    gap: var(--cr-space-4);\n  }\n\n  .cr-native-scope .cr-list-head {\n    display: none;\n  }\n\n  .cr-native-scope .cr-review-group-path {\n    display: none;\n  }\n\n  .cr-native-scope .cr-review-row {\n    grid-template-columns: minmax(0, 1fr) auto;\n    gap: var(--cr-space-2) var(--cr-space-3);\n    align-items: start;\n    padding: var(--cr-space-4);\n  }\n\n  .cr-native-scope .cr-review-main {\n    grid-column: 1;\n    grid-row: 1;\n  }\n\n  .cr-native-scope .cr-review-row .cr-author {\n    display: none;\n  }\n\n  .cr-native-scope .cr-review-row .cr-age {\n    grid-column: 1;\n    grid-row: 2;\n  }\n\n  .cr-native-scope .cr-review-row .cr-badge {\n    grid-column: 2;\n    grid-row: 1;\n    justify-self: end;\n  }\n\n  .cr-native-scope .cr-review-row .cr-scope {\n    display: none;\n  }\n\n  .cr-native-scope .cr-review-row .cr-not-fixed {\n    grid-column: 2;\n    grid-row: 2;\n    justify-self: end;\n  }\n\n  .cr-native-scope .cr-form-grid {\n    grid-template-columns: minmax(0, 1fr);\n  }\n\n  .cr-native-scope .cr-form-card {\n    padding: var(--cr-space-4);\n  }\n}\n\n@media (max-width: 480px) {\n  .cr-native-scope .cr-content {\n    padding: var(--cr-space-4) var(--cr-space-3) var(--cr-space-8);\n  }\n\n  .cr-native-scope .cr-topbar {\n    padding: var(--cr-space-2) var(--cr-space-3);\n  }\n\n  .cr-native-scope .cr-page-title {\n    font-size: 25px;\n  }\n\n  .cr-native-scope .cr-toolbar {\n    flex-direction: column;\n    align-items: stretch;\n  }\n\n  .cr-native-scope .cr-toolbar > .cr-field,\n  .cr-native-scope .cr-toolbar > .cr-search {\n    position: relative;\n    flex: 0 0 auto;\n    min-width: 0;\n  }\n\n  .cr-native-scope .cr-search-icon {\n    position: absolute;\n    z-index: 1;\n    top: 50%;\n    left: 11px;\n    color: var(--cr-text-muted);\n    pointer-events: none;\n    transform: translateY(-50%);\n  }\n\n  .cr-native-scope .cr-search .cr-input {\n    padding-left: 34px;\n  }\n\n  .cr-native-scope .cr-toolbar > .cr-field-select {\n    flex-basis: auto;\n  }\n\n  .cr-native-scope .cr-review-row {\n    grid-template-columns: minmax(0, 1fr);\n  }\n\n  .cr-native-scope .cr-review-row .cr-badge,\n  .cr-native-scope .cr-review-row .cr-not-fixed {\n    grid-column: 1;\n    justify-self: start;\n  }\n\n  .cr-native-scope .cr-review-row .cr-badge {\n    grid-row: 3;\n  }\n\n  .cr-native-scope .cr-review-row .cr-not-fixed {\n    grid-row: 4;\n  }\n\n  .cr-native-scope .cr-page-actions,\n  .cr-native-scope .cr-form-actions {\n    flex-direction: column;\n    align-items: stretch;\n  }\n\n  .cr-native-scope .cr-page-actions .cr-button,\n  .cr-native-scope .cr-form-actions .cr-button {\n    width: 100%;\n  }\n\n  .cr-native-scope .cr-dialog {\n    max-height: 90vh;\n  }\n}\n\n@media (pointer: coarse) {\n  .cr-native-scope .cr-button,\n  .cr-native-scope .cr-icon-button,\n  .cr-native-scope .cr-nav-link,\n  .cr-native-scope .cr-input,\n  .cr-native-scope .cr-select {\n    min-height: 44px;\n  }\n\n  .cr-native-scope .cr-icon-button {\n    width: 44px;\n    height: 44px;\n    flex-basis: 44px;\n  }\n}\n\n.cr-native-scope .cr-drawer-backdrop {\n  position: fixed;\n  z-index: 45;\n  inset: 0;\n  display: none;\n  border: 0;\n  background: var(--cr-overlay);\n  cursor: default;\n}\n\n@media (max-width: 768px) {\n  .cr-native-scope .cr-shell[data-drawer='open'] .cr-drawer-backdrop {\n    display: block;\n  }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .cr-native-scope .cr-skeleton::after,\n  .cr-native-scope .cr-spinner,\n  .cr-native-scope .cr-overlay,\n  .cr-native-scope .cr-dialog,\n  .cr-native-scope .cr-toast,\n  .cr-native-scope .cr-skip-link,\n  .cr-native-scope .cr-review-row,\n  .cr-native-scope .cr-button,\n  .cr-native-scope .cr-nav-link,\n  .cr-native-scope .cr-tab {\n    animation: none;\n    transition: none;\n  }\n}\n\n/* ---------------------------------------------------------------------------\n * Review detail\n * ------------------------------------------------------------------------- */\n\n.cr-native-scope .cr-detail,\n.cr-native-scope .cr-detail-loading,\n.cr-native-scope .cr-detail-error {\n  min-width: 0;\n}\n\n.cr-native-scope .cr-detail-loading {\n  display: grid;\n  gap: var(--cr-space-4);\n}\n\n.cr-native-scope .cr-detail-header {\n  display: flex;\n  align-items: flex-start;\n  justify-content: space-between;\n  gap: var(--cr-space-6);\n  margin: var(--cr-space-4) 0 var(--cr-space-6);\n}\n\n.cr-native-scope .cr-detail-heading {\n  min-width: 0;\n}\n\n.cr-native-scope .cr-detail-eyebrow {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n  margin-bottom: var(--cr-space-2);\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-meta);\n}\n\n.cr-native-scope .cr-eyebrow-dot {\n  width: 3px;\n  height: 3px;\n  border-radius: 999px;\n  background: var(--cr-text-muted);\n}\n\n.cr-native-scope .cr-scope-separator {\n  color: var(--cr-text-muted);\n}\n\n.cr-native-scope .cr-detail-title {\n  overflow-wrap: anywhere;\n}\n\n.cr-native-scope .cr-detail-scope {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n  margin-top: var(--cr-space-3);\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-meta);\n}\n\n.cr-native-scope .cr-detail-actions {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  justify-content: flex-end;\n  gap: var(--cr-space-2);\n  flex: 0 0 auto;\n}\n\n.cr-native-scope .cr-round-pills {\n  display: inline-flex;\n  align-items: center;\n  gap: 2px;\n  padding: 3px;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-pill);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-round-pill {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  min-height: 30px;\n  padding: 2px 9px;\n  border: 0;\n  border-radius: var(--cr-radius-pill);\n  background: transparent;\n  color: var(--cr-text-muted);\n  font-family: var(--cr-font-mono);\n  font-size: 12px;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-round-pill:hover {\n  color: var(--cr-text);\n  background: var(--cr-surface-raised);\n}\n\n.cr-native-scope .cr-round-pill[aria-pressed='true'] {\n  background: var(--cr-primary);\n  color: var(--cr-on-primary);\n}\n\n.cr-native-scope .cr-round-count {\n  display: inline-grid;\n  min-width: 18px;\n  height: 18px;\n  place-items: center;\n  padding: 0 4px;\n  border-radius: 999px;\n  background: color-mix(in srgb, currentColor 16%, transparent);\n  font-family: var(--cr-font-ui);\n  font-size: 10px;\n  font-weight: 700;\n}\n\n.cr-native-scope .cr-banner {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: var(--cr-space-3);\n  margin-bottom: var(--cr-space-4);\n  padding: var(--cr-space-3) var(--cr-space-4);\n  border: 1px solid color-mix(in srgb, var(--cr-primary) 45%, var(--cr-border));\n  border-radius: var(--cr-radius-card);\n  background: color-mix(in srgb, var(--cr-primary) 10%, var(--cr-surface));\n  color: var(--cr-text);\n  font-size: var(--cr-text-control);\n}\n\n.cr-native-scope .cr-detail-grid {\n  display: grid;\n  grid-template-columns: minmax(0, 1fr) var(--cr-rail);\n  gap: var(--cr-space-5);\n  align-items: start;\n  min-width: 0;\n}\n\n.cr-native-scope .cr-detail-main {\n  min-width: 0;\n}\n\n.cr-native-scope .cr-detail-grid-wide {\n  grid-template-columns: minmax(0, 1fr);\n}\n\n.cr-native-scope .cr-detail-tabs {\n  display: flex;\n  gap: var(--cr-space-1);\n  overflow-x: auto;\n  border-bottom: 1px solid var(--cr-border);\n  scrollbar-width: thin;\n}\n\n.cr-native-scope .cr-detail-tabs .cr-tab {\n  min-height: 44px;\n  padding: 0 var(--cr-space-3);\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-tab-count {\n  display: inline-grid;\n  min-width: 19px;\n  height: 18px;\n  place-items: center;\n  margin-left: 6px;\n  padding: 0 5px;\n  border-radius: 999px;\n  background: var(--cr-surface-raised);\n  color: var(--cr-text-muted);\n  font-family: var(--cr-font-ui);\n  font-size: 10px;\n  font-weight: 700;\n}\n\n.cr-native-scope .cr-tab[aria-selected='true'] .cr-tab-count {\n  background: color-mix(in srgb, var(--cr-primary) 18%, transparent);\n  color: var(--cr-primary);\n}\n\n.cr-native-scope .cr-tab-panel {\n  padding-top: var(--cr-space-4);\n  outline: none;\n}\n\n.cr-native-scope .cr-section-head,\n.cr-native-scope .cr-card-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: var(--cr-space-3);\n  min-width: 0;\n}\n\n.cr-native-scope .cr-section-head {\n  margin-bottom: var(--cr-space-3);\n}\n\n.cr-native-scope .cr-card {\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-card-head {\n  margin-bottom: var(--cr-space-3);\n}\n\n.cr-native-scope .cr-card-title {\n  margin: 0;\n  color: var(--cr-text);\n  font-size: var(--cr-text-control);\n  font-weight: 650;\n  letter-spacing: -0.01em;\n}\n\n.cr-native-scope .cr-link-button {\n  display: inline-flex;\n  align-items: center;\n  min-height: 28px;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: var(--cr-primary);\n  font: inherit;\n  font-size: var(--cr-text-meta);\n  text-decoration: underline;\n  text-underline-offset: 3px;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-link-button:hover {\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-inline-actions {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-notice {\n  margin: var(--cr-space-3) 0 0;\n  padding: var(--cr-space-2) var(--cr-space-3);\n  border-left: 3px solid var(--cr-border);\n  border-radius: 0 var(--cr-radius-control) var(--cr-radius-control) 0;\n  background: var(--cr-surface-raised);\n  font-size: var(--cr-text-meta);\n}\n\n.cr-native-scope .cr-notice-warning {\n  border-left-color: var(--cr-warning);\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-notice-info {\n  border-left-color: var(--cr-primary);\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-rail {\n  display: grid;\n  gap: var(--cr-space-3);\n  min-width: 0;\n}\n\n.cr-native-scope .cr-rail-card {\n  padding: var(--cr-space-4);\n}\n\n.cr-native-scope .cr-rail-copy {\n  margin: 0;\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-control);\n  overflow-wrap: anywhere;\n}\n\n.cr-native-scope .cr-rail-meta {\n  display: flex;\n  flex-wrap: wrap;\n  gap: var(--cr-space-2);\n  margin-top: var(--cr-space-3);\n  color: var(--cr-text-muted);\n  font-size: 12px;\n}\n\n.cr-native-scope .cr-fix-grid {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 6px;\n}\n\n.cr-native-scope .cr-fix-cell {\n  display: grid;\n  gap: 2px;\n  min-height: 58px;\n  padding: var(--cr-space-2);\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n  background: var(--cr-bg);\n  color: var(--cr-text);\n  text-align: left;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-fix-cell:hover {\n  background: var(--cr-surface-raised);\n}\n\n.cr-native-scope .cr-fix-cell[aria-pressed='true'] {\n  border-color: var(--cr-primary);\n  box-shadow: inset 0 0 0 1px var(--cr-primary);\n}\n\n.cr-native-scope .cr-fix-cell[data-group='addressed'] .cr-fix-count {\n  color: var(--cr-success);\n}\n\n.cr-native-scope .cr-fix-cell[data-group='not-fixed'] .cr-fix-count {\n  color: var(--cr-danger);\n}\n\n.cr-native-scope .cr-fix-cell[data-group='outdated'] .cr-fix-count {\n  color: var(--cr-warning);\n}\n\n.cr-native-scope .cr-fix-count {\n  font-family: var(--cr-font-mono);\n  font-size: 20px;\n  font-weight: 650;\n  line-height: 1.1;\n}\n\n.cr-native-scope .cr-fix-label {\n  color: var(--cr-text-muted);\n  font-size: 11px;\n  line-height: 1.2;\n}\n\n.cr-native-scope .cr-fix-board .cr-link-button {\n  margin-top: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-fix-note {\n  margin: var(--cr-space-3) 0 0;\n}\n\n.cr-native-scope .cr-switch-row {\n  display: flex;\n  align-items: flex-start;\n  gap: var(--cr-space-2);\n  min-height: 40px;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-switch-row input {\n  width: 18px;\n  height: 18px;\n  margin: 2px 0 0;\n  accent-color: var(--cr-primary);\n}\n\n.cr-native-scope .cr-switch-row > span {\n  display: grid;\n  gap: 2px;\n  font-size: var(--cr-text-control);\n}\n\n.cr-native-scope .cr-delivery-details {\n  margin-top: var(--cr-space-2);\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-meta);\n}\n\n.cr-native-scope .cr-delivery-details summary {\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-shortcut-card .cr-link-button {\n  font-family: var(--cr-font-mono);\n  font-size: 16px;\n}\n\n/* Conversations */\n.cr-native-scope .cr-thread-list {\n  display: grid;\n  gap: var(--cr-space-3);\n  margin: 0;\n  padding: 0;\n  list-style: none;\n}\n\n/* Quoted code scrolls inside its own block; it must not widen the grid track. */\n.cr-native-scope .cr-thread-list > li {\n  min-width: 0;\n}\n\n.cr-native-scope .cr-thread {\n  min-width: 0;\n  padding: var(--cr-space-3);\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-thread-active {\n  border-color: var(--cr-primary);\n}\n\n.cr-native-scope .cr-thread-compact {\n  padding: var(--cr-space-3);\n  border-radius: var(--cr-radius-control);\n  background: var(--cr-bg);\n}\n\n.cr-native-scope .cr-thread-deleted {\n  border-style: dashed;\n  background: var(--cr-bg);\n}\n\n.cr-native-scope .cr-thread-tombstone {\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-control);\n  font-style: italic;\n}\n\n.cr-native-scope .cr-thread-delete-confirm {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n  margin-top: var(--cr-space-3);\n  padding-top: var(--cr-space-3);\n  border-top: 1px solid var(--cr-border);\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-control);\n}\n\n.cr-native-scope .cr-thread-head {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n  margin-bottom: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-thread-author {\n  font-size: var(--cr-text-control);\n  font-weight: 650;\n}\n\n.cr-native-scope .cr-avatar {\n  display: grid;\n  width: 24px;\n  height: 24px;\n  place-items: center;\n  border-radius: 999px;\n  background: var(--cr-surface-raised);\n  color: var(--cr-primary);\n  font-size: 11px;\n  font-weight: 700;\n}\n\n.cr-native-scope .cr-anchor-jump {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n  max-width: 100%;\n  min-height: 32px;\n  margin-bottom: var(--cr-space-2);\n  padding: 3px 7px;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n  background: var(--cr-bg);\n  color: var(--cr-text-muted);\n  font: inherit;\n  font-size: 12px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-anchor-jump:hover {\n  color: var(--cr-text);\n  border-color: var(--cr-primary);\n}\n\n.cr-native-scope .cr-anchor-path {\n  overflow: hidden;\n  max-width: 34ch;\n  font-family: var(--cr-font-mono);\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-anchor-line {\n  color: var(--cr-primary);\n  font-family: var(--cr-font-mono);\n}\n\n.cr-native-scope .cr-thread-body {\n  color: var(--cr-text);\n  font-size: var(--cr-text-control);\n  line-height: 1.55;\n  white-space: pre-wrap;\n  overflow-wrap: anywhere;\n}\n\n.cr-native-scope .cr-quote {\n  overflow: auto;\n  max-height: 220px;\n  margin: var(--cr-space-2) 0;\n  padding: var(--cr-space-2) var(--cr-space-3);\n  border-left: 3px solid var(--cr-border);\n  border-radius: 0 var(--cr-radius-control) var(--cr-radius-control) 0;\n  background: var(--cr-bg);\n  color: var(--cr-text-muted);\n  font-family: var(--cr-font-mono);\n  font-size: var(--cr-text-code);\n  line-height: var(--cr-leading-code);\n  white-space: pre;\n}\n\n.cr-native-scope .cr-suggestion {\n  margin-top: var(--cr-space-3);\n  padding: var(--cr-space-2);\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n  background: var(--cr-bg);\n}\n\n.cr-native-scope .cr-suggestion-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: var(--cr-space-2);\n  margin-bottom: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-suggestion-label {\n  color: var(--cr-text-muted);\n  font-size: 11px;\n  font-weight: 650;\n  letter-spacing: 0.06em;\n  text-transform: uppercase;\n}\n\n.cr-native-scope .cr-suggestion-block {\n  overflow: auto;\n  border-radius: var(--cr-radius-control);\n}\n\n.cr-native-scope .cr-suggestion-block + .cr-suggestion-block {\n  margin-top: 6px;\n}\n\n.cr-native-scope .cr-suggestion-block pre {\n  margin: 0;\n  padding: 6px 9px;\n  font-family: var(--cr-font-mono);\n  font-size: var(--cr-text-code);\n  line-height: var(--cr-leading-code);\n  white-space: pre;\n}\n\n.cr-native-scope .cr-suggestion-old {\n  border: 1px solid color-mix(in srgb, var(--cr-danger) 35%, var(--cr-border));\n  background: var(--cr-removed-bg);\n}\n\n.cr-native-scope .cr-suggestion-new {\n  border: 1px solid color-mix(in srgb, var(--cr-success) 35%, var(--cr-border));\n  background: var(--cr-added-bg);\n}\n\n.cr-native-scope .cr-suggestion-caption {\n  display: block;\n  padding: 2px 9px;\n  color: var(--cr-text-muted);\n  font-size: 10px;\n  font-weight: 650;\n  letter-spacing: 0.07em;\n  text-transform: uppercase;\n}\n\n.cr-native-scope .cr-replies {\n  display: grid;\n  gap: var(--cr-space-2);\n  margin: var(--cr-space-3) 0 0;\n  padding: 0 0 0 var(--cr-space-3);\n  border-left: 2px solid var(--cr-border);\n  list-style: none;\n}\n\n.cr-native-scope .cr-reply-head {\n  display: flex;\n  align-items: center;\n  gap: var(--cr-space-2);\n  font-size: 12px;\n}\n\n.cr-native-scope .cr-reply-body {\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-control);\n  white-space: pre-wrap;\n  overflow-wrap: anywhere;\n}\n\n.cr-native-scope .cr-thread-actions {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-1);\n  margin-top: var(--cr-space-3);\n}\n\n.cr-native-scope .cr-reply-form {\n  margin-top: var(--cr-space-3);\n  padding-top: var(--cr-space-3);\n  border-top: 1px solid var(--cr-border);\n}\n\n.cr-native-scope .cr-topic-thread {\n  display: grid;\n  gap: var(--cr-space-2);\n  min-width: 0;\n  margin-top: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-topic-thread-list {\n  display: grid;\n  gap: var(--cr-space-2);\n  margin: 0;\n  padding: 0;\n  list-style: none;\n}\n\n.cr-native-scope .cr-topic-thread-list > li {\n  min-width: 0;\n}\n\n.cr-native-scope .cr-topic-thread-actions,\n.cr-native-scope .cr-topic-thread-form-actions {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-topic-thread-form {\n  display: grid;\n  gap: var(--cr-space-2);\n  margin-top: var(--cr-space-1);\n  padding-top: var(--cr-space-2);\n  border-top: 1px solid var(--cr-border);\n}\n\n.cr-native-scope .cr-topic-thread-form .cr-meta {\n  margin: 0;\n}\n\n.cr-native-scope .cr-topic-thread-error {\n  margin: 0;\n  color: var(--cr-danger);\n  font-size: var(--cr-text-meta);\n}\n\n/* Diff */\n.cr-native-scope .cr-diff-layout {\n  display: grid;\n  grid-template-columns: 238px minmax(0, 1fr);\n  gap: var(--cr-space-3);\n  align-items: start;\n  min-width: 0;\n}\n\n.cr-native-scope .cr-file-tree {\n  position: sticky;\n  top: var(--cr-space-4);\n  overflow: auto;\n  max-height: calc(100vh - 80px);\n  padding: var(--cr-space-3);\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-file-tree-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  margin-bottom: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-file-tree .cr-field {\n  margin-bottom: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-file-tree-empty {\n  margin: var(--cr-space-2) 0;\n}\n\n.cr-native-scope .cr-tree {\n  display: grid;\n  gap: 2px;\n}\n\n.cr-native-scope .cr-tree-dir {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  width: 100%;\n  min-height: 28px;\n  padding: 2px 4px;\n  border: 0;\n  border-radius: var(--cr-radius-control);\n  background: transparent;\n  color: var(--cr-text-muted);\n  font: inherit;\n  font-size: 11px;\n  font-weight: 650;\n  text-align: left;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-tree-dir:hover {\n  color: var(--cr-text);\n  background: var(--cr-surface-raised);\n}\n\n.cr-native-scope .cr-tree-dir-name {\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-tree-file {\n  display: grid;\n  grid-template-columns: 16px minmax(0, 1fr) auto auto auto;\n  gap: 6px;\n  align-items: center;\n  width: 100%;\n  min-height: 30px;\n  padding: 2px 4px 2px 16px;\n  border: 0;\n  border-radius: var(--cr-radius-control);\n  background: transparent;\n  color: var(--cr-text-muted);\n  font: inherit;\n  font-size: 12px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-tree-file:hover {\n  background: var(--cr-surface-raised);\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-tree-file-active {\n  background: var(--cr-surface-raised);\n  color: var(--cr-text);\n  box-shadow: inset 2px 0 0 var(--cr-primary);\n}\n\n.cr-native-scope .cr-tree-path {\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-tree-status {\n  display: grid;\n  width: 15px;\n  height: 15px;\n  place-items: center;\n  border-radius: 3px;\n  font-family: var(--cr-font-mono);\n  font-size: 9px;\n  font-weight: 700;\n}\n\n.cr-native-scope .cr-tree-status-added,\n.cr-native-scope .cr-tree-status-untracked {\n  background: color-mix(in srgb, var(--cr-success) 16%, transparent);\n  color: var(--cr-success);\n}\n\n.cr-native-scope .cr-tree-status-deleted {\n  background: color-mix(in srgb, var(--cr-danger) 16%, transparent);\n  color: var(--cr-danger);\n}\n\n.cr-native-scope .cr-tree-status-renamed {\n  background: color-mix(in srgb, var(--cr-warning) 16%, transparent);\n  color: var(--cr-warning);\n}\n\n.cr-native-scope .cr-tree-status-modified {\n  background: var(--cr-surface-raised);\n  color: var(--cr-text-muted);\n}\n\n.cr-native-scope .cr-tree-stat {\n  color: var(--cr-text-muted);\n  font-family: var(--cr-font-mono);\n  font-size: 10px;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-diff-main {\n  min-width: 0;\n}\n\n.cr-native-scope .cr-conflict-banner {\n  margin-bottom: var(--cr-space-3);\n  padding: var(--cr-space-3) var(--cr-space-4);\n  border: 1px solid color-mix(in srgb, var(--cr-danger) 35%, var(--cr-border));\n  border-left: 4px solid var(--cr-danger);\n  border-radius: var(--cr-radius-card);\n  background: color-mix(in srgb, var(--cr-danger) 7%, var(--cr-surface));\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-conflict-banner strong {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: baseline;\n  gap: var(--cr-space-2);\n  font-size: var(--cr-text-control);\n}\n\n.cr-native-scope .cr-conflict-count {\n  color: var(--cr-danger);\n  font-family: var(--cr-font-mono);\n  font-size: var(--cr-text-meta);\n  font-weight: 500;\n}\n\n.cr-native-scope .cr-conflict-banner p {\n  margin: var(--cr-space-1) 0 var(--cr-space-2);\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-meta);\n}\n\n.cr-native-scope .cr-conflict-banner ul {\n  display: flex;\n  flex-wrap: wrap;\n  gap: var(--cr-space-1) var(--cr-space-3);\n  margin: 0;\n  padding: 0;\n  list-style: none;\n}\n\n.cr-native-scope .cr-conflict-banner li {\n  min-width: 0;\n}\n\n.cr-native-scope .cr-conflict-banner .cr-link-button {\n  max-width: 100%;\n  overflow: hidden;\n  font-family: var(--cr-font-mono);\n  font-size: var(--cr-text-meta);\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-tree-status-conflict {\n  background: color-mix(in srgb, var(--cr-danger) 18%, transparent);\n  color: var(--cr-danger);\n}\n\n.cr-native-scope .cr-diff-toolbar {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-3);\n  margin-bottom: var(--cr-space-3);\n  padding: var(--cr-space-2);\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-diff-delta-note {\n  display: inline-flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 2px 6px;\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-meta);\n}\n\n/* Full-file preview */\n\n.cr-native-scope .cr-dialog:has(.cr-file-view) {\n  display: flex;\n  width: min(1080px, 100%);\n  max-height: min(88vh, 900px);\n  flex-direction: column;\n  overflow: hidden;\n}\n\n.cr-native-scope .cr-dialog:has(.cr-file-view) .cr-dialog-head {\n  flex: 0 0 auto;\n}\n\n.cr-native-scope .cr-dialog:has(.cr-file-view) .cr-dialog-body {\n  min-height: 0;\n  overflow: auto;\n  overscroll-behavior: contain;\n}\n\n.cr-native-scope .cr-file-view {\n  display: grid;\n  min-width: 0;\n  gap: var(--cr-space-3);\n}\n\n.cr-native-scope .cr-file-view > .cr-segmented {\n  justify-self: start;\n}\n\n.cr-native-scope .cr-full-file {\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n  background: var(--cr-bg);\n  font-family: var(--cr-font-mono);\n  font-size: var(--cr-text-code);\n  line-height: var(--cr-leading-code);\n}\n\n.cr-native-scope .cr-full-file-head,\n.cr-native-scope .cr-full-file-line {\n  display: grid;\n  grid-template-columns: 58px 20px minmax(0, 1fr) 26px;\n  min-width: 0;\n  align-items: stretch;\n}\n\n.cr-native-scope .cr-full-file-head {\n  position: sticky;\n  z-index: 1;\n  top: 0;\n  border-bottom: 1px solid var(--cr-border);\n  background: var(--cr-surface);\n  color: var(--cr-text-muted);\n  font-family: var(--cr-font-sans);\n  font-size: 10px;\n  font-weight: 650;\n  letter-spacing: 0.08em;\n  text-transform: uppercase;\n}\n\n.cr-native-scope .cr-full-file-head > * {\n  padding: 6px 8px;\n}\n\n.cr-native-scope .cr-full-file-line {\n  min-height: 20px;\n  color: var(--cr-text);\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-full-file-line:focus-visible {\n  outline: 2px solid var(--cr-focus);\n  outline-offset: -2px;\n}\n\n.cr-native-scope .cr-full-file-line-selected {\n  background: color-mix(in srgb, var(--cr-primary) 18%, var(--cr-bg));\n}\n\n.cr-native-scope .cr-full-file-block + .cr-full-file-block .cr-full-file-line {\n  border-top: 1px solid color-mix(in srgb, var(--cr-border) 45%, transparent);\n}\n\n.cr-native-scope .cr-full-file-toolbar {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  justify-content: space-between;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-full-file-toolbar .cr-meta {\n  margin: 0;\n}\n\n.cr-native-scope .cr-full-file-thread-cell,\n.cr-native-scope .cr-full-file-composer-cell {\n  padding: var(--cr-space-2);\n  border-top: 1px solid var(--cr-border);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-full-file-thread-cell .cr-thread + .cr-thread {\n  margin-top: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-full-file-composer-cell {\n  background: var(--cr-surface-raised);\n}\n\n.cr-native-scope .cr-full-file-finding {\n  display: block;\n  font-family: var(--cr-font-ui);\n}\n\n.cr-native-scope .cr-full-file-finding .cr-inline-finding {\n  margin: 0;\n}\n\n.cr-native-scope .cr-full-file-finding .cr-inline-finding-head strong,\n.cr-native-scope .cr-full-file-finding .cr-inline-finding-rationale {\n  overflow-wrap: anywhere;\n}\n\n.cr-native-scope .cr-full-file-question {\n  display: block;\n  font-family: var(--cr-font-ui);\n}\n\n.cr-native-scope .cr-full-file-question .cr-inline-question {\n  margin: 0;\n}\n\n.cr-native-scope .cr-full-file-line-add {\n  background: var(--cr-added-bg);\n}\n\n.cr-native-scope .cr-full-file-line-del {\n  background: var(--cr-removed-bg);\n}\n\n.cr-native-scope .cr-full-file-no {\n  padding: 0 7px 0 3px;\n  border-right: 1px solid var(--cr-border);\n  color: var(--cr-text-muted);\n  font-size: 11px;\n  text-align: right;\n  user-select: none;\n}\n\n.cr-native-scope .cr-full-file-marker {\n  color: var(--cr-text-muted);\n  text-align: center;\n  user-select: none;\n}\n\n.cr-native-scope .cr-full-file-line-add .cr-full-file-marker {\n  color: var(--cr-success);\n}\n\n.cr-native-scope .cr-full-file-line-del .cr-full-file-marker {\n  color: var(--cr-danger);\n}\n\n.cr-native-scope .cr-full-file-code {\n  margin: 0;\n  padding: 0 10px;\n  overflow-wrap: anywhere;\n  tab-size: 2;\n  white-space: pre-wrap;\n}\n\n.cr-native-scope .cr-full-file-actions-cell {\n  display: flex;\n  min-width: 0;\n  align-items: center;\n  justify-content: center;\n}\n\n.cr-native-scope .cr-full-file-comment {\n  display: none;\n  width: 20px;\n  min-height: 18px;\n  padding: 0;\n  border: 0;\n  border-radius: 3px;\n  background: var(--cr-surface-raised);\n  color: var(--cr-primary);\n  font: inherit;\n  font-weight: 700;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-full-file-line:hover .cr-full-file-comment,\n.cr-native-scope .cr-full-file-line:focus-within .cr-full-file-comment,\n.cr-native-scope .cr-full-file-line-selected .cr-full-file-comment {\n  display: inline-block;\n}\n\n@media (pointer: coarse) {\n  .cr-native-scope .cr-full-file-head,\n  .cr-native-scope .cr-full-file-line {\n    grid-template-columns: 58px 20px minmax(0, 1fr) 40px;\n  }\n\n  .cr-native-scope .cr-full-file-comment {\n    display: inline-block;\n    width: 36px;\n    min-height: 36px;\n  }\n}\n\n.cr-native-scope .cr-full-file-more {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-segmented {\n  display: inline-flex;\n  padding: 2px;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n  background: var(--cr-bg);\n}\n\n.cr-native-scope .cr-segmented-button {\n  min-height: 30px;\n  padding: 2px 9px;\n  border: 0;\n  border-radius: 4px;\n  background: transparent;\n  color: var(--cr-text-muted);\n  font: inherit;\n  font-size: 12px;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-segmented-button:hover:not(:disabled) {\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-segmented-button[aria-pressed='true'] {\n  background: var(--cr-surface-raised);\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-segmented-button:disabled {\n  opacity: 0.45;\n  cursor: not-allowed;\n}\n\n.cr-native-scope .cr-diff-count,\n.cr-native-scope .cr-diff-scope-note {\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-shortcut-hint {\n  margin-left: auto;\n  font-family: var(--cr-font-mono);\n  font-size: 11px;\n}\n\n.cr-native-scope .cr-mobile-file-select {\n  display: none;\n}\n\n.cr-native-scope .cr-diff-files {\n  display: grid;\n  gap: var(--cr-space-3);\n  min-width: 0;\n}\n\n.cr-native-scope .cr-diff-file {\n  overflow: hidden;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-diff-file-active {\n  border-color: color-mix(in srgb, var(--cr-primary) 55%, var(--cr-border));\n}\n\n.cr-native-scope .cr-diff-file-head {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n  min-height: 42px;\n  padding: var(--cr-space-1) var(--cr-space-2);\n  border-bottom: 1px solid var(--cr-border);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-diff-full-file {\n  flex: 0 0 auto;\n}\n\n.cr-native-scope .cr-diff-collapse {\n  display: grid;\n  width: 26px;\n  height: 26px;\n  place-items: center;\n  border: 0;\n  border-radius: 4px;\n  background: transparent;\n  color: var(--cr-text-muted);\n  font-size: 16px;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-diff-collapse:hover {\n  background: var(--cr-surface-raised);\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-diff-path {\n  display: flex;\n  min-width: 0;\n  flex: 1 1 260px;\n  align-items: center;\n  gap: var(--cr-space-2);\n  padding: 2px 0;\n  border: 0;\n  background: transparent;\n  color: var(--cr-text);\n  font-family: var(--cr-font-mono);\n  font-size: 12px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-diff-path:hover .cr-diff-path-text {\n  text-decoration: underline;\n  text-underline-offset: 3px;\n}\n\n.cr-native-scope .cr-diff-path-text {\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-diff-stat {\n  font-family: var(--cr-font-mono);\n  font-size: 11px;\n}\n\n.cr-native-scope .cr-diff-stat-add {\n  color: var(--cr-success);\n}\n\n.cr-native-scope .cr-diff-stat-del {\n  color: var(--cr-danger);\n}\n\n.cr-native-scope .cr-diff-hash {\n  flex: 0 0 auto;\n  margin-left: auto;\n  font-family: var(--cr-font-mono);\n}\n\n.cr-native-scope .cr-diff-body {\n  overflow-x: auto;\n  min-width: 0;\n}\n\n.cr-native-scope .cr-diff-gutter-head {\n  display: grid;\n  grid-template-columns: 48px 48px 20px 22px minmax(0, 1fr);\n  min-width: 560px;\n  padding: 3px var(--cr-space-2);\n  border-bottom: 1px solid var(--cr-border);\n  color: var(--cr-text-muted);\n  font-family: var(--cr-font-mono);\n  font-size: 9px;\n  letter-spacing: 0.08em;\n  text-transform: uppercase;\n}\n\n.cr-native-scope .cr-hunk {\n  display: flex;\n  flex-wrap: wrap;\n  gap: var(--cr-space-2);\n  min-width: 560px;\n  padding: 4px var(--cr-space-2);\n  border-top: 1px solid var(--cr-border);\n  border-bottom: 1px solid var(--cr-border);\n  background: var(--cr-surface-raised);\n  color: var(--cr-text-muted);\n  font-family: var(--cr-font-mono);\n  font-size: 11px;\n}\n\n.cr-native-scope .cr-hunk-code {\n  color: var(--cr-info);\n}\n\n.cr-native-scope .cr-hunk-header {\n  overflow-wrap: anywhere;\n}\n\n.cr-native-scope .cr-diff-line {\n  position: relative;\n  display: grid;\n  grid-template-columns: 48px 48px 20px 22px minmax(0, 1fr) auto;\n  align-items: stretch;\n  min-width: 560px;\n  min-height: 20px;\n  color: var(--cr-text);\n  font-family: var(--cr-font-mono);\n  font-size: var(--cr-text-code);\n  line-height: var(--cr-leading-code);\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-diff-line:hover {\n  background: color-mix(in srgb, var(--cr-text) 5%, transparent);\n}\n\n.cr-native-scope .cr-diff-line:focus-visible {\n  outline: 2px solid var(--cr-focus);\n  outline-offset: -2px;\n}\n\n.cr-native-scope .cr-diff-line-add {\n  background: var(--cr-added-bg);\n}\n\n.cr-native-scope .cr-diff-line-del {\n  background: var(--cr-removed-bg);\n}\n\n.cr-native-scope .cr-diff-line-selected {\n  box-shadow: inset 2px 0 0 var(--cr-selection-accent);\n}\n\n.cr-native-scope .cr-diff-line-range {\n  background: var(--cr-selection-bg);\n}\n\n.cr-native-scope .cr-diff-line-drag {\n  background: var(--cr-selection-bg);\n  box-shadow: inset 2px 0 0 var(--cr-selection-accent);\n}\n\n.cr-native-scope .cr-diff-line-drag .cr-diff-no {\n  color: var(--cr-selection-accent);\n}\n\n.cr-native-scope .cr-diff-risk-cell {\n  display: grid;\n  place-items: center;\n  align-self: center;\n}\n\n.cr-native-scope .cr-diff-risk-pin {\n  position: relative;\n  display: grid;\n  width: 17px;\n  height: 17px;\n  padding: 0;\n  place-items: center;\n  border: 1px solid currentColor;\n  border-radius: 50%;\n  background: var(--cr-surface);\n  color: var(--cr-text-muted);\n  font-family: var(--cr-font-ui);\n  font-size: 9px;\n  font-weight: 800;\n  line-height: 1;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-diff-risk-pin:hover,\n.cr-native-scope .cr-diff-risk-pin:focus-visible {\n  outline: 2px solid currentColor;\n  outline-offset: 1px;\n}\n\n.cr-native-scope .cr-diff-risk-pin.cr-risk-blocker {\n  background: var(--cr-danger);\n  color: var(--cr-on-danger);\n  border-color: var(--cr-danger);\n}\n\n.cr-native-scope .cr-diff-risk-pin.cr-risk-major {\n  background: var(--cr-warning);\n  color: var(--cr-bg);\n  border-color: var(--cr-warning);\n}\n\n.cr-native-scope .cr-diff-risk-pin.cr-risk-minor {\n  background: var(--cr-info);\n  color: var(--cr-bg);\n  border-color: var(--cr-info);\n}\n\n.cr-native-scope .cr-diff-risk-pin.cr-risk-nit {\n  background: var(--cr-surface-raised);\n  color: var(--cr-text-muted);\n}\n\n.cr-native-scope .cr-diff-line-commented .cr-diff-comment-count {\n  display: inline-grid;\n}\n\n.cr-native-scope .cr-diff-no {\n  padding: 0 7px 0 3px;\n  border-right: 1px solid var(--cr-border);\n  color: var(--cr-text-muted);\n  font-size: 11px;\n  text-align: right;\n  user-select: none;\n}\n\n.cr-native-scope .cr-diff-marker {\n  color: var(--cr-text-muted);\n  text-align: center;\n  user-select: none;\n}\n\n.cr-native-scope .cr-diff-line-add .cr-diff-marker {\n  color: var(--cr-success);\n}\n\n.cr-native-scope .cr-diff-line-del .cr-diff-marker {\n  color: var(--cr-danger);\n}\n\n.cr-native-scope .cr-diff-text {\n  overflow: visible;\n  padding-right: var(--cr-space-2);\n  font-family: inherit;\n  white-space: pre;\n}\n\n.cr-native-scope .cr-diff-wrap .cr-diff-line,\n.cr-native-scope .cr-diff-wrap .cr-diff-gutter-head,\n.cr-native-scope .cr-diff-wrap .cr-hunk {\n  min-width: 0;\n}\n\n.cr-native-scope .cr-diff-wrap .cr-diff-text {\n  min-width: 0;\n  white-space: pre-wrap;\n  overflow-wrap: anywhere;\n}\n\n.cr-native-scope .cr-diff-wrap .cr-diff-body {\n  overflow-x: hidden;\n}\n\n.cr-native-scope .cr-diff-wrap .cr-quote,\n.cr-native-scope .cr-diff-wrap .cr-thread-body,\n.cr-native-scope .cr-diff-wrap .cr-reply-body {\n  overflow-wrap: anywhere;\n}\n\n.cr-native-scope .cr-diff-actions-cell {\n  display: flex;\n  min-width: 0;\n  align-items: center;\n  justify-content: flex-end;\n  gap: 3px;\n}\n\n.cr-native-scope .cr-diff-comment {\n  display: none;\n  width: 24px;\n  min-height: 20px;\n  padding: 0;\n  border: 0;\n  border-radius: 3px;\n  background: var(--cr-surface-raised);\n  color: var(--cr-primary);\n  font: inherit;\n  font-weight: 700;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-diff-line:hover .cr-diff-comment,\n.cr-native-scope .cr-diff-line:focus-within .cr-diff-comment,\n.cr-native-scope .cr-diff-line-selected .cr-diff-comment {\n  display: inline-block;\n}\n\n.cr-native-scope .cr-diff-comment-count {\n  display: none;\n  min-width: 18px;\n  height: 18px;\n  place-items: center;\n  align-self: center;\n  margin-right: 4px;\n  border-radius: 999px;\n  background: var(--cr-primary);\n  color: var(--cr-on-primary);\n  font-family: var(--cr-font-ui);\n  font-size: 10px;\n  font-weight: 700;\n}\n\n.cr-native-scope .cr-diff-line-commented .cr-diff-comment-count {\n  display: inline-grid;\n}\n\n.cr-native-scope .cr-inline-thread {\n  display: grid;\n  gap: var(--cr-space-2);\n  min-width: 0;\n  padding: var(--cr-space-2) var(--cr-space-3);\n  border-bottom: 1px solid var(--cr-border);\n  background: var(--cr-bg);\n}\n\n.cr-native-scope .cr-inline-composer {\n  min-width: 0;\n  padding: var(--cr-space-2) var(--cr-space-3) var(--cr-space-3);\n  border-bottom: 1px solid var(--cr-border);\n  background: var(--cr-bg);\n}\n\n.cr-native-scope .cr-inline-finding-row {\n  display: block;\n}\n\n.cr-native-scope .cr-inline-question-row {\n  display: block;\n}\n\n.cr-native-scope .cr-inline-thread-cell {\n  display: grid;\n  gap: var(--cr-space-2);\n  min-width: 0;\n}\n\n.cr-native-scope .cr-inline-finding {\n  display: block;\n  min-width: 0;\n  margin: 0;\n  padding: 0;\n  border: 0;\n  border-block: 1px solid var(--cr-border);\n  border-left: 2px solid var(--cr-warning);\n  border-radius: 0;\n  background: var(--cr-surface);\n  color: var(--cr-text);\n  font-family: var(--cr-font-ui);\n}\n\n.cr-native-scope .cr-inline-finding.cr-risk-blocker {\n  border-left-color: var(--cr-danger);\n}\n\n.cr-native-scope .cr-inline-finding.cr-risk-minor {\n  border-left-color: var(--cr-info);\n}\n\n.cr-native-scope .cr-inline-finding.cr-risk-nit {\n  border-left-color: var(--cr-text-muted);\n}\n\n.cr-native-scope .cr-inline-finding-header {\n  display: grid;\n  width: 100%;\n  min-width: 0;\n  grid-template-columns: 14px 22px minmax(0, 1fr);\n  align-items: start;\n  gap: var(--cr-space-2);\n  margin: 0;\n  padding: 5px 10px 6px;\n  border: 0;\n  background: transparent;\n  color: inherit;\n  font: inherit;\n  text-align: left;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-inline-finding-header:hover {\n  background: color-mix(in srgb, var(--cr-text) 4%, transparent);\n}\n\n.cr-native-scope .cr-inline-finding-header:focus-visible {\n  outline: 2px solid var(--cr-focus);\n  outline-offset: -2px;\n}\n\n.cr-native-scope .cr-inline-finding-toggle {\n  display: grid;\n  width: 14px;\n  height: 20px;\n  place-items: center;\n  color: var(--cr-text-muted);\n  font-size: 11px;\n  line-height: 1;\n}\n\n.cr-native-scope .cr-inline-finding-severity {\n  display: grid;\n  width: 22px;\n  height: 22px;\n  place-items: center;\n  border-radius: 50%;\n  background: var(--cr-warning);\n  color: var(--cr-bg);\n  font-size: 10px;\n  font-weight: 800;\n  line-height: 1;\n}\n\n.cr-native-scope .cr-inline-finding.cr-risk-blocker .cr-inline-finding-severity {\n  background: var(--cr-danger);\n  color: var(--cr-on-danger);\n}\n\n.cr-native-scope .cr-inline-finding.cr-risk-minor .cr-inline-finding-severity {\n  background: var(--cr-info);\n  color: var(--cr-bg);\n}\n\n.cr-native-scope .cr-inline-finding.cr-risk-nit .cr-inline-finding-severity {\n  background: var(--cr-surface-raised);\n  color: var(--cr-text-muted);\n}\n\n.cr-native-scope .cr-inline-finding-main {\n  display: grid;\n  gap: 0;\n  min-width: 0;\n}\n\n.cr-native-scope .cr-inline-finding-head {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: baseline;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-inline-finding-head strong {\n  font-size: var(--cr-text-control);\n}\n\n.cr-native-scope .cr-inline-finding-body {\n  padding: 0 10px 7px 62px;\n}\n\n.cr-native-scope .cr-inline-finding-rationale {\n  margin: 0;\n  color: var(--cr-text);\n  font-size: var(--cr-text-meta);\n  line-height: 1.5;\n}\n\n.cr-native-scope .cr-inline-finding-details {\n  min-width: 0;\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-meta);\n}\n\n.cr-native-scope .cr-inline-finding-details summary {\n  width: fit-content;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-inline-finding-evidence,\n.cr-native-scope .cr-inline-finding-suggestion pre {\n  max-width: 100%;\n  margin: var(--cr-space-2) 0 0;\n  overflow-x: auto;\n  padding: var(--cr-space-2);\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n  background: var(--cr-bg);\n  color: var(--cr-text);\n  font-family: var(--cr-font-mono);\n  font-size: 11px;\n  line-height: 1.45;\n  white-space: pre-wrap;\n  overflow-wrap: anywhere;\n}\n\n.cr-native-scope .cr-inline-finding-suggestion {\n  margin-top: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-inline-finding-actions {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-inline-question {\n  display: block;\n  width: 100%;\n  min-width: 0;\n  margin: 0;\n  padding: 5px 10px 6px;\n  border: 0;\n  border-block: 1px solid var(--cr-border);\n  border-left: 2px solid color-mix(in srgb, var(--cr-info) 70%, var(--cr-border));\n  border-radius: 0;\n  background: var(--cr-surface);\n  color: var(--cr-text);\n  font-family: var(--cr-font-ui);\n}\n\n.cr-native-scope .cr-inline-question-row {\n  display: flex;\n  min-width: 0;\n  align-items: center;\n  gap: 8px;\n}\n\n.cr-native-scope .cr-inline-question-header {\n  display: grid;\n  flex: 1;\n  min-width: 0;\n  grid-template-columns: 14px 18px minmax(0, 1fr);\n  align-items: center;\n  gap: 8px;\n  margin: 0;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: inherit;\n  font: inherit;\n  text-align: left;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-inline-question-header:hover {\n  background: color-mix(in srgb, var(--cr-text) 4%, transparent);\n}\n\n.cr-native-scope .cr-inline-question-header:focus-visible {\n  outline: 2px solid var(--cr-focus);\n  outline-offset: -2px;\n}\n\n.cr-native-scope .cr-inline-question-mark {\n  display: grid;\n  width: 18px;\n  height: 18px;\n  place-items: center;\n  border: 1px solid color-mix(in srgb, var(--cr-info) 45%, var(--cr-border));\n  border-radius: 50%;\n  background: color-mix(in srgb, var(--cr-info) 12%, var(--cr-surface));\n  color: color-mix(in srgb, var(--cr-info) 82%, var(--cr-text));\n  font-family: var(--cr-font-ui);\n  font-size: 11px;\n  font-weight: 800;\n  line-height: 1;\n}\n\n.cr-native-scope .cr-inline-question-main {\n  display: grid;\n  gap: 3px;\n  min-width: 0;\n}\n\n.cr-native-scope .cr-inline-question-head {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.cr-native-scope .cr-inline-question-head .cr-badge {\n  flex: none;\n}\n\n.cr-native-scope .cr-inline-question-head .cr-meta {\n  margin: 0;\n  font-size: 11px;\n}\n\n.cr-native-scope .cr-inline-question-toggle {\n  display: grid;\n  width: 14px;\n  height: 20px;\n  place-items: center;\n  color: var(--cr-text-muted);\n  font-size: 11px;\n  line-height: 1;\n}\n\n.cr-native-scope .cr-inline-question-cta {\n  min-height: 24px;\n  margin-left: auto;\n  padding: 2px 7px;\n  border: 1px solid color-mix(in srgb, var(--cr-info) 30%, var(--cr-border));\n  border-radius: var(--cr-radius-control);\n  background: color-mix(in srgb, var(--cr-info) 6%, transparent);\n  color: var(--cr-text);\n  font: inherit;\n  font-size: 11px;\n  font-weight: 650;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-inline-question-cta:hover {\n  background: color-mix(in srgb, var(--cr-info) 12%, transparent);\n}\n\n.cr-native-scope .cr-inline-question-cta:focus-visible {\n  outline: 2px solid var(--cr-focus);\n  outline-offset: 2px;\n}\n\n.cr-native-scope .cr-inline-question-text {\n  margin: 0;\n  color: var(--cr-text);\n  font-size: 13px;\n  font-weight: 600;\n  line-height: 1.45;\n  overflow-wrap: anywhere;\n}\n\n.cr-native-scope .cr-inline-question-body {\n  display: grid;\n  gap: 4px;\n  min-width: 0;\n  padding: 4px 0 0 48px;\n}\n\n.cr-native-scope .cr-inline-question-why {\n  margin: 0;\n  color: var(--cr-text-muted);\n  font-size: 12px;\n  line-height: 1.45;\n  overflow-wrap: anywhere;\n}\n\n.cr-native-scope .cr-inline-question-why .cr-meta {\n  font-size: 11px;\n}\n\n.cr-native-scope .cr-inline-question .cr-topic-thread {\n  margin-top: 4px;\n  padding-top: 6px;\n  border-top: 1px solid color-mix(in srgb, var(--cr-info) 18%, var(--cr-border));\n}\n\n.cr-native-scope .cr-inline-question .cr-topic-thread-list {\n  gap: 0;\n}\n\n.cr-native-scope .cr-inline-question .cr-topic-thread-list > li + li {\n  border-top: 1px solid color-mix(in srgb, var(--cr-info) 14%, var(--cr-border));\n}\n\n.cr-native-scope .cr-inline-question .cr-thread-compact {\n  padding: 7px 0;\n  border: 0;\n  border-radius: 0;\n  background: transparent;\n}\n\n.cr-native-scope .cr-inline-question .cr-thread-actions {\n  margin-top: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-inline-question .cr-reply-form {\n  margin-top: var(--cr-space-2);\n  padding-top: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-finding-decision {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: flex-start;\n  justify-content: space-between;\n  gap: var(--cr-space-2);\n  margin-top: var(--cr-space-3);\n  padding-top: var(--cr-space-3);\n  border-top: 1px solid var(--cr-border);\n}\n\n.cr-native-scope .cr-finding-decision-status {\n  display: flex;\n  flex: 1 1 220px;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n  min-width: 0;\n}\n\n.cr-native-scope .cr-finding-decision-note {\n  flex: 1 1 100%;\n  margin: 0;\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-control);\n  overflow-wrap: anywhere;\n}\n\n.cr-native-scope .cr-finding-decision-note-label {\n  color: var(--cr-text);\n  font-weight: 600;\n}\n\n.cr-native-scope .cr-finding-decision-actions {\n  display: flex;\n  flex-wrap: wrap;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-finding-decision .cr-button[aria-pressed='true'] {\n  border-color: var(--cr-primary);\n  color: var(--cr-primary);\n  box-shadow: inset 0 0 0 1px var(--cr-primary);\n}\n\n.cr-native-scope .cr-finding-decision-editor {\n  display: grid;\n  flex: 1 1 100%;\n  gap: var(--cr-space-2);\n  margin-top: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-finding-decision-editor .cr-field {\n  margin: 0;\n}\n\n.cr-native-scope .cr-finding-decision-editor .cr-textarea {\n  min-height: 84px;\n}\n\n.cr-native-scope .cr-finding-decision-editor-actions {\n  display: flex;\n  flex-wrap: wrap;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-finding-decision-error {\n  color: var(--cr-danger);\n  font-size: var(--cr-text-meta);\n  margin: 0;\n}\n\n.cr-native-scope .cr-diff-empty,\n.cr-native-scope .cr-diff-placeholder,\n.cr-native-scope .cr-diff-more,\n.cr-native-scope .cr-diff-loading {\n  padding: var(--cr-space-4);\n}\n\n.cr-native-scope .cr-diff-empty {\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-control);\n}\n\n.cr-native-scope .cr-diff-placeholder {\n  display: grid;\n  gap: 6px;\n}\n\n.cr-native-scope .cr-diff-more {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-3);\n  border-top: 1px solid var(--cr-border);\n}\n\n.cr-native-scope .cr-diff-loading {\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface);\n}\n\n/* Composer */\n.cr-native-scope .cr-composer {\n  padding: var(--cr-space-3);\n  border: 1px solid var(--cr-primary);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-composer-head {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: baseline;\n  justify-content: space-between;\n  gap: var(--cr-space-2);\n  margin-bottom: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-composer-title {\n  font-size: var(--cr-text-control);\n  font-weight: 650;\n}\n\n.cr-native-scope .cr-composer-range {\n  display: grid;\n  grid-template-columns: minmax(0, 120px) minmax(0, 120px);\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-draft-note {\n  margin: 0 0 var(--cr-space-2);\n  padding: 8px 10px;\n  border: 1px solid color-mix(in srgb, var(--cr-info) 35%, var(--cr-border));\n  border-radius: var(--cr-radius-control);\n  background: color-mix(in srgb, var(--cr-info) 8%, var(--cr-surface));\n  color: var(--cr-text-muted);\n  font-size: 12px;\n  line-height: 1.45;\n}\n\n.cr-native-scope .cr-composer-suggestion {\n  display: grid;\n  gap: var(--cr-space-2);\n  margin-top: var(--cr-space-2);\n  padding-top: var(--cr-space-2);\n  border-top: 1px solid var(--cr-border);\n}\n\n.cr-native-scope .cr-suggestion-preview {\n  display: grid;\n  gap: 6px;\n}\n\n.cr-native-scope .cr-composer-actions {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n  margin-top: var(--cr-space-3);\n}\n\n.cr-native-scope .cr-composer-actions .cr-meta {\n  margin-left: auto;\n}\n\n.cr-native-scope .cr-check {\n  display: flex;\n  align-items: center;\n  gap: var(--cr-space-2);\n  min-height: 36px;\n  color: var(--cr-text);\n  font-size: var(--cr-text-control);\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-check input {\n  width: 18px;\n  height: 18px;\n  margin: 0;\n  accent-color: var(--cr-primary);\n}\n\n/* Report and signals */\n.cr-native-scope .cr-report {\n  display: grid;\n  gap: var(--cr-space-4);\n}\n\n.cr-native-scope .cr-report-summary {\n  padding: var(--cr-space-4);\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-report-summary-head {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-report-copy {\n  margin: var(--cr-space-3) 0;\n  color: var(--cr-text);\n  font-size: var(--cr-text-body);\n  line-height: 1.55;\n  white-space: pre-wrap;\n}\n\n.cr-native-scope .cr-report-copy,\n.cr-native-scope .cr-rail-copy {\n  max-height: var(--cr-summary-max-height);\n  padding-right: var(--cr-space-2);\n  overflow-y: auto;\n  overflow-wrap: anywhere;\n  overscroll-behavior: contain;\n  scrollbar-gutter: stable;\n  scrollbar-width: thin;\n}\n\n.cr-native-scope .cr-report-transferred {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n  margin: 0 0 var(--cr-space-3);\n}\n\n.cr-native-scope .cr-report-counts {\n  display: flex;\n  flex-wrap: wrap;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-report-warnings,\n.cr-native-scope .cr-report-warnings li {\n  margin: var(--cr-space-2) 0 0;\n  padding-left: var(--cr-space-4);\n  color: var(--cr-warning);\n  font-size: var(--cr-text-meta);\n}\n\n.cr-native-scope .cr-report-toolbar {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: flex-end;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-report-toolbar .cr-field {\n  width: 170px;\n}\n\n.cr-native-scope .cr-multi-select {\n  position: relative;\n  display: grid;\n  gap: 6px;\n  width: 170px;\n  min-width: 0;\n}\n\n.cr-native-scope .cr-multi-select-trigger {\n  display: flex;\n  width: 100%;\n  min-height: 44px;\n  align-items: center;\n  justify-content: space-between;\n  gap: var(--cr-space-2);\n  padding: 8px 10px;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n  background: var(--cr-bg);\n  color: var(--cr-text);\n  font-size: var(--cr-text-control);\n  line-height: var(--cr-leading-control);\n  text-align: left;\n  cursor: pointer;\n  transition:\n    border-color var(--cr-motion-press) ease,\n    background var(--cr-motion-press) ease;\n}\n\n.cr-native-scope .cr-multi-select-trigger:hover {\n  border-color: var(--cr-text-muted);\n}\n\n.cr-native-scope .cr-multi-select-trigger:focus-visible {\n  border-color: var(--cr-primary);\n  outline: 2px solid var(--cr-focus);\n  outline-offset: 2px;\n}\n\n.cr-native-scope .cr-multi-select-trigger[aria-expanded='true'] {\n  border-color: var(--cr-primary);\n}\n\n.cr-native-scope .cr-multi-select-trigger:disabled {\n  cursor: not-allowed;\n  opacity: 0.55;\n}\n\n.cr-native-scope .cr-multi-select-trigger > span:first-child {\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-multi-select-chevron {\n  flex: none;\n  color: var(--cr-text-muted);\n  font-size: 11px;\n}\n\n.cr-native-scope .cr-multi-select-menu {\n  position: absolute;\n  z-index: 20;\n  top: calc(100% + 4px);\n  left: 0;\n  display: none;\n  width: max(100%, 220px);\n  max-height: 300px;\n  overflow: auto;\n  padding: 6px;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface);\n  box-shadow: var(--cr-shadow);\n}\n\n.cr-native-scope .cr-multi-select[data-open] .cr-multi-select-menu {\n  display: grid;\n  gap: 1px;\n}\n\n.cr-native-scope .cr-multi-select-option {\n  min-height: 40px;\n  padding: 4px 8px;\n  border-radius: var(--cr-radius-control);\n}\n\n.cr-native-scope .cr-multi-select-option:hover {\n  background: var(--cr-surface-raised);\n}\n\n.cr-native-scope .cr-report-selection {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n  margin-top: var(--cr-space-2);\n  padding: var(--cr-space-2) var(--cr-space-3);\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n  background: var(--cr-surface-raised);\n}\n\n.cr-native-scope .cr-report-select-all {\n  margin-right: var(--cr-space-1);\n}\n\n.cr-native-scope .cr-report-bulk-actions {\n  display: flex;\n  flex-wrap: wrap;\n  gap: var(--cr-space-2);\n  margin-left: auto;\n}\n\n@media (max-width: 720px) {\n  .cr-native-scope .cr-report-bulk-actions {\n    width: 100%;\n    margin-left: 0;\n  }\n}\n\n.cr-native-scope .cr-findings {\n  display: grid;\n  gap: var(--cr-space-3);\n  margin: 0;\n  padding: 0;\n  list-style: none;\n}\n\n.cr-native-scope .cr-report-browser {\n  min-width: 0;\n  overflow: hidden;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-report-tabs > .cr-tabs {\n  padding: 0 var(--cr-space-4);\n  background: var(--cr-surface-raised);\n}\n\n.cr-native-scope .cr-report-tabs > [role='tabpanel'] {\n  min-width: 0;\n}\n\n.cr-native-scope .cr-report-issues {\n  display: grid;\n  gap: var(--cr-space-3);\n  padding: var(--cr-space-4);\n}\n\n.cr-native-scope .cr-report-questions {\n  display: grid;\n  gap: var(--cr-space-3);\n  padding: var(--cr-space-4);\n  overflow-wrap: anywhere;\n}\n\n.cr-native-scope .cr-report-scroll {\n  height: clamp(20rem, 58vh, 46rem);\n  padding: var(--cr-space-4);\n  overflow-x: hidden;\n  overflow-y: auto;\n  border-block: 1px solid var(--cr-border);\n  overscroll-behavior: contain;\n  scrollbar-gutter: stable;\n  scrollbar-width: thin;\n}\n\n.cr-native-scope .cr-report-scroll .cr-findings,\n.cr-native-scope .cr-report-scroll .cr-question-list {\n  margin: 0;\n  padding: 0;\n}\n\n.cr-native-scope .cr-report-pagination {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  justify-content: space-between;\n  gap: var(--cr-space-2);\n  padding-block: var(--cr-space-1);\n}\n\n.cr-native-scope .cr-report-pagination-actions {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-finding {\n  min-width: 0;\n  max-width: 100%;\n  padding: var(--cr-space-4);\n  overflow-wrap: anywhere;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-finding-collapsed {\n  padding-block: var(--cr-space-3);\n}\n\n.cr-native-scope .cr-finding-collapsed .cr-finding-head {\n  margin-bottom: var(--cr-space-1);\n}\n\n.cr-native-scope .cr-finding-collapsed .cr-finding-title {\n  margin-bottom: 0;\n}\n\n.cr-native-scope .cr-finding-toggle {\n  display: grid;\n  width: 16px;\n  height: 20px;\n  padding: 0;\n  place-items: center;\n  border: 0;\n  background: transparent;\n  color: var(--cr-text-muted);\n  font: inherit;\n  font-size: 11px;\n  line-height: 1;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-finding-toggle:hover,\n.cr-native-scope .cr-finding-toggle:focus-visible {\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-finding-toggle:focus-visible {\n  outline: 2px solid var(--cr-focus);\n  outline-offset: 1px;\n}\n\n.cr-native-scope .cr-finding-body {\n  display: grid;\n  gap: var(--cr-space-2);\n  min-width: 0;\n}\n\n.cr-native-scope .cr-finding-item {\n  min-width: 0;\n  max-width: 100%;\n  list-style: none;\n}\n\n.cr-native-scope .cr-finding-item:focus-visible {\n  outline: 2px solid var(--cr-focus);\n  outline-offset: 2px;\n  border-radius: var(--cr-radius-card);\n}\n\n.cr-native-scope .cr-finding:focus-visible {\n  outline: 2px solid var(--cr-focus);\n  outline-offset: 2px;\n}\n\n.cr-native-scope .cr-finding-head {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n  min-width: 0;\n  margin-bottom: var(--cr-space-2);\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-finding-select {\n  flex: 0 0 auto;\n  width: 18px;\n  height: 18px;\n  margin: 0;\n  accent-color: var(--cr-primary);\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-finding-selected {\n  border-color: var(--cr-primary);\n  box-shadow: inset 0 0 0 1px var(--cr-primary);\n}\n\n.cr-native-scope .cr-finding-location {\n  min-width: 0;\n  padding: 0;\n  overflow-wrap: anywhere;\n  border: 0;\n  background: transparent;\n  color: var(--cr-primary);\n  font-family: var(--cr-font-mono);\n  font-size: 12px;\n  text-decoration: underline;\n  text-underline-offset: 3px;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-finding-title {\n  margin: 0 0 var(--cr-space-2);\n  font-size: var(--cr-text-control);\n  font-weight: 650;\n}\n\n.cr-native-scope .cr-finding-copy {\n  margin: 0;\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-control);\n  white-space: pre-wrap;\n  overflow-wrap: anywhere;\n}\n\n.cr-native-scope .cr-evidence {\n  max-width: 100%;\n  overflow: auto;\n  overflow-wrap: anywhere;\n  max-height: 280px;\n  margin: var(--cr-space-3) 0 0;\n  padding: var(--cr-space-2) var(--cr-space-3);\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n  background: var(--cr-bg);\n  color: var(--cr-text-muted);\n  font-family: var(--cr-font-mono);\n  font-size: var(--cr-text-code);\n  line-height: var(--cr-leading-code);\n  white-space: pre-wrap;\n}\n\n.cr-native-scope .cr-report-section {\n  padding: var(--cr-space-4);\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-question-list,\n.cr-native-scope .cr-verification-list,\n.cr-native-scope .cr-test-list {\n  display: grid;\n  gap: var(--cr-space-2);\n  margin: var(--cr-space-3) 0 0;\n  padding: 0;\n  list-style: none;\n}\n\n.cr-native-scope .cr-question-list li,\n.cr-native-scope .cr-verification-list li,\n.cr-native-scope .cr-test-list li {\n  display: flex;\n  min-width: 0;\n  flex-wrap: wrap;\n  align-items: baseline;\n  gap: var(--cr-space-2);\n  padding-bottom: var(--cr-space-2);\n  border-bottom: 1px solid var(--cr-border);\n}\n\n.cr-native-scope .cr-question-list li:last-child,\n.cr-native-scope .cr-verification-list li:last-child,\n.cr-native-scope .cr-test-list li:last-child {\n  border-bottom: 0;\n  padding-bottom: 0;\n}\n\n.cr-native-scope .cr-question-list p {\n  flex-basis: 100%;\n  margin: 0;\n}\n\n.cr-native-scope .cr-question-list > li {\n  align-items: flex-start;\n}\n\n.cr-native-scope .cr-question-list .cr-topic-thread {\n  flex-basis: 100%;\n  width: 100%;\n  margin-top: 6px;\n  padding-top: 8px;\n  border-top: 1px solid var(--cr-border);\n}\n\n.cr-native-scope .cr-finding-item > .cr-topic-thread {\n  margin: 8px var(--cr-space-4) 0;\n  padding-top: 8px;\n  border-top: 1px solid var(--cr-border);\n}\n\n.cr-native-scope .cr-signals {\n  display: grid;\n  gap: var(--cr-space-3);\n}\n\n.cr-native-scope .cr-signals-head {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: baseline;\n  justify-content: space-between;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-signals-note {\n  margin: 0;\n}\n\n.cr-native-scope .cr-signal-list {\n  display: grid;\n  gap: var(--cr-space-2);\n  margin: 0;\n  padding: 0;\n  list-style: none;\n}\n\n.cr-native-scope .cr-signal {\n  display: grid;\n  grid-template-columns: 18px minmax(0, 1fr) auto;\n  gap: var(--cr-space-3);\n  align-items: start;\n  padding: var(--cr-space-3);\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-signal[data-tone='danger'] {\n  border-left: 3px solid var(--cr-danger);\n}\n\n.cr-native-scope .cr-signal[data-tone='warning'] {\n  border-left: 3px solid var(--cr-warning);\n}\n\n.cr-native-scope .cr-signal[data-tone='info'] {\n  border-left: 3px solid var(--cr-info);\n}\n\n.cr-native-scope .cr-signal-mark {\n  color: var(--cr-text-muted);\n  font-size: 14px;\n  line-height: 1.3;\n}\n\n.cr-native-scope .cr-signal-main {\n  min-width: 0;\n}\n\n.cr-native-scope .cr-signal-title-row {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-signal-main p {\n  margin: 2px 0 0;\n  overflow-wrap: anywhere;\n}\n\n.cr-native-scope .cr-signal .cr-link-button {\n  overflow-wrap: anywhere;\n}\n\n/* Submit / refresh / shortcuts */\n.cr-native-scope .cr-submit {\n  display: grid;\n  gap: var(--cr-space-3);\n}\n\n.cr-native-scope .cr-recipient-warning {\n  padding: var(--cr-space-3);\n  border: 1px solid color-mix(in srgb, var(--cr-warning) 45%, var(--cr-border));\n  border-radius: var(--cr-radius-control);\n  background: color-mix(in srgb, var(--cr-warning) 9%, var(--cr-surface));\n}\n\n.cr-native-scope .cr-recipient-warning p {\n  margin: 4px 0 0;\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-meta);\n}\n\n.cr-native-scope .cr-verdict-field {\n  margin: 0;\n  padding: 0;\n  border: 0;\n}\n\n.cr-native-scope .cr-verdict-options {\n  display: grid;\n  gap: var(--cr-space-2);\n  margin-top: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-verdict-option {\n  display: flex;\n  align-items: flex-start;\n  gap: var(--cr-space-2);\n  min-height: 44px;\n  padding: var(--cr-space-2);\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-verdict-option:has(input:checked) {\n  border-color: var(--cr-primary);\n  background: color-mix(in srgb, var(--cr-primary) 8%, transparent);\n}\n\n.cr-native-scope .cr-verdict-option input {\n  width: 18px;\n  height: 18px;\n  margin: 2px 0 0;\n  accent-color: var(--cr-primary);\n}\n\n.cr-native-scope .cr-verdict-option > span {\n  display: grid;\n  gap: 1px;\n}\n\n.cr-native-scope .cr-submit-counts {\n  display: flex;\n  flex-wrap: wrap;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-tree-risk {\n  display: grid;\n  min-width: 18px;\n  height: 18px;\n  padding: 0 4px;\n  place-items: center;\n  border: 1px solid currentColor;\n  border-radius: var(--cr-radius-pill);\n  background: var(--cr-surface);\n  font-family: var(--cr-font-ui);\n  font-size: 10px;\n  font-weight: 750;\n}\n\n.cr-native-scope .cr-tree-risk.cr-risk-blocker {\n  color: var(--cr-danger);\n}\n\n.cr-native-scope .cr-tree-risk.cr-risk-major {\n  color: var(--cr-warning);\n}\n\n.cr-native-scope .cr-tree-risk.cr-risk-minor {\n  color: var(--cr-info);\n}\n\n.cr-native-scope .cr-tree-risk.cr-risk-nit {\n  color: var(--cr-text-muted);\n}\n\n.cr-native-scope .cr-tree-comments {\n  display: inline-grid;\n  min-width: 18px;\n  height: 18px;\n  place-items: center;\n  padding: 0 4px;\n  border-radius: 9px;\n  background: color-mix(in srgb, var(--cr-warning) 18%, transparent);\n  color: var(--cr-warning);\n  font-family: var(--cr-font-mono);\n  font-size: 10px;\n  font-weight: 700;\n}\n\n.cr-native-scope .cr-submit-pending {\n  display: grid;\n  gap: var(--cr-space-2);\n  padding-top: var(--cr-space-3);\n  border-top: 1px solid var(--cr-border);\n}\n\n.cr-native-scope .cr-submit-pending-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-submit-pending-head h3 {\n  margin: 0;\n  font-size: 13px;\n  font-weight: 650;\n}\n\n.cr-native-scope .cr-submit-pending-head span {\n  color: var(--cr-text-muted);\n  font-family: var(--cr-font-mono);\n  font-size: 11px;\n}\n\n.cr-native-scope .cr-submit-pending-list {\n  display: grid;\n  gap: 6px;\n  max-height: 220px;\n  margin: 0;\n  padding: 0;\n  overflow: auto;\n  list-style: none;\n}\n\n.cr-native-scope .cr-submit-pending-item {\n  display: grid;\n  gap: 2px;\n  width: 100%;\n  padding: 8px 10px;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n  background: var(--cr-surface);\n  color: var(--cr-text);\n  text-align: left;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-submit-pending-item:hover:not(:disabled),\n.cr-native-scope .cr-submit-pending-item:focus-visible {\n  border-color: var(--cr-primary);\n  background: color-mix(in srgb, var(--cr-primary) 7%, var(--cr-surface));\n}\n\n.cr-native-scope .cr-submit-pending-item:disabled {\n  cursor: default;\n}\n\n.cr-native-scope .cr-submit-pending-path {\n  color: var(--cr-text-muted);\n  font-size: 11px;\n}\n\n.cr-native-scope .cr-submit-pending-body {\n  display: -webkit-box;\n  overflow: hidden;\n  font-size: 12px;\n  line-height: 1.4;\n  -webkit-box-orient: vertical;\n  -webkit-line-clamp: 2;\n}\n\n.cr-native-scope .cr-refresh {\n  display: grid;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-refresh p {\n  margin: 0;\n}\n\n.cr-native-scope .cr-shortcut-list {\n  display: grid;\n  gap: var(--cr-space-2);\n  margin: 0;\n}\n\n.cr-native-scope .cr-shortcut-list > div {\n  display: grid;\n  grid-template-columns: 72px minmax(0, 1fr);\n  gap: var(--cr-space-2);\n  align-items: baseline;\n}\n\n.cr-native-scope .cr-shortcut-list dt,\n.cr-native-scope .cr-shortcut-list dd {\n  margin: 0;\n}\n\n.cr-native-scope .cr-shortcut-list kbd {\n  display: inline-block;\n  min-width: 26px;\n  padding: 2px 6px;\n  border: 1px solid var(--cr-border);\n  border-bottom-width: 2px;\n  border-radius: 4px;\n  background: var(--cr-bg);\n  color: var(--cr-text);\n  font-family: var(--cr-font-mono);\n  font-size: 11px;\n  text-align: center;\n}\n\n/* Detail responsive */\n@media (max-width: 1240px) {\n  .cr-native-scope .cr-detail-grid {\n    grid-template-columns: minmax(0, 1fr);\n  }\n\n  .cr-native-scope .cr-rail {\n    grid-template-columns: repeat(2, minmax(0, 1fr));\n  }\n\n  .cr-native-scope .cr-rail-card:first-child {\n    grid-column: 1 / -1;\n  }\n}\n\n@media (max-width: 1024px) {\n  .cr-native-scope .cr-diff-layout {\n    grid-template-columns: 210px minmax(0, 1fr);\n  }\n}\n\n@media (max-width: 900px) {\n  .cr-native-scope .cr-diff-layout {\n    grid-template-columns: minmax(0, 1fr);\n  }\n\n  .cr-native-scope .cr-file-tree {\n    position: static;\n    display: none;\n  }\n\n  .cr-native-scope .cr-mobile-file-select {\n    display: block;\n    flex: 1 1 180px;\n  }\n\n  .cr-native-scope .cr-mobile-file-select select {\n    width: 100%;\n    min-height: 38px;\n    padding: 6px 9px;\n    border: 1px solid var(--cr-border);\n    border-radius: var(--cr-radius-control);\n    background: var(--cr-bg);\n    color: var(--cr-text);\n    font-size: var(--cr-text-control);\n  }\n\n  .cr-native-scope .cr-shortcut-hint {\n    display: none;\n  }\n}\n\n@media (max-width: 768px) {\n  .cr-native-scope .cr-detail-header {\n    flex-direction: column;\n    gap: var(--cr-space-4);\n  }\n\n  .cr-native-scope .cr-detail-actions {\n    justify-content: flex-start;\n  }\n\n  .cr-native-scope .cr-detail-title {\n    font-size: 26px;\n  }\n\n  .cr-native-scope .cr-rail {\n    grid-template-columns: minmax(0, 1fr);\n  }\n\n  .cr-native-scope .cr-rail-card:first-child {\n    grid-column: auto;\n  }\n\n  .cr-native-scope .cr-inline-thread,\n  .cr-native-scope .cr-inline-composer {\n    padding-inline: var(--cr-space-3);\n    min-width: 0;\n  }\n\n  .cr-native-scope .cr-inline-finding,\n  .cr-native-scope .cr-inline-question {\n    margin-inline: 0;\n  }\n\n  .cr-native-scope .cr-signal {\n    grid-template-columns: 18px minmax(0, 1fr);\n  }\n\n  .cr-native-scope .cr-signal .cr-link-button {\n    grid-column: 2;\n    justify-self: start;\n  }\n\n  .cr-native-scope .cr-report-toolbar .cr-field,\n  .cr-native-scope .cr-report-toolbar .cr-multi-select {\n    width: min(100%, 220px);\n  }\n}\n\n@media (max-width: 520px) {\n  .cr-native-scope .cr-detail-header,\n  .cr-native-scope .cr-detail-eyebrow,\n  .cr-native-scope .cr-detail-scope {\n    overflow-wrap: anywhere;\n  }\n\n  .cr-native-scope .cr-detail-tabs {\n    flex-wrap: wrap;\n  }\n\n  .cr-native-scope .cr-detail-tabs .cr-tab {\n    flex: 1 1 45%;\n    justify-content: center;\n    min-width: 0;\n    padding: 0 8px;\n    font-size: 12.5px;\n  }\n\n  .cr-native-scope .cr-detail-tabs .cr-tab-count {\n    margin-left: 5px;\n    min-width: 17px;\n    padding: 0 4px;\n  }\n\n  .cr-native-scope .cr-detail-actions {\n    display: grid;\n    grid-template-columns: minmax(0, 1fr);\n    width: 100%;\n  }\n\n  .cr-native-scope .cr-detail-actions .cr-button {\n    width: 100%;\n  }\n\n  .cr-native-scope .cr-round-pills {\n    justify-content: flex-start;\n  }\n\n  .cr-native-scope .cr-diff-toolbar {\n    align-items: stretch;\n  }\n\n  .cr-native-scope .cr-diff-count,\n  .cr-native-scope .cr-diff-scope-note {\n    white-space: normal;\n  }\n\n  .cr-native-scope .cr-diff-file-head {\n    gap: 6px;\n  }\n\n  .cr-native-scope .cr-diff-hash {\n    display: none;\n  }\n\n  .cr-native-scope .cr-diff-gutter-head,\n  .cr-native-scope .cr-hunk,\n  .cr-native-scope .cr-diff-line,\n  .cr-native-scope .cr-inline-thread,\n  .cr-native-scope .cr-inline-composer {\n    min-width: 0;\n  }\n\n  .cr-native-scope .cr-diff-body {\n    overflow-x: auto;\n  }\n\n  .cr-native-scope .cr-diff-gutter-head {\n    grid-template-columns: 34px 34px 16px 22px minmax(0, 1fr);\n  }\n\n  .cr-native-scope .cr-diff-line {\n    grid-template-columns: 34px 34px 16px 22px minmax(0, 1fr) auto auto;\n    font-size: 11.5px;\n  }\n\n  .cr-native-scope .cr-inline-thread,\n  .cr-native-scope .cr-inline-composer {\n    padding-left: var(--cr-space-2);\n  }\n\n  .cr-native-scope .cr-composer-range {\n    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);\n  }\n\n  .cr-native-scope .cr-rail {\n    grid-template-columns: minmax(0, 1fr);\n  }\n\n  .cr-native-scope .cr-fix-grid {\n    grid-template-columns: repeat(2, minmax(0, 1fr));\n  }\n\n  .cr-native-scope .cr-thread-head {\n    gap: 6px;\n  }\n}\n\n@media (pointer: coarse) {\n  .cr-native-scope .cr-diff-line {\n    min-height: 44px;\n  }\n\n  .cr-native-scope .cr-diff-comment {\n    display: inline-block;\n    width: 44px;\n    height: 44px;\n  }\n\n  .cr-native-scope .cr-diff-risk-pin::before {\n    position: absolute;\n    inset: -14px;\n    content: '';\n  }\n\n  .cr-native-scope .cr-round-pill,\n  .cr-native-scope .cr-segmented-button,\n  .cr-native-scope .cr-tree-file,\n  .cr-native-scope .cr-tree-dir {\n    min-height: 44px;\n  }\n\n  .cr-native-scope .cr-diff-line:hover .cr-diff-comment {\n    display: inline-block;\n  }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .cr-native-scope .cr-round-pill,\n  .cr-native-scope .cr-segmented-button,\n  .cr-native-scope .cr-fix-cell,\n  .cr-native-scope .cr-tree-file,\n  .cr-native-scope .cr-tree-dir,\n  .cr-native-scope .cr-thread,\n  .cr-native-scope .cr-anchor-jump {\n    transition: none;\n  }\n}\n\n.cr-native-scope .cr-button[data-size='small'] {\n  min-height: 30px;\n  padding: 3px 9px;\n  font-size: 12px;\n}\n\n@media (max-width: 768px) {\n  .cr-native-scope .cr-topbar .cr-tooltip,\n  .cr-native-scope .cr-topbar .cr-tooltip-wrap:hover .cr-tooltip,\n  .cr-native-scope .cr-topbar .cr-tooltip-wrap:focus-within .cr-tooltip,\n  .cr-native-scope .cr-topbar .cr-tooltip[data-open='true'] {\n    left: auto;\n    right: 0;\n    transform: translateY(2px);\n  }\n\n  .cr-native-scope .cr-topbar .cr-tooltip-wrap:hover .cr-tooltip,\n  .cr-native-scope .cr-topbar .cr-tooltip-wrap:focus-within .cr-tooltip,\n  .cr-native-scope .cr-topbar .cr-tooltip[data-open='true'] {\n    transform: translateY(0);\n  }\n}\n\n.cr-native-scope .cr-detail-tabs {\n  scrollbar-width: none;\n}\n\n.cr-native-scope .cr-detail-tabs::-webkit-scrollbar {\n  display: none;\n}\n\n@media (max-width: 520px) {\n  .cr-native-scope .cr-detail-actions > .cr-badge {\n    justify-self: start;\n  }\n}\n\n@media (pointer: coarse) {\n  .cr-native-scope .cr-button[data-size='small'],\n  .cr-native-scope .cr-link-button {\n    min-height: 44px;\n  }\n}\n\n.cr-native-scope .cr-form-section-head {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: flex-start;\n  justify-content: space-between;\n  gap: var(--cr-space-3);\n}\n\n.cr-native-scope .cr-form-error-summary {\n  margin: 0;\n  padding: var(--cr-space-3);\n  border: 1px solid color-mix(in srgb, var(--cr-danger) 45%, var(--cr-border));\n  border-radius: var(--cr-radius-control);\n  background: color-mix(in srgb, var(--cr-danger) 9%, var(--cr-surface));\n  color: var(--cr-text);\n  font-size: var(--cr-text-control);\n}\n\n.cr-native-scope .cr-commits-fieldset {\n  display: grid;\n  gap: var(--cr-space-2);\n  min-width: 0;\n  margin: var(--cr-space-2) 0 0;\n  padding: var(--cr-space-3);\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n}\n\n.cr-native-scope .cr-radio {\n  display: flex;\n  align-items: flex-start;\n  gap: var(--cr-space-2);\n  min-height: 44px;\n  padding: 6px 4px;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-radio input {\n  width: 18px;\n  height: 18px;\n  margin: 2px 0 0;\n  accent-color: var(--cr-primary);\n}\n\n.cr-native-scope .cr-radio > span {\n  display: grid;\n  gap: 2px;\n}\n\n.cr-native-scope .cr-commit-picker {\n  display: grid;\n  gap: var(--cr-space-2);\n  padding-top: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-commit-list {\n  display: grid;\n  gap: 2px;\n  margin: 0;\n  padding: 0;\n  list-style: none;\n}\n\n.cr-native-scope .cr-commit-option {\n  display: grid;\n  grid-template-columns: 18px 72px minmax(0, 1fr) auto;\n  align-items: center;\n  gap: var(--cr-space-2);\n  min-height: 44px;\n  padding: 4px 6px;\n  border-radius: var(--cr-radius-control);\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-commit-option:hover {\n  background: color-mix(in srgb, var(--cr-text) 5%, transparent);\n}\n\n.cr-native-scope .cr-commit-option input {\n  width: 18px;\n  height: 18px;\n  margin: 0;\n  accent-color: var(--cr-primary);\n}\n\n.cr-native-scope .cr-commit-sha {\n  color: var(--cr-text-muted);\n  font-family: var(--cr-font-mono);\n  font-size: 12px;\n}\n\n.cr-native-scope .cr-commit-subject {\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-commit-author {\n  color: var(--cr-text-muted);\n  font-size: 12px;\n}\n\n.cr-native-scope .cr-settings-form {\n  display: grid;\n  gap: var(--cr-space-4);\n  max-width: 1040px;\n}\n\n.cr-native-scope .cr-settings-notice {\n  margin: 0;\n  padding: var(--cr-space-3);\n  border: 1px solid color-mix(in srgb, var(--cr-success) 45%, var(--cr-border));\n  border-radius: var(--cr-radius-control);\n  background: color-mix(in srgb, var(--cr-success) 8%, var(--cr-surface));\n  color: var(--cr-text);\n  font-size: var(--cr-text-control);\n}\n\n.cr-native-scope .cr-repo-list {\n  display: grid;\n  gap: var(--cr-space-3);\n  margin: 0;\n  padding: 0;\n  list-style: none;\n}\n\n.cr-native-scope .cr-repo-row {\n  display: grid;\n  grid-template-columns: minmax(0, 1fr) auto;\n  align-items: start;\n  gap: var(--cr-space-3);\n  padding: var(--cr-space-4);\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-repo-fields {\n  display: grid;\n  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 0.8fr);\n  gap: var(--cr-space-3);\n}\n\n.cr-native-scope .cr-path-control {\n  display: flex;\n  align-items: stretch;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-path-control .cr-input {\n  min-width: 0;\n  flex: 1 1 auto;\n}\n\n.cr-native-scope .cr-path-control .cr-icon-button {\n  flex: 0 0 auto;\n}\n\n.cr-native-scope .cr-path-browse {\n  background: var(--cr-surface);\n  color: var(--cr-primary);\n}\n\n.cr-native-scope .cr-branch-feedback {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-1) var(--cr-space-2);\n}\n\n.cr-native-scope .cr-branch-feedback .cr-error {\n  min-width: 0;\n  flex: 1 1 180px;\n}\n\n.cr-native-scope .cr-repo-remove {\n  margin-top: calc(1.4em + 6px);\n}\n\n.cr-native-scope .cr-folder-path-form {\n  display: flex;\n  align-items: flex-end;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-folder-path-form .cr-field {\n  min-width: 0;\n  flex: 1 1 auto;\n  margin: 0;\n}\n\n.cr-native-scope .cr-folder-nav {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-folder-breadcrumbs {\n  display: flex;\n  min-width: 0;\n  flex: 1 1 220px;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 2px;\n  font-family: var(--cr-font-mono);\n  font-size: 12px;\n}\n\n.cr-native-scope .cr-folder-crumb {\n  display: inline-flex;\n  align-items: center;\n  gap: 2px;\n}\n\n.cr-native-scope .cr-folder-separator {\n  color: var(--cr-text-muted);\n}\n\n.cr-native-scope .cr-folder-crumb-button {\n  min-height: 30px;\n  padding: 2px 5px;\n  border: 0;\n  border-radius: 4px;\n  background: transparent;\n  color: var(--cr-primary);\n  font: inherit;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-folder-crumb-button[aria-current='location'] {\n  color: var(--cr-text);\n  font-weight: 650;\n}\n\n.cr-native-scope .cr-folder-crumb-button:hover {\n  background: var(--cr-surface-raised);\n}\n\n.cr-native-scope .cr-folder-list {\n  display: grid;\n  max-height: min(42vh, 360px);\n  margin: 0;\n  padding: 0;\n  overflow: auto;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n  list-style: none;\n}\n\n.cr-native-scope .cr-folder-entry {\n  display: flex;\n  width: 100%;\n  min-height: 44px;\n  align-items: center;\n  justify-content: space-between;\n  gap: var(--cr-space-3);\n  padding: var(--cr-space-2) var(--cr-space-3);\n  border: 0;\n  border-bottom: 1px solid var(--cr-border);\n  background: var(--cr-surface);\n  color: var(--cr-text);\n  font-family: var(--cr-font-mono);\n  font-size: 13px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-folder-list li:last-child .cr-folder-entry {\n  border-bottom: 0;\n}\n\n.cr-native-scope .cr-folder-entry:hover,\n.cr-native-scope .cr-folder-entry:focus-visible {\n  background: var(--cr-surface-raised);\n}\n\n.cr-native-scope .cr-folder-entry-name {\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-folder-git-badge {\n  flex: 0 0 auto;\n  padding: 1px 7px;\n  border: 1px solid color-mix(in srgb, var(--cr-success) 45%, var(--cr-border));\n  border-radius: var(--cr-radius-pill);\n  color: var(--cr-success);\n  font-family: var(--cr-font-ui);\n  font-size: 10px;\n  font-weight: 650;\n  letter-spacing: 0.02em;\n}\n\n@media (max-width: 860px) {\n  .cr-native-scope .cr-repo-fields {\n    grid-template-columns: minmax(0, 1fr);\n  }\n\n  .cr-native-scope .cr-path-control,\n  .cr-native-scope .cr-folder-path-form {\n    flex-wrap: wrap;\n  }\n\n  .cr-native-scope .cr-folder-path-form .cr-button {\n    width: 100%;\n  }\n\n  .cr-native-scope .cr-repo-row {\n    grid-template-columns: minmax(0, 1fr);\n  }\n\n  .cr-native-scope .cr-repo-row > .cr-button {\n    justify-self: start;\n  }\n\n  .cr-native-scope .cr-repo-remove {\n    margin-top: 0;\n  }\n}\n\n@media (max-width: 520px) {\n  .cr-native-scope .cr-commit-option {\n    grid-template-columns: 18px minmax(0, 1fr);\n  }\n\n  .cr-native-scope .cr-commit-sha {\n    display: none;\n  }\n\n  .cr-native-scope .cr-commit-author {\n    grid-column: 2;\n  }\n}\n\n/* Touch line selection: long-press then drag. The bar appears only for that gesture. */\n.cr-native-scope .cr-touch-comment-bar {\n  position: fixed;\n  bottom: calc(18px + env(safe-area-inset-bottom, 0px));\n  left: 50%;\n  z-index: 80;\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  max-width: calc(100vw - 24px);\n  padding: 6px 6px 6px 14px;\n  transform: translateX(-50%);\n  border: 1px solid var(--cr-border);\n  border-radius: 999px;\n  background: var(--cr-surface-raised);\n  box-shadow: 0 10px 30px rgb(0 0 0 / 22%);\n  color: var(--cr-text);\n  font-size: 12px;\n}\n\n.cr-native-scope .cr-touch-comment-range {\n  overflow: hidden;\n  color: var(--cr-text-muted);\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-touch-comment-cta {\n  min-height: 40px;\n  padding: 0 16px;\n  border: 0;\n  border-radius: 999px;\n  background: var(--cr-primary);\n  color: var(--cr-on-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-touch-comment-clear {\n  display: inline-flex;\n  width: 36px;\n  height: 36px;\n  align-items: center;\n  justify-content: center;\n  padding: 0;\n  border: 0;\n  border-radius: 999px;\n  background: transparent;\n  color: var(--cr-text-muted);\n  font-size: 18px;\n  line-height: 1;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-touch-comment-clear:hover {\n  background: color-mix(in srgb, var(--cr-text) 8%, transparent);\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-touch-selecting .cr-diff-line {\n  user-select: none;\n}\n\n@media (pointer: coarse) {\n  .cr-native-scope .cr-diff-line {\n    -webkit-touch-callout: none;\n    user-select: none;\n  }\n\n  .cr-native-scope .cr-touch-comment-cta {\n    min-height: 44px;\n  }\n\n  .cr-native-scope .cr-touch-comment-clear {\n    width: 44px;\n    height: 44px;\n  }\n}\n\n.cr-native-scope {\n  box-sizing: border-box;\n  display: flex;\n  flex-direction: column;\n  min-width: 0;\n  min-height: 0;\n  height: 100%;\n  overflow: hidden;\n  background: var(--cr-bg);\n  color: var(--cr-text);\n  font-family: var(--dsw-font-family, var(--cr-font-ui));\n}\n\n.cr-native-scope.cr-native-panel .cr-native-bar {\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  min-height: 48px;\n  padding: 6px 16px;\n  border-bottom: 1px solid var(--cr-border);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-native-brand {\n  flex: 0 0 auto;\n  color: var(--cr-text);\n  font-family: var(--dsw-font-family, var(--cr-font-ui));\n  font-size: 13px;\n  font-weight: 600;\n}\n\n.cr-native-scope .cr-native-nav {\n  display: flex;\n  flex: 1 1 auto;\n  gap: 4px;\n  min-width: 0;\n  overflow-x: auto;\n  scrollbar-width: thin;\n}\n\n.cr-native-scope .cr-native-tab {\n  flex: 0 0 auto;\n  min-height: 32px;\n  padding: 5px 9px;\n  border: 1px solid transparent;\n  border-radius: var(--cr-radius-control);\n  color: var(--cr-text-muted);\n  font-size: 12px;\n  text-decoration: none;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-native-tab:hover {\n  background: var(--cr-surface-raised);\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-native-tab[aria-current='page'] {\n  border-color: var(--cr-border);\n  background: var(--cr-surface-raised);\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-native-main {\n  display: flex;\n  flex: 1 1 auto;\n  flex-direction: column;\n  min-height: 0;\n  overflow: auto;\n  padding: 20px 24px 48px;\n}\n\n.cr-native-scope.cr-native-panel {\n  --cr-bg: var(--dsw-alias-bg-layer-1, #0d1117);\n  --cr-surface: var(--dsw-alias-bg-layer-2, #161b22);\n  --cr-surface-raised: var(--dsw-alias-bg-layer-3, #21262d);\n  --cr-text: var(--dsw-alias-label-primary, #e6edf3);\n  --cr-text-muted: var(--dsw-alias-label-tertiary, #9da7b3);\n  --cr-border: var(--dsw-alias-border-l2, #5b6572);\n  --cr-primary: var(--dsw-alias-brand-primary, #58a6ff);\n  --cr-on-primary: var(--dsw-alias-label-primary-foreground, #08111f);\n}\n\n.cr-native-scope.cr-settings-tab {\n  height: auto;\n  min-height: 0;\n  overflow: visible;\n  padding: 4px 0 24px;\n}\n\n.cr-native-scope.cr-settings-tab > .cr-page-head {\n  margin-bottom: 16px;\n}\n\n@media (max-width: 640px) {\n  .cr-native-scope.cr-native-panel .cr-native-bar {\n    padding-inline: 12px;\n  }\n\n  .cr-native-scope .cr-native-main {\n    padding: 16px 16px 40px;\n  }\n}\n\n.cr-native-scope .cr-native-error {\n  padding: 24px;\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-native-error h1 {\n  margin: 0 0 8px;\n  font-size: 20px;\n}\n\n.cr-native-scope .cr-native-error p {\n  margin: 0 0 16px;\n  color: var(--cr-text-muted);\n}\n\n/* Native DSH settings section (Settings \u2192 Code Review). The surrounding shell\n   owns the modal chrome and theme, so this surface only uses host tokens. */\n.cr-native-scope.cr-dsh-settings-scope {\n  height: auto;\n  min-height: 0;\n  overflow: visible;\n  background: transparent;\n  color: var(--dsw-alias-label-primary, #111827);\n  font-size: 13px;\n}\n\n.cr-native-scope .cr-dsh-settings {\n  display: grid;\n  gap: 14px;\n  max-width: 760px;\n  font-family: var(--dsw-font-family, system-ui, sans-serif);\n  font-size: 13px;\n  line-height: 1.45;\n}\n\n.cr-native-scope .cr-dsh-settings-head {\n  display: flex;\n  align-items: flex-start;\n  justify-content: space-between;\n  gap: 16px;\n}\n\n.cr-native-scope .cr-dsh-settings-copy {\n  min-width: 0;\n}\n\n.cr-native-scope .cr-dsh-settings-copy h2 {\n  margin: 0;\n  font-size: 15px;\n  font-weight: 600;\n  line-height: 1.35;\n}\n\n.cr-native-scope .cr-dsh-settings-copy p {\n  margin: 2px 0 0;\n  color: var(--dsw-alias-label-tertiary, #6b7280);\n  font-size: 12px;\n}\n\n.cr-native-scope .cr-dsh-form {\n  display: grid;\n  gap: 12px;\n}\n\n.cr-native-scope .cr-dsh-muted {\n  margin: 0;\n  color: var(--dsw-alias-label-tertiary, #6b7280);\n  font-size: 12px;\n}\n\n.cr-native-scope .cr-dsh-banner {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  margin: 0;\n  padding: 8px 10px;\n  border: 1px solid var(--dsw-alias-border-l2, #d0d5dd);\n  border-radius: 8px;\n  font-size: 12px;\n}\n\n.cr-native-scope .cr-dsh-banner-error {\n  border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary, #d92d20) 45%, transparent);\n  color: var(--dsw-alias-state-error-primary, #b42318);\n}\n\n.cr-native-scope .cr-dsh-banner-success {\n  border-color: color-mix(\n    in srgb,\n    var(--dsw-alias-state-success-primary, #12b76a) 45%,\n    transparent\n  );\n  color: var(--dsw-alias-label-primary, #111827);\n}\n\n.cr-native-scope .cr-dsh-repos {\n  border-top: 1px solid var(--dsw-alias-border-l2, #d0d5dd);\n}\n\n.cr-native-scope .cr-dsh-repo {\n  display: grid;\n  grid-template-columns: minmax(110px, 0.9fr) minmax(190px, 1.5fr) minmax(125px, 0.8fr) auto;\n  align-items: start;\n  gap: 10px;\n  padding: 12px 0;\n  border-bottom: 1px solid var(--dsw-alias-border-l2, #d0d5dd);\n}\n\n.cr-native-scope .cr-dsh-field {\n  display: grid;\n  gap: 4px;\n  min-width: 0;\n}\n\n.cr-native-scope .cr-dsh-label {\n  color: var(--dsw-alias-label-tertiary, #6b7280);\n  font-size: 11px;\n  font-weight: 500;\n  line-height: 1.3;\n}\n\n.cr-native-scope .cr-dsh-input {\n  box-sizing: border-box;\n  width: 100%;\n  height: 32px;\n  padding: 0 9px;\n  border: 1px solid var(--dsw-alias-border-l2, #d0d5dd);\n  border-radius: 8px;\n  background: var(--dsw-alias-bg-layer-2, #fff);\n  color: var(--dsw-alias-label-primary, #111827);\n  font: inherit;\n  font-size: 13px;\n  outline: none;\n}\n\n.cr-native-scope .cr-dsh-input::placeholder {\n  color: var(--dsw-alias-label-quaternary, #98a2b3);\n}\n\n.cr-native-scope .cr-dsh-input:focus-visible {\n  border-color: var(--dsw-alias-brand-primary, #2f6fed);\n  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-alias-brand-primary, #2f6fed) 28%, transparent);\n}\n\n.cr-native-scope .cr-dsh-input:disabled {\n  opacity: 0.55;\n}\n\n.cr-native-scope .cr-dsh-mono {\n  font-family: var(--cr-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);\n  font-size: 12px;\n}\n\n.cr-native-scope .cr-dsh-select {\n  padding-right: 26px;\n}\n\n.cr-native-scope .cr-dsh-inline {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.cr-native-scope .cr-dsh-inline .cr-dsh-input {\n  min-width: 0;\n  flex: 1 1 auto;\n}\n\n.cr-native-scope .cr-dsh-icon-button {\n  display: inline-flex;\n  flex: 0 0 auto;\n  align-items: center;\n  justify-content: center;\n  width: 32px;\n  height: 32px;\n  padding: 0;\n  border: 1px solid var(--dsw-alias-border-l2, #d0d5dd);\n  border-radius: 8px;\n  background: var(--dsw-alias-bg-layer-2, #fff);\n  color: var(--dsw-alias-label-tertiary, #6b7280);\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-dsh-icon-button:hover:not(:disabled) {\n  background: var(--dsw-alias-bg-layer-3, #f2f4f7);\n  color: var(--dsw-alias-label-primary, #111827);\n}\n\n.cr-native-scope .cr-dsh-icon-button:disabled {\n  opacity: 0.5;\n}\n\n.cr-native-scope .cr-dsh-remove {\n  margin-top: 19px;\n}\n\n.cr-native-scope .cr-dsh-remove:hover:not(:disabled) {\n  border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary, #d92d20) 50%, transparent);\n  color: var(--dsw-alias-state-error-primary, #b42318);\n}\n\n.cr-native-scope .cr-dsh-retry {\n  flex: 0 0 auto;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: var(--dsw-alias-brand-primary, #2f6fed);\n  font: inherit;\n  font-size: 12px;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-dsh-button {\n  display: inline-flex;\n  flex: 0 0 auto;\n  align-items: center;\n  justify-content: center;\n  min-height: 32px;\n  padding: 0 12px;\n  border: 1px solid var(--dsw-alias-border-l2, #d0d5dd);\n  border-radius: 8px;\n  background: transparent;\n  color: var(--dsw-alias-label-primary, #111827);\n  font: inherit;\n  font-size: 12px;\n  font-weight: 500;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-dsh-button:hover:not(:disabled) {\n  background: var(--dsw-alias-bg-layer-3, #f2f4f7);\n}\n\n.cr-native-scope .cr-dsh-button-primary {\n  border-color: transparent;\n  background: var(--dsw-alias-brand-primary, #2f6fed);\n  color: var(--dsw-alias-label-primary-foreground, #fff);\n}\n\n.cr-native-scope .cr-dsh-button-primary:hover:not(:disabled) {\n  background: color-mix(in srgb, var(--dsw-alias-brand-primary, #2f6fed) 88%, #000);\n}\n\n.cr-native-scope .cr-dsh-button:disabled {\n  opacity: 0.5;\n  cursor: default;\n}\n\n.cr-native-scope .cr-dsh-add {\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n  width: 100%;\n  min-height: 34px;\n  border: 1px dashed var(--dsw-alias-border-l2, #d0d5dd);\n  border-radius: 8px;\n  background: transparent;\n  color: var(--dsw-alias-label-tertiary, #6b7280);\n  font: inherit;\n  font-size: 12px;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-dsh-add:hover:not(:disabled) {\n  border-color: var(--dsw-alias-brand-primary, #2f6fed);\n  color: var(--dsw-alias-brand-primary, #2f6fed);\n}\n\n.cr-native-scope .cr-dsh-add:disabled {\n  opacity: 0.5;\n}\n\n.cr-native-scope .cr-dsh-error {\n  color: var(--dsw-alias-state-error-primary, #b42318);\n  font-size: 11px;\n}\n\n.cr-native-scope .cr-dsh-empty {\n  padding: 14px 0 4px;\n}\n\n.cr-native-scope .cr-dsh-empty p {\n  margin: 0;\n}\n\n.cr-native-scope .cr-dsh-empty .cr-dsh-muted {\n  margin-top: 2px;\n}\n\n@media (max-width: 760px) {\n  .cr-native-scope .cr-dsh-settings-head {\n    flex-direction: column;\n    align-items: stretch;\n  }\n\n  .cr-native-scope .cr-dsh-settings-head .cr-dsh-button-primary {\n    align-self: flex-start;\n  }\n\n  .cr-native-scope .cr-dsh-repo {\n    grid-template-columns: minmax(0, 1fr);\n    gap: 10px;\n  }\n\n  .cr-native-scope .cr-dsh-remove {\n    margin-top: 0;\n    justify-self: end;\n  }\n}\n\n@media (pointer: coarse) {\n  .cr-native-scope .cr-dsh-input,\n  .cr-native-scope .cr-dsh-select {\n    height: 40px;\n    font-size: 16px;\n  }\n\n  .cr-native-scope .cr-dsh-icon-button {\n    width: 40px;\n    height: 40px;\n  }\n\n  .cr-native-scope .cr-dsh-button {\n    min-height: 40px;\n  }\n\n  .cr-native-scope .cr-dsh-add {\n    min-height: 42px;\n  }\n\n  .cr-native-scope .cr-dsh-remove {\n    margin-top: 15px;\n  }\n}\n\n/* Native folder picker opened from the Code Review settings section. */\n.cr-native-scope .cr-dsh-picker-layer {\n  position: fixed;\n  inset: 0;\n  z-index: 10000;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  padding: 24px;\n  background: color-mix(in srgb, #000 42%, transparent);\n}\n\n.cr-native-scope .cr-dsh-picker {\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n  width: min(560px, 100%);\n  max-height: min(80vh, 720px);\n  padding: 16px;\n  border: 1px solid var(--dsw-alias-border-l2, #d0d5dd);\n  border-radius: 12px;\n  background: var(--dsw-alias-bg-layer-1, #fff);\n  color: var(--dsw-alias-label-primary, #111827);\n  box-shadow: 0 16px 48px rgb(0 0 0 / 28%);\n  font-family: var(--dsw-font-family, system-ui, sans-serif);\n  font-size: 13px;\n  outline: none;\n}\n\n.cr-native-scope .cr-dsh-picker-head {\n  display: flex;\n  align-items: flex-start;\n  justify-content: space-between;\n  gap: 12px;\n}\n\n.cr-native-scope .cr-dsh-picker-head h2 {\n  margin: 0;\n  font-size: 15px;\n  font-weight: 600;\n  line-height: 1.35;\n}\n\n.cr-native-scope .cr-dsh-picker-head p {\n  margin: 2px 0 0;\n  color: var(--dsw-alias-label-tertiary, #6b7280);\n  font-size: 12px;\n}\n\n.cr-native-scope .cr-dsh-picker-path {\n  display: grid;\n  gap: 4px;\n}\n\n.cr-native-scope .cr-dsh-picker-nav {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 0;\n}\n\n.cr-native-scope .cr-dsh-button-quiet {\n  padding: 0 9px;\n}\n\n.cr-native-scope .cr-dsh-breadcrumbs {\n  display: flex;\n  flex: 1 1 auto;\n  align-items: center;\n  gap: 2px;\n  min-width: 0;\n  overflow-x: auto;\n  white-space: nowrap;\n  scrollbar-width: none;\n}\n\n.cr-native-scope .cr-dsh-breadcrumbs::-webkit-scrollbar {\n  display: none;\n}\n\n.cr-native-scope .cr-dsh-crumb {\n  display: inline-flex;\n  align-items: center;\n}\n\n.cr-native-scope .cr-dsh-crumb-separator {\n  padding: 0 2px;\n  color: var(--dsw-alias-label-quaternary, #98a2b3);\n}\n\n.cr-native-scope .cr-dsh-crumb-button {\n  padding: 2px 3px;\n  border: 0;\n  border-radius: 4px;\n  background: transparent;\n  color: var(--dsw-alias-brand-primary, #2f6fed);\n  font: inherit;\n  font-size: 12px;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-dsh-crumb-button:hover {\n  background: var(--dsw-alias-bg-layer-3, #f2f4f7);\n}\n\n.cr-native-scope .cr-dsh-crumb-button[aria-current='location'] {\n  color: var(--dsw-alias-label-primary, #111827);\n  font-weight: 500;\n}\n\n.cr-native-scope .cr-dsh-badge {\n  flex: 0 0 auto;\n  padding: 1px 6px;\n  border: 1px solid\n    color-mix(in srgb, var(--dsw-alias-state-success-primary, #12b76a) 50%, transparent);\n  border-radius: 999px;\n  color: var(--dsw-alias-state-success-primary, #067647);\n  font-size: 10px;\n  line-height: 1.5;\n}\n\n.cr-native-scope .cr-dsh-picker-list {\n  flex: 1 1 auto;\n  min-height: 120px;\n  max-height: 46vh;\n  overflow: auto;\n  border: 1px solid var(--dsw-alias-border-l2, #d0d5dd);\n  border-radius: 8px;\n  padding: 4px;\n}\n\n.cr-native-scope .cr-dsh-picker-entries {\n  margin: 0;\n  padding: 0;\n  list-style: none;\n}\n\n.cr-native-scope .cr-dsh-picker-entry {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  width: 100%;\n  min-height: 34px;\n  padding: 0 8px;\n  border: 0;\n  border-radius: 6px;\n  background: transparent;\n  color: var(--dsw-alias-label-primary, #111827);\n  font: inherit;\n  font-size: 13px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-dsh-picker-entry:hover {\n  background: var(--dsw-alias-bg-layer-3, #f2f4f7);\n}\n\n.cr-native-scope .cr-dsh-picker-entry-name {\n  flex: 1 1 auto;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-dsh-picker-state {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  padding: 8px;\n  color: var(--dsw-alias-state-error-primary, #b42318);\n  font-size: 12px;\n}\n\n.cr-native-scope .cr-dsh-picker-hint {\n  flex: 0 0 auto;\n}\n\n.cr-native-scope .cr-dsh-picker-actions {\n  display: flex;\n  justify-content: flex-end;\n  gap: 8px;\n  padding-top: 2px;\n}\n\n@media (max-width: 600px) {\n  .cr-native-scope .cr-dsh-picker-layer {\n    padding: 12px;\n  }\n\n  .cr-native-scope .cr-dsh-picker {\n    max-height: 90vh;\n  }\n\n  .cr-native-scope .cr-dsh-picker-actions .cr-dsh-button {\n    flex: 1 1 0;\n  }\n}\n\n@media (pointer: coarse) {\n  .cr-native-scope .cr-dsh-picker-entry {\n    min-height: 44px;\n  }\n\n  .cr-native-scope .cr-dsh-picker {\n    font-size: 14px;\n  }\n}\n";
+    style.textContent = "/*\n * Code review design tokens. Dark is the default; light is a derived theme.\n * Every text/border pair used by the UI is checked in tokens.test.ts.\n */\n.cr-native-scope,\n.cr-native-scope[data-theme='dark'],\n.cr-native-scope .theme-dark {\n  color-scheme: dark;\n  --cr-bg: #0d1117;\n  --cr-surface: #161b22;\n  --cr-surface-raised: #21262d;\n  --cr-text: #e6edf3;\n  --cr-text-muted: #9da7b3;\n  --cr-border: #5b6572;\n  --cr-primary: #58a6ff;\n  --cr-on-primary: #08111f;\n  --cr-danger: #ff7b72;\n  --cr-on-danger: #2b0b0b;\n  --cr-warning: #e3b341;\n  --cr-info: #79c0ff;\n  --cr-success: #56d364;\n  --cr-added-bg: #10261a;\n  --cr-removed-bg: #2b1518;\n  --cr-added-accent: #56d364;\n  --cr-removed-accent: #ff7b72;\n  --cr-word-added-bg: #1b4729;\n  --cr-word-removed-bg: #4a2024;\n  --cr-selection: #1f6feb;\n  --cr-on-selection: #ffffff;\n  --cr-selection-bg: #162b45;\n  --cr-selection-accent: #79c0ff;\n  --cr-focus: #58a6ff;\n  --cr-overlay: rgb(3 7 12 / 76%);\n  --cr-shadow: 0 18px 48px rgb(0 0 0 / 42%);\n}\n\n.cr-native-scope[data-theme='light'],\n.cr-native-scope .theme-light {\n  color-scheme: light;\n  /*\n   * The page is deliberately off-white: a pure-white canvas glares when\n   * switching from the dark theme. Cards stay a touch lighter than the page.\n   */\n  --cr-bg: #f4f6f8;\n  --cr-surface: #fbfcfd;\n  --cr-surface-raised: #eaeef2;\n  --cr-text: #1f2328;\n  --cr-text-muted: #57606a;\n  /* Neutral border chosen for a \u22653:1 boundary on both page and surface. */\n  --cr-border: #7d8590;\n  --cr-primary: #0969da;\n  --cr-on-primary: #ffffff;\n  --cr-danger: #b42318;\n  --cr-on-danger: #ffffff;\n  --cr-warning: #7a4d00;\n  --cr-info: #1d4ed8;\n  --cr-success: #116d32;\n  --cr-added-bg: #eaffef;\n  --cr-removed-bg: #ffefed;\n  --cr-added-accent: #116d32;\n  --cr-removed-accent: #b42318;\n  --cr-word-added-bg: #ccffd8;\n  --cr-word-removed-bg: #ffd7d5;\n  --cr-selection: #0969da;\n  --cr-on-selection: #ffffff;\n  --cr-selection-bg: #ddf4ff;\n  --cr-selection-accent: #0969da;\n  --cr-focus: #0969da;\n  --cr-overlay: rgb(31 35 40 / 48%);\n  --cr-shadow: 0 18px 48px rgb(31 35 40 / 18%);\n}\n\n.cr-native-scope {\n  /* Syntax highlighting (Prism). light-dark() follows the host's color-scheme,\n     including the DSH shell which sets it on <html>. */\n  --cr-syn-keyword: #c586c0;\n  --cr-syn-keyword: light-dark(#af00db, #c586c0);\n  --cr-syn-type: #4ec9b0;\n  --cr-syn-type: light-dark(#1f7187, #4ec9b0);\n  --cr-syn-function: #dcdcaa;\n  --cr-syn-function: light-dark(#795e26, #dcdcaa);\n  --cr-syn-variable: #9cdcfe;\n  --cr-syn-variable: light-dark(#001080, #9cdcfe);\n  --cr-syn-property: #9cdcfe;\n  --cr-syn-property: light-dark(#001080, #9cdcfe);\n  --cr-syn-string: #ce9178;\n  --cr-syn-string: light-dark(#a31515, #ce9178);\n  --cr-syn-number: #b5cea8;\n  --cr-syn-number: light-dark(#067a4a, #b5cea8);\n  --cr-syn-comment: #6a9955;\n  --cr-syn-comment: light-dark(#008000, #6a9955);\n  --cr-syn-tag: #569cd6;\n  --cr-syn-tag: light-dark(#800000, #569cd6);\n  --cr-syn-constant: #4fc1ff;\n  --cr-syn-constant: light-dark(#0070c1, #4fc1ff);\n\n  --cr-space-1: 4px;\n  --cr-space-2: 8px;\n  --cr-space-3: 12px;\n  --cr-space-4: 16px;\n  --cr-space-5: 20px;\n  --cr-space-6: 24px;\n  --cr-space-8: 32px;\n  --cr-space-10: 40px;\n  --cr-space-12: 48px;\n  --cr-radius-control: 6px;\n  --cr-radius-card: 10px;\n  --cr-radius-pill: 999px;\n  --cr-font-ui:\n    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell,\n    'Helvetica Neue', Arial, sans-serif;\n  --cr-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;\n  --cr-text-body: 16px;\n  --cr-leading-body: 1.5;\n  --cr-text-control: 14px;\n  --cr-leading-control: 1.4;\n  --cr-text-meta: 13px;\n  --cr-text-code: 12.5px;\n  --cr-leading-code: 20px;\n  --cr-motion-press: 120ms;\n  --cr-motion-tabs: 150ms;\n  --cr-motion-collapse: 180ms;\n  --cr-motion-dialog: 240ms;\n  --cr-sidebar: 280px;\n  --cr-rail: 320px;\n  --cr-summary-max-height: clamp(14rem, 40vh, 28rem);\n  --cr-focus-ring: 0 0 0 2px var(--cr-bg), 0 0 0 4px var(--cr-focus);\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .cr-native-scope {\n    --cr-motion-press: 0ms;\n    --cr-motion-tabs: 0ms;\n    --cr-motion-collapse: 0ms;\n    --cr-motion-dialog: 0ms;\n  }\n}\n\n.cr-native-scope *,\n.cr-native-scope *::before,\n.cr-native-scope *::after {\n  box-sizing: border-box;\n}\n\n.cr-native-scope {\n  min-height: 100%;\n}\n\n.cr-native-scope {\n  background: var(--cr-bg);\n  color: var(--cr-text);\n  font-family: var(--cr-font-ui);\n  font-size: var(--cr-text-body);\n  line-height: var(--cr-leading-body);\n  -webkit-font-smoothing: antialiased;\n  text-rendering: optimizeLegibility;\n}\n\n.cr-native-scope {\n  margin: 0;\n  background: var(--cr-bg);\n  color: var(--cr-text);\n}\n\n.cr-native-scope button,\n.cr-native-scope input,\n.cr-native-scope textarea,\n.cr-native-scope select {\n  font: inherit;\n  color: inherit;\n}\n\n.cr-native-scope a {\n  color: var(--cr-primary);\n  text-underline-offset: 3px;\n}\n\n.cr-native-scope a:hover {\n  text-decoration-thickness: 2px;\n}\n\n.cr-native-scope :focus-visible {\n  outline: 2px solid var(--cr-focus);\n  outline-offset: 2px;\n}\n\n.cr-native-scope ::selection {\n  background: var(--cr-selection);\n  color: var(--cr-on-selection);\n}\n\n.cr-native-scope.cr-selecting-lines {\n  cursor: row-resize;\n  user-select: none;\n}\n\n.cr-native-scope .cr-visually-hidden {\n  position: absolute !important;\n  width: 1px !important;\n  height: 1px !important;\n  padding: 0 !important;\n  margin: -1px !important;\n  overflow: hidden !important;\n  clip: rect(0 0 0 0) !important;\n  white-space: nowrap !important;\n  border: 0 !important;\n}\n\n.cr-native-scope .cr-skip-link {\n  position: fixed;\n  z-index: 100;\n  top: 8px;\n  left: 8px;\n  padding: 8px 12px;\n  border-radius: var(--cr-radius-control);\n  background: var(--cr-primary);\n  color: var(--cr-on-primary);\n  transform: translateY(-160%);\n  transition: transform var(--cr-motion-collapse) ease;\n}\n\n.cr-native-scope .cr-skip-link:focus-visible {\n  transform: translateY(0);\n}\n\n.cr-native-scope .cr-mono {\n  font-family: var(--cr-font-mono);\n  font-size: var(--cr-text-code);\n  line-height: var(--cr-leading-code);\n}\n\n.cr-native-scope .cr-meta {\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-meta);\n  line-height: 1.4;\n}\n\n/* App shell */\n.cr-native-scope .cr-shell {\n  display: grid;\n  grid-template-columns: var(--cr-sidebar) minmax(0, 1fr);\n  min-height: 100vh;\n  background: var(--cr-bg);\n}\n\n.cr-native-scope .cr-sidebar {\n  position: sticky;\n  top: 0;\n  display: flex;\n  flex-direction: column;\n  gap: var(--cr-space-6);\n  height: 100vh;\n  padding: var(--cr-space-5) var(--cr-space-4);\n  border-right: 1px solid var(--cr-border);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-sidebar-head {\n  display: flex;\n  min-width: 0;\n  align-items: center;\n  justify-content: space-between;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-sidebar-head .cr-brand {\n  min-width: 0;\n  flex: 1 1 auto;\n}\n\n.cr-native-scope .cr-sidebar-toggle {\n  flex: 0 0 40px;\n}\n\n.cr-native-scope .cr-brand {\n  display: flex;\n  align-items: center;\n  gap: var(--cr-space-3);\n  padding: var(--cr-space-1) var(--cr-space-2);\n  color: var(--cr-text);\n  text-decoration: none;\n}\n\n.cr-native-scope .cr-brand-mark {\n  display: grid;\n  place-items: center;\n  width: 34px;\n  height: 34px;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n  color: var(--cr-on-primary);\n  background: var(--cr-primary);\n  font-family: var(--cr-font-mono);\n  font-size: 16px;\n  font-weight: 700;\n  letter-spacing: -0.08em;\n}\n\n.cr-native-scope .cr-brand-copy {\n  display: grid;\n  gap: 1px;\n}\n\n.cr-native-scope .cr-brand-name {\n  font-family: var(--cr-font-mono);\n  font-size: 15px;\n  font-weight: 600;\n  letter-spacing: -0.02em;\n}\n\n.cr-native-scope .cr-brand-sub {\n  color: var(--cr-text-muted);\n  font-size: 11px;\n  letter-spacing: 0.06em;\n  text-transform: uppercase;\n}\n\n.cr-native-scope .cr-nav {\n  display: grid;\n  gap: var(--cr-space-1);\n}\n\n.cr-native-scope .cr-nav-label {\n  padding: 0 var(--cr-space-2) var(--cr-space-2);\n  color: var(--cr-text-muted);\n  font-size: 11px;\n  font-weight: 600;\n  letter-spacing: 0.08em;\n  text-transform: uppercase;\n}\n\n.cr-native-scope .cr-nav-link {\n  display: flex;\n  align-items: center;\n  gap: var(--cr-space-3);\n  min-height: 40px;\n  padding: var(--cr-space-2) var(--cr-space-3);\n  border: 1px solid transparent;\n  border-radius: var(--cr-radius-control);\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-control);\n  font-weight: 500;\n  text-decoration: none;\n  transition:\n    background var(--cr-motion-press) ease,\n    color var(--cr-motion-press) ease;\n}\n\n.cr-native-scope .cr-nav-link:hover {\n  background: var(--cr-surface-raised);\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-nav-link[aria-current='page'] {\n  border-color: var(--cr-border);\n  background: var(--cr-surface-raised);\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-nav-icon {\n  display: grid;\n  place-items: center;\n  width: 20px;\n  height: 20px;\n  flex: 0 0 20px;\n}\n\n.cr-native-scope .cr-sidebar-footer {\n  display: grid;\n  gap: var(--cr-space-3);\n  margin-top: auto;\n  padding-top: var(--cr-space-4);\n  border-top: 1px solid var(--cr-border);\n}\n\n.cr-native-scope .cr-theme-row {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-daemon {\n  display: flex;\n  align-items: center;\n  gap: var(--cr-space-2);\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-meta);\n}\n\n.cr-native-scope .cr-dot {\n  width: 7px;\n  height: 7px;\n  border-radius: var(--cr-radius-pill);\n  background: var(--cr-success);\n  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cr-success) 18%, transparent);\n}\n\n.cr-native-scope .cr-main {\n  display: flex;\n  flex-direction: column;\n  min-width: 0;\n}\n\n.cr-native-scope .cr-topbar {\n  display: none;\n  align-items: center;\n  gap: var(--cr-space-3);\n  min-height: 56px;\n  padding: var(--cr-space-2) var(--cr-space-4);\n  border-bottom: 1px solid var(--cr-border);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-content {\n  width: 100%;\n  max-width: 1320px;\n  margin: 0 auto;\n  padding: var(--cr-space-8) var(--cr-space-8) var(--cr-space-12);\n}\n\n.cr-native-scope .cr-page-head {\n  display: flex;\n  align-items: flex-start;\n  justify-content: space-between;\n  gap: var(--cr-space-6);\n  margin-bottom: var(--cr-space-6);\n}\n\n.cr-native-scope .cr-eyebrow {\n  margin: 0 0 var(--cr-space-2);\n  color: var(--cr-primary);\n  font-family: var(--cr-font-mono);\n  font-size: 11px;\n  font-weight: 600;\n  letter-spacing: 0.1em;\n  text-transform: uppercase;\n}\n\n.cr-native-scope .cr-page-title {\n  margin: 0;\n  font-size: clamp(26px, 3vw, 34px);\n  font-weight: 650;\n  letter-spacing: -0.035em;\n  line-height: 1.15;\n}\n\n.cr-native-scope .cr-page-sub {\n  max-width: 62ch;\n  margin: var(--cr-space-2) 0 0;\n  color: var(--cr-text-muted);\n  font-size: 15px;\n}\n\n.cr-native-scope .cr-page-actions {\n  display: flex;\n  flex-wrap: wrap;\n  gap: var(--cr-space-2);\n}\n\n/* Toolbar and table */\n.cr-native-scope .cr-toolbar {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: flex-end;\n  gap: var(--cr-space-3);\n  padding: var(--cr-space-4);\n  border: 1px solid var(--cr-border);\n  border-bottom: 0;\n  border-radius: var(--cr-radius-card) var(--cr-radius-card) 0 0;\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-toolbar > .cr-field,\n.cr-native-scope .cr-toolbar > .cr-search {\n  flex: 1 1 220px;\n}\n\n.cr-native-scope .cr-search {\n  position: relative;\n  min-width: 0;\n}\n\n.cr-native-scope .cr-search-icon {\n  position: absolute;\n  z-index: 1;\n  top: 50%;\n  left: 11px;\n  color: var(--cr-text-muted);\n  pointer-events: none;\n  transform: translateY(-50%);\n}\n\n.cr-native-scope .cr-search .cr-input {\n  padding-left: 34px;\n}\n\n.cr-native-scope .cr-toolbar > .cr-field-select {\n  flex: 0 1 190px;\n}\n\n.cr-native-scope .cr-list {\n  /* The review list lives directly in the panel flex column; without this it shrinks\n     to the leftover viewport height and clips every row past the first screen. */\n  flex-shrink: 0;\n  overflow: hidden;\n  border: 1px solid var(--cr-border);\n  border-radius: 0 0 var(--cr-radius-card) var(--cr-radius-card);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-list-head {\n  display: grid;\n  grid-template-columns: minmax(0, 2.6fr) minmax(90px, 1fr) minmax(80px, 0.7fr) 76px 84px 86px;\n  gap: var(--cr-space-4);\n  padding: var(--cr-space-3) var(--cr-space-4);\n  border-bottom: 1px solid var(--cr-border);\n  color: var(--cr-text-muted);\n  font-size: 11px;\n  font-weight: 600;\n  letter-spacing: 0.08em;\n  text-transform: uppercase;\n}\n\n/* Repository groups in the reviews list (client-side only). */\n\n.cr-native-scope .cr-review-group {\n  min-width: 0;\n}\n\n.cr-native-scope .cr-review-group + .cr-review-group {\n  border-top: 1px solid var(--cr-border);\n}\n\n.cr-native-scope .cr-review-group-heading {\n  margin: 0;\n  font: inherit;\n}\n\n.cr-native-scope .cr-review-group-toggle {\n  display: flex;\n  width: 100%;\n  min-width: 0;\n  align-items: center;\n  gap: var(--cr-space-2);\n  padding: var(--cr-space-3) var(--cr-space-4);\n  border: 0;\n  background: color-mix(in srgb, var(--cr-surface-raised) 45%, var(--cr-surface));\n  color: var(--cr-text);\n  cursor: pointer;\n  text-align: left;\n}\n\n.cr-native-scope .cr-review-group-toggle:hover {\n  background: var(--cr-surface-raised);\n}\n\n.cr-native-scope .cr-review-group-toggle:focus-visible {\n  outline-offset: -2px;\n}\n\n.cr-native-scope .cr-review-group-chevron {\n  width: 0;\n  height: 0;\n  flex: none;\n  border-top: 5px solid transparent;\n  border-bottom: 5px solid transparent;\n  border-left: 6px solid currentColor;\n  transform: rotate(90deg);\n  transition: transform var(--cr-motion-collapse) ease;\n}\n\n.cr-native-scope .cr-review-group-toggle[aria-expanded='false'] .cr-review-group-chevron {\n  transform: rotate(0deg);\n}\n\n.cr-native-scope .cr-review-group-name {\n  overflow: hidden;\n  min-width: 0;\n  font-size: 14px;\n  font-weight: 600;\n  letter-spacing: -0.01em;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-review-group-path {\n  overflow: hidden;\n  min-width: 0;\n  color: var(--cr-text-muted);\n  font-family: var(--cr-font-mono);\n  font-size: 11px;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-review-group-count {\n  flex: none;\n  margin-left: auto;\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-meta);\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-review-group-rows[hidden] {\n  display: none;\n}\n\n.cr-native-scope .cr-review-row {\n  display: grid;\n  grid-template-columns: minmax(0, 2.6fr) minmax(90px, 1fr) minmax(80px, 0.7fr) 76px 84px 86px;\n  gap: var(--cr-space-4);\n  align-items: center;\n  min-height: 64px;\n  padding: var(--cr-space-3) var(--cr-space-4);\n  border-bottom: 1px solid color-mix(in srgb, var(--cr-border) 55%, transparent);\n  color: var(--cr-text);\n  text-decoration: none;\n  transition: background var(--cr-motion-press) ease;\n}\n\n.cr-native-scope .cr-review-row:last-child {\n  border-bottom: 0;\n}\n\n.cr-native-scope .cr-review-row:hover {\n  background: var(--cr-surface-raised);\n}\n\n.cr-native-scope .cr-review-title {\n  display: block;\n  overflow: hidden;\n  font-size: 15px;\n  font-weight: 600;\n  letter-spacing: -0.01em;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-review-id {\n  display: block;\n  overflow: hidden;\n  margin-top: 3px;\n  color: var(--cr-text-muted);\n  font-family: var(--cr-font-mono);\n  font-size: 11px;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-scope {\n  display: inline-flex;\n  max-width: 100%;\n  align-items: center;\n  gap: 6px;\n  overflow: hidden;\n  padding: 3px 8px;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-pill);\n  color: var(--cr-text-muted);\n  font-family: var(--cr-font-mono);\n  font-size: 11px;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-author {\n  overflow: hidden;\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-control);\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-age {\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-meta);\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-not-fixed {\n  color: var(--cr-warning);\n  font-size: var(--cr-text-meta);\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-not-fixed[data-zero='true'] {\n  color: var(--cr-text-muted);\n}\n\n/* Forms */\n.cr-native-scope .cr-form {\n  display: grid;\n  gap: var(--cr-space-5);\n  max-width: 760px;\n}\n\n.cr-native-scope .cr-form-card {\n  display: grid;\n  gap: var(--cr-space-5);\n  padding: var(--cr-space-6);\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-form-section {\n  display: grid;\n  gap: var(--cr-space-2);\n  padding-bottom: var(--cr-space-4);\n  border-bottom: 1px solid color-mix(in srgb, var(--cr-border) 55%, transparent);\n}\n\n.cr-native-scope .cr-form-section:last-child {\n  padding-bottom: 0;\n  border-bottom: 0;\n}\n\n.cr-native-scope .cr-form-section-title {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 600;\n}\n\n.cr-native-scope .cr-form-section-copy {\n  margin: 0;\n  color: var(--cr-text-muted);\n  font-size: 14px;\n}\n\n.cr-native-scope .cr-form-grid {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: var(--cr-space-4);\n}\n\n.cr-native-scope .cr-form-actions {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-3);\n}\n\n.cr-native-scope .cr-field {\n  display: grid;\n  align-content: start;\n  gap: 6px;\n  min-width: 0;\n}\n\n.cr-native-scope .cr-label {\n  color: var(--cr-text);\n  font-size: var(--cr-text-control);\n  font-weight: 550;\n}\n\n.cr-native-scope .cr-hint {\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-meta);\n}\n\n.cr-native-scope .cr-error {\n  color: var(--cr-danger);\n  font-size: var(--cr-text-meta);\n}\n\n.cr-native-scope .cr-input,\n.cr-native-scope .cr-textarea,\n.cr-native-scope .cr-select {\n  width: 100%;\n  min-height: 40px;\n  padding: 8px 10px;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n  background: var(--cr-bg);\n  color: var(--cr-text);\n  font-size: var(--cr-text-control);\n  line-height: var(--cr-leading-control);\n  transition:\n    border-color var(--cr-motion-press) ease,\n    background var(--cr-motion-press) ease;\n}\n\n.cr-native-scope .cr-textarea {\n  min-height: 112px;\n  resize: vertical;\n}\n\n.cr-native-scope .cr-input::placeholder,\n.cr-native-scope .cr-textarea::placeholder {\n  color: var(--cr-text-muted);\n  opacity: 0.8;\n}\n\n.cr-native-scope .cr-input:hover,\n.cr-native-scope .cr-textarea:hover,\n.cr-native-scope .cr-select:hover {\n  border-color: var(--cr-text-muted);\n}\n\n.cr-native-scope .cr-input:focus-visible,\n.cr-native-scope .cr-textarea:focus-visible,\n.cr-native-scope .cr-select:focus-visible {\n  border-color: var(--cr-primary);\n  outline: 2px solid var(--cr-focus);\n  outline-offset: 2px;\n}\n\n.cr-native-scope .cr-input[aria-invalid='true'],\n.cr-native-scope .cr-textarea[aria-invalid='true'],\n.cr-native-scope .cr-select[aria-invalid='true'] {\n  border-color: var(--cr-danger);\n}\n\n.cr-native-scope .cr-input:disabled,\n.cr-native-scope .cr-textarea:disabled,\n.cr-native-scope .cr-select:disabled {\n  cursor: not-allowed;\n  opacity: 0.55;\n}\n\n.cr-native-scope .cr-select {\n  appearance: none;\n  padding-right: 32px;\n  background-image:\n    linear-gradient(45deg, transparent 50%, currentColor 50%),\n    linear-gradient(135deg, currentColor 50%, transparent 50%);\n  background-position:\n    calc(100% - 16px) 17px,\n    calc(100% - 11px) 17px;\n  background-repeat: no-repeat;\n  background-size: 5px 5px;\n}\n\n/* Buttons */\n.cr-native-scope .cr-button {\n  display: inline-flex;\n  min-height: 40px;\n  align-items: center;\n  justify-content: center;\n  gap: var(--cr-space-2);\n  padding: 8px 14px;\n  border: 1px solid transparent;\n  border-radius: var(--cr-radius-control);\n  font-size: var(--cr-text-control);\n  font-weight: 600;\n  line-height: 1.2;\n  text-decoration: none;\n  cursor: pointer;\n  transition:\n    background var(--cr-motion-press) ease,\n    border-color var(--cr-motion-press) ease,\n    transform var(--cr-motion-press) ease;\n}\n\n.cr-native-scope .cr-button:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.cr-native-scope .cr-button:disabled,\n.cr-native-scope .cr-button[aria-disabled='true'] {\n  cursor: not-allowed;\n  opacity: 0.55;\n}\n\n.cr-native-scope .cr-button[data-variant='primary'] {\n  background: var(--cr-primary);\n  color: var(--cr-on-primary);\n}\n\n.cr-native-scope .cr-button[data-variant='primary']:hover:not(:disabled) {\n  background: color-mix(in srgb, var(--cr-primary) 88%, var(--cr-text));\n}\n\n.cr-native-scope .cr-button[data-variant='secondary'] {\n  border-color: var(--cr-border);\n  background: var(--cr-surface-raised);\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-button[data-variant='secondary']:hover:not(:disabled) {\n  border-color: var(--cr-text-muted);\n  background: color-mix(in srgb, var(--cr-surface-raised) 70%, var(--cr-border));\n}\n\n.cr-native-scope .cr-button[data-variant='ghost'] {\n  background: transparent;\n  color: var(--cr-text-muted);\n}\n\n.cr-native-scope .cr-button[data-variant='ghost']:hover:not(:disabled) {\n  background: var(--cr-surface-raised);\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-button[data-variant='danger'] {\n  background: var(--cr-danger);\n  color: var(--cr-on-danger);\n}\n\n.cr-native-scope .cr-icon-button {\n  display: inline-grid;\n  width: 40px;\n  height: 40px;\n  flex: 0 0 40px;\n  place-items: center;\n  padding: 0;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n  background: transparent;\n  color: var(--cr-text-muted);\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-icon-button:hover:not(:disabled) {\n  background: var(--cr-surface-raised);\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-icon-button:disabled {\n  cursor: not-allowed;\n  opacity: 0.55;\n}\n\n.cr-native-scope .cr-spinner {\n  width: 14px;\n  height: 14px;\n  border: 2px solid currentColor;\n  border-right-color: transparent;\n  border-radius: var(--cr-radius-pill);\n  animation: cr-spin 700ms linear infinite;\n}\n\n@keyframes cr-spin {\n  to {\n    transform: rotate(360deg);\n  }\n}\n\n/* Badges, skeleton, empty state */\n.cr-native-scope .cr-badge {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  padding: 2px 9px;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-pill);\n  color: var(--cr-text-muted);\n  font-family: var(--cr-font-mono);\n  font-size: 11px;\n  font-weight: 600;\n  letter-spacing: 0.02em;\n  line-height: 1.6;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-badge[data-tone='success'] {\n  border-color: color-mix(in srgb, var(--cr-success) 45%, var(--cr-border));\n  background: color-mix(in srgb, var(--cr-success) 10%, transparent);\n  color: var(--cr-success);\n}\n\n.cr-native-scope .cr-badge[data-tone='danger'] {\n  border-color: color-mix(in srgb, var(--cr-danger) 45%, var(--cr-border));\n  background: color-mix(in srgb, var(--cr-danger) 10%, transparent);\n  color: var(--cr-danger);\n}\n\n.cr-native-scope .cr-badge[data-tone='warning'] {\n  border-color: color-mix(in srgb, var(--cr-warning) 45%, var(--cr-border));\n  color: var(--cr-warning);\n}\n\n.cr-native-scope .cr-skeleton {\n  display: block;\n  overflow: hidden;\n  border-radius: var(--cr-radius-control);\n  background: var(--cr-surface-raised);\n  position: relative;\n}\n\n.cr-native-scope .cr-skeleton::after {\n  position: absolute;\n  inset: 0;\n  background: linear-gradient(\n    90deg,\n    transparent,\n    color-mix(in srgb, var(--cr-border) 30%, transparent),\n    transparent\n  );\n  animation: cr-shimmer 1200ms ease-in-out infinite;\n  content: '';\n  transform: translateX(-100%);\n}\n\n@keyframes cr-shimmer {\n  to {\n    transform: translateX(100%);\n  }\n}\n\n.cr-native-scope .cr-empty {\n  display: grid;\n  justify-items: center;\n  gap: var(--cr-space-3);\n  padding: var(--cr-space-12) var(--cr-space-6);\n  text-align: center;\n}\n\n.cr-native-scope .cr-empty-icon {\n  display: grid;\n  width: 48px;\n  height: 48px;\n  place-items: center;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface-raised);\n  color: var(--cr-text-muted);\n  font-family: var(--cr-font-mono);\n  font-size: 20px;\n}\n\n.cr-native-scope .cr-empty-title {\n  margin: 0;\n  font-size: 17px;\n  font-weight: 600;\n}\n\n.cr-native-scope .cr-empty-copy {\n  max-width: 46ch;\n  margin: 0;\n  color: var(--cr-text-muted);\n  font-size: 14px;\n}\n\n.cr-native-scope .cr-error-panel {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  justify-content: space-between;\n  gap: var(--cr-space-3);\n  padding: var(--cr-space-4);\n  border: 1px solid color-mix(in srgb, var(--cr-danger) 45%, var(--cr-border));\n  border-radius: var(--cr-radius-card);\n  background: color-mix(in srgb, var(--cr-danger) 8%, var(--cr-surface));\n}\n\n.cr-native-scope .cr-error-panel strong {\n  display: block;\n  font-size: 14px;\n}\n\n.cr-native-scope .cr-error-panel p {\n  margin: 2px 0 0;\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-meta);\n}\n\n/* Dialog, tabs, tooltip, toast */\n.cr-native-scope .cr-overlay {\n  position: fixed;\n  z-index: 40;\n  inset: 0;\n  display: grid;\n  place-items: center;\n  padding: var(--cr-space-4);\n  background: var(--cr-overlay);\n  animation: cr-fade var(--cr-motion-dialog) ease both;\n}\n\n.cr-native-scope .cr-dialog {\n  width: min(520px, 100%);\n  max-height: min(80vh, 720px);\n  overflow: auto;\n  overscroll-behavior: contain;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface);\n  box-shadow: var(--cr-shadow);\n  animation: cr-dialog-in var(--cr-motion-dialog) ease both;\n}\n\n.cr-native-scope .cr-dialog-head {\n  display: flex;\n  align-items: flex-start;\n  justify-content: space-between;\n  gap: var(--cr-space-4);\n  padding: var(--cr-space-5) var(--cr-space-5) var(--cr-space-3);\n}\n\n.cr-native-scope .cr-dialog-title {\n  margin: 0;\n  font-size: 18px;\n  font-weight: 650;\n  letter-spacing: -0.02em;\n}\n\n.cr-native-scope .cr-dialog-copy {\n  margin: var(--cr-space-2) 0 0;\n  color: var(--cr-text-muted);\n  font-size: 14px;\n}\n\n.cr-native-scope .cr-dialog-body {\n  display: grid;\n  gap: var(--cr-space-4);\n  padding: 0 var(--cr-space-5) var(--cr-space-5);\n  overscroll-behavior: contain;\n}\n\n.cr-native-scope .cr-dialog-actions {\n  display: flex;\n  flex-wrap: wrap;\n  justify-content: flex-end;\n  gap: var(--cr-space-2);\n  padding-top: var(--cr-space-2);\n}\n\n@keyframes cr-fade {\n  from {\n    opacity: 0;\n  }\n}\n\n@keyframes cr-dialog-in {\n  from {\n    opacity: 0;\n    transform: translateY(8px) scale(0.985);\n  }\n}\n\n.cr-native-scope .cr-tabs {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 2px;\n  border-bottom: 1px solid var(--cr-border);\n}\n\n.cr-native-scope .cr-tab {\n  position: relative;\n  min-height: 40px;\n  padding: 8px 12px;\n  border: 0;\n  border-radius: var(--cr-radius-control) var(--cr-radius-control) 0 0;\n  background: transparent;\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-control);\n  font-weight: 550;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-tab:hover {\n  background: var(--cr-surface-raised);\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-tab[aria-selected='true'] {\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-tab[aria-selected='true']::after {\n  position: absolute;\n  right: 8px;\n  bottom: -1px;\n  left: 8px;\n  height: 2px;\n  background: var(--cr-primary);\n  content: '';\n  transition: transform var(--cr-motion-tabs) ease;\n}\n\n.cr-native-scope .cr-tooltip-wrap {\n  position: relative;\n  display: inline-flex;\n}\n\n.cr-native-scope .cr-tooltip {\n  position: absolute;\n  z-index: 30;\n  bottom: calc(100% + 6px);\n  left: 50%;\n  width: max-content;\n  max-width: 240px;\n  padding: 5px 8px;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n  background: var(--cr-surface-raised);\n  color: var(--cr-text);\n  font-size: 12px;\n  line-height: 1.35;\n  opacity: 0;\n  pointer-events: none;\n  transform: translate(-50%, 2px);\n  transition:\n    opacity var(--cr-motion-press) ease,\n    transform var(--cr-motion-press) ease;\n}\n\n.cr-native-scope .cr-tooltip-wrap:hover .cr-tooltip,\n.cr-native-scope .cr-tooltip-wrap:focus-within .cr-tooltip,\n.cr-native-scope .cr-tooltip[data-open='true'] {\n  opacity: 1;\n  transform: translate(-50%, 0);\n}\n\n.cr-native-scope .cr-toast-region {\n  position: fixed;\n  z-index: 60;\n  right: var(--cr-space-4);\n  bottom: var(--cr-space-4);\n  display: grid;\n  width: min(380px, calc(100vw - 32px));\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-toast {\n  display: flex;\n  align-items: flex-start;\n  justify-content: space-between;\n  gap: var(--cr-space-3);\n  padding: var(--cr-space-3) var(--cr-space-4);\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface-raised);\n  box-shadow: var(--cr-shadow);\n  font-size: 14px;\n  animation: cr-toast-in var(--cr-motion-dialog) ease both;\n}\n\n.cr-native-scope .cr-toast[data-tone='danger'] {\n  border-color: color-mix(in srgb, var(--cr-danger) 55%, var(--cr-border));\n}\n\n@keyframes cr-toast-in {\n  from {\n    opacity: 0;\n    transform: translateY(8px);\n  }\n}\n\n/* Routes */\n.cr-native-scope .cr-auth-page,\n.cr-native-scope .cr-health-page,\n.cr-native-scope .cr-placeholder {\n  max-width: 720px;\n}\n\n.cr-native-scope .cr-code-block {\n  overflow: auto;\n  max-height: 60vh;\n  margin: 0;\n  padding: var(--cr-space-4);\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface);\n  font-family: var(--cr-font-mono);\n  font-size: var(--cr-text-code);\n  line-height: var(--cr-leading-code);\n  white-space: pre-wrap;\n}\n\n.cr-native-scope .cr-back {\n  display: inline-flex;\n  min-height: 40px;\n  align-items: center;\n  gap: 6px;\n  color: var(--cr-text-muted);\n  font-size: 14px;\n  text-decoration: none;\n}\n\n.cr-native-scope .cr-back:hover {\n  color: var(--cr-text);\n}\n\n/* Responsive shell */\n.cr-native-scope .cr-menu-button {\n  display: none;\n}\n\n@media (min-width: 1025px) {\n  .cr-native-scope .cr-shell[data-sidebar='collapsed'] {\n    --cr-sidebar: 76px;\n  }\n\n  .cr-native-scope .cr-shell[data-sidebar='collapsed'] .cr-sidebar {\n    align-items: center;\n    padding: var(--cr-space-4) var(--cr-space-1);\n  }\n\n  .cr-native-scope .cr-shell[data-sidebar='collapsed'] .cr-sidebar-head {\n    flex-direction: column;\n    width: 100%;\n    gap: var(--cr-space-3);\n  }\n\n  .cr-native-scope .cr-shell[data-sidebar='collapsed'] .cr-sidebar .cr-brand {\n    justify-content: center;\n    padding: 0;\n  }\n\n  .cr-native-scope .cr-shell[data-sidebar='collapsed'] .cr-sidebar .cr-brand-copy,\n  .cr-native-scope .cr-shell[data-sidebar='collapsed'] .cr-nav-label,\n  .cr-native-scope .cr-shell[data-sidebar='collapsed'] .cr-nav-text,\n  .cr-native-scope .cr-shell[data-sidebar='collapsed'] .cr-theme-label,\n  .cr-native-scope .cr-shell[data-sidebar='collapsed'] .cr-daemon span {\n    display: none;\n  }\n\n  .cr-native-scope .cr-shell[data-sidebar='collapsed'] .cr-nav {\n    justify-items: center;\n  }\n\n  .cr-native-scope .cr-shell[data-sidebar='collapsed'] .cr-nav-link {\n    width: 44px;\n    height: 44px;\n    justify-content: center;\n    padding: 0;\n  }\n\n  .cr-native-scope .cr-shell[data-sidebar='collapsed'] .cr-sidebar-footer {\n    align-self: stretch;\n    justify-items: center;\n  }\n\n  .cr-native-scope .cr-shell[data-sidebar='collapsed'] .cr-theme-row,\n  .cr-native-scope .cr-shell[data-sidebar='collapsed'] .cr-daemon {\n    justify-content: center;\n  }\n}\n\n@media (max-width: 1024px) {\n  .cr-native-scope .cr-sidebar-toggle {\n    display: none;\n  }\n\n  .cr-native-scope {\n    --cr-sidebar: 76px;\n  }\n\n  .cr-native-scope .cr-sidebar {\n    align-items: center;\n    padding: var(--cr-space-4) var(--cr-space-2);\n  }\n\n  .cr-native-scope .cr-brand {\n    padding: 0;\n  }\n\n  .cr-native-scope .cr-brand-copy,\n  .cr-native-scope .cr-nav-label,\n  .cr-native-scope .cr-nav-text,\n  .cr-native-scope .cr-sidebar-footer .cr-theme-label,\n  .cr-native-scope .cr-daemon span {\n    display: none;\n  }\n\n  .cr-native-scope .cr-nav-link {\n    width: 44px;\n    height: 44px;\n    justify-content: center;\n    padding: 0;\n  }\n\n  .cr-native-scope .cr-content {\n    padding: var(--cr-space-6) var(--cr-space-6) var(--cr-space-10);\n  }\n}\n\n@media (max-width: 768px) {\n  .cr-native-scope {\n    --cr-sidebar: 0px;\n  }\n\n  .cr-native-scope .cr-shell {\n    display: block;\n  }\n\n  .cr-native-scope .cr-sidebar {\n    position: fixed;\n    z-index: 50;\n    top: 0;\n    bottom: 0;\n    left: 0;\n    width: 280px;\n    height: 100dvh;\n    align-items: stretch;\n    padding: var(--cr-space-5) var(--cr-space-4);\n    border-right: 1px solid var(--cr-border);\n    transform: translateX(-100%);\n    transition: transform var(--cr-motion-collapse) ease;\n  }\n\n  .cr-native-scope .cr-shell[data-drawer='open'] .cr-sidebar {\n    transform: translateX(0);\n  }\n\n  .cr-native-scope .cr-brand-copy,\n  .cr-native-scope .cr-nav-label,\n  .cr-native-scope .cr-nav-text,\n  .cr-native-scope .cr-sidebar-footer .cr-theme-label,\n  .cr-native-scope .cr-daemon span {\n    display: initial;\n  }\n\n  .cr-native-scope .cr-nav-link {\n    width: auto;\n    height: auto;\n    justify-content: flex-start;\n    padding: var(--cr-space-2) var(--cr-space-3);\n  }\n\n  .cr-native-scope .cr-topbar {\n    display: flex;\n    position: sticky;\n    z-index: 20;\n    top: 0;\n  }\n\n  .cr-native-scope .cr-menu-button {\n    display: inline-grid;\n  }\n\n  .cr-native-scope .cr-content {\n    padding: var(--cr-space-5) var(--cr-space-4) var(--cr-space-10);\n  }\n\n  .cr-native-scope .cr-page-head {\n    align-items: stretch;\n    flex-direction: column;\n    gap: var(--cr-space-4);\n  }\n\n  .cr-native-scope .cr-list-head {\n    display: none;\n  }\n\n  .cr-native-scope .cr-review-group-path {\n    display: none;\n  }\n\n  .cr-native-scope .cr-review-row {\n    grid-template-columns: minmax(0, 1fr) auto;\n    gap: var(--cr-space-2) var(--cr-space-3);\n    align-items: start;\n    padding: var(--cr-space-4);\n  }\n\n  .cr-native-scope .cr-review-main {\n    grid-column: 1;\n    grid-row: 1;\n  }\n\n  .cr-native-scope .cr-review-row .cr-author {\n    display: none;\n  }\n\n  .cr-native-scope .cr-review-row .cr-age {\n    grid-column: 1;\n    grid-row: 2;\n  }\n\n  .cr-native-scope .cr-review-row .cr-badge {\n    grid-column: 2;\n    grid-row: 1;\n    justify-self: end;\n  }\n\n  .cr-native-scope .cr-review-row .cr-scope {\n    display: none;\n  }\n\n  .cr-native-scope .cr-review-row .cr-not-fixed {\n    grid-column: 2;\n    grid-row: 2;\n    justify-self: end;\n  }\n\n  .cr-native-scope .cr-form-grid {\n    grid-template-columns: minmax(0, 1fr);\n  }\n\n  .cr-native-scope .cr-form-card {\n    padding: var(--cr-space-4);\n  }\n}\n\n@media (max-width: 480px) {\n  .cr-native-scope .cr-content {\n    padding: var(--cr-space-4) var(--cr-space-3) var(--cr-space-8);\n  }\n\n  .cr-native-scope .cr-topbar {\n    padding: var(--cr-space-2) var(--cr-space-3);\n  }\n\n  .cr-native-scope .cr-page-title {\n    font-size: 25px;\n  }\n\n  .cr-native-scope .cr-toolbar {\n    flex-direction: column;\n    align-items: stretch;\n  }\n\n  .cr-native-scope .cr-toolbar > .cr-field,\n  .cr-native-scope .cr-toolbar > .cr-search {\n    position: relative;\n    flex: 0 0 auto;\n    min-width: 0;\n  }\n\n  .cr-native-scope .cr-search-icon {\n    position: absolute;\n    z-index: 1;\n    top: 50%;\n    left: 11px;\n    color: var(--cr-text-muted);\n    pointer-events: none;\n    transform: translateY(-50%);\n  }\n\n  .cr-native-scope .cr-search .cr-input {\n    padding-left: 34px;\n  }\n\n  .cr-native-scope .cr-toolbar > .cr-field-select {\n    flex-basis: auto;\n  }\n\n  .cr-native-scope .cr-review-row {\n    grid-template-columns: minmax(0, 1fr);\n  }\n\n  .cr-native-scope .cr-review-row .cr-badge,\n  .cr-native-scope .cr-review-row .cr-not-fixed {\n    grid-column: 1;\n    justify-self: start;\n  }\n\n  .cr-native-scope .cr-review-row .cr-badge {\n    grid-row: 3;\n  }\n\n  .cr-native-scope .cr-review-row .cr-not-fixed {\n    grid-row: 4;\n  }\n\n  .cr-native-scope .cr-page-actions,\n  .cr-native-scope .cr-form-actions {\n    flex-direction: column;\n    align-items: stretch;\n  }\n\n  .cr-native-scope .cr-page-actions .cr-button,\n  .cr-native-scope .cr-form-actions .cr-button {\n    width: 100%;\n  }\n\n  .cr-native-scope .cr-dialog {\n    max-height: 90vh;\n  }\n}\n\n@media (pointer: coarse) {\n  .cr-native-scope .cr-button,\n  .cr-native-scope .cr-icon-button,\n  .cr-native-scope .cr-nav-link,\n  .cr-native-scope .cr-input,\n  .cr-native-scope .cr-select {\n    min-height: 44px;\n  }\n\n  .cr-native-scope .cr-icon-button {\n    width: 44px;\n    height: 44px;\n    flex-basis: 44px;\n  }\n}\n\n.cr-native-scope .cr-drawer-backdrop {\n  position: fixed;\n  z-index: 45;\n  inset: 0;\n  display: none;\n  border: 0;\n  background: var(--cr-overlay);\n  cursor: default;\n}\n\n@media (max-width: 768px) {\n  .cr-native-scope .cr-shell[data-drawer='open'] .cr-drawer-backdrop {\n    display: block;\n  }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .cr-native-scope .cr-skeleton::after,\n  .cr-native-scope .cr-spinner,\n  .cr-native-scope .cr-overlay,\n  .cr-native-scope .cr-dialog,\n  .cr-native-scope .cr-toast,\n  .cr-native-scope .cr-skip-link,\n  .cr-native-scope .cr-review-row,\n  .cr-native-scope .cr-button,\n  .cr-native-scope .cr-nav-link,\n  .cr-native-scope .cr-tab {\n    animation: none;\n    transition: none;\n  }\n}\n\n/* ---------------------------------------------------------------------------\n * Review detail\n * ------------------------------------------------------------------------- */\n\n.cr-native-scope .cr-detail,\n.cr-native-scope .cr-detail-loading,\n.cr-native-scope .cr-detail-error {\n  min-width: 0;\n}\n\n.cr-native-scope .cr-detail-loading {\n  display: grid;\n  gap: var(--cr-space-4);\n}\n\n.cr-native-scope .cr-detail-header {\n  display: flex;\n  align-items: flex-start;\n  justify-content: space-between;\n  gap: var(--cr-space-6);\n  margin: var(--cr-space-4) 0 var(--cr-space-6);\n}\n\n.cr-native-scope .cr-detail-heading {\n  min-width: 0;\n}\n\n.cr-native-scope .cr-detail-eyebrow {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n  margin-bottom: var(--cr-space-2);\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-meta);\n}\n\n.cr-native-scope .cr-eyebrow-dot {\n  width: 3px;\n  height: 3px;\n  border-radius: 999px;\n  background: var(--cr-text-muted);\n}\n\n.cr-native-scope .cr-scope-separator {\n  color: var(--cr-text-muted);\n}\n\n.cr-native-scope .cr-detail-title {\n  overflow-wrap: anywhere;\n}\n\n.cr-native-scope .cr-detail-scope {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n  margin-top: var(--cr-space-3);\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-meta);\n}\n\n.cr-native-scope .cr-detail-actions {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  justify-content: flex-end;\n  gap: var(--cr-space-2);\n  flex: 0 0 auto;\n}\n\n.cr-native-scope .cr-round-pills {\n  display: inline-flex;\n  align-items: center;\n  gap: 2px;\n  padding: 3px;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-pill);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-round-pill {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  min-height: 30px;\n  padding: 2px 9px;\n  border: 0;\n  border-radius: var(--cr-radius-pill);\n  background: transparent;\n  color: var(--cr-text-muted);\n  font-family: var(--cr-font-mono);\n  font-size: 12px;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-round-pill:hover {\n  color: var(--cr-text);\n  background: var(--cr-surface-raised);\n}\n\n.cr-native-scope .cr-round-pill[aria-pressed='true'] {\n  background: var(--cr-primary);\n  color: var(--cr-on-primary);\n}\n\n.cr-native-scope .cr-round-count {\n  display: inline-grid;\n  min-width: 18px;\n  height: 18px;\n  place-items: center;\n  padding: 0 4px;\n  border-radius: 999px;\n  background: color-mix(in srgb, currentColor 16%, transparent);\n  font-family: var(--cr-font-ui);\n  font-size: 10px;\n  font-weight: 700;\n}\n\n.cr-native-scope .cr-banner {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: var(--cr-space-3);\n  margin-bottom: var(--cr-space-4);\n  padding: var(--cr-space-3) var(--cr-space-4);\n  border: 1px solid color-mix(in srgb, var(--cr-primary) 45%, var(--cr-border));\n  border-radius: var(--cr-radius-card);\n  background: color-mix(in srgb, var(--cr-primary) 10%, var(--cr-surface));\n  color: var(--cr-text);\n  font-size: var(--cr-text-control);\n}\n\n.cr-native-scope .cr-detail-grid {\n  display: grid;\n  grid-template-columns: minmax(0, 1fr) var(--cr-rail);\n  gap: var(--cr-space-5);\n  align-items: start;\n  min-width: 0;\n}\n\n.cr-native-scope .cr-detail-main {\n  min-width: 0;\n}\n\n.cr-native-scope .cr-detail-grid-wide {\n  grid-template-columns: minmax(0, 1fr);\n}\n\n.cr-native-scope .cr-detail-tabs {\n  display: flex;\n  gap: var(--cr-space-1);\n  overflow-x: auto;\n  border-bottom: 1px solid var(--cr-border);\n  scrollbar-width: thin;\n}\n\n.cr-native-scope .cr-detail-tabs .cr-tab {\n  min-height: 44px;\n  padding: 0 var(--cr-space-3);\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-tab-count {\n  display: inline-grid;\n  min-width: 19px;\n  height: 18px;\n  place-items: center;\n  margin-left: 6px;\n  padding: 0 5px;\n  border-radius: 999px;\n  background: var(--cr-surface-raised);\n  color: var(--cr-text-muted);\n  font-family: var(--cr-font-ui);\n  font-size: 10px;\n  font-weight: 700;\n}\n\n.cr-native-scope .cr-tab[aria-selected='true'] .cr-tab-count {\n  background: color-mix(in srgb, var(--cr-primary) 18%, transparent);\n  color: var(--cr-primary);\n}\n\n.cr-native-scope .cr-tab-panel {\n  padding-top: var(--cr-space-4);\n  outline: none;\n}\n\n.cr-native-scope .cr-section-head,\n.cr-native-scope .cr-card-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: var(--cr-space-3);\n  min-width: 0;\n}\n\n.cr-native-scope .cr-section-head {\n  margin-bottom: var(--cr-space-3);\n}\n\n.cr-native-scope .cr-card {\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-card-head {\n  margin-bottom: var(--cr-space-3);\n}\n\n.cr-native-scope .cr-card-title {\n  margin: 0;\n  color: var(--cr-text);\n  font-size: var(--cr-text-control);\n  font-weight: 650;\n  letter-spacing: -0.01em;\n}\n\n.cr-native-scope .cr-link-button {\n  display: inline-flex;\n  align-items: center;\n  min-height: 28px;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: var(--cr-primary);\n  font: inherit;\n  font-size: var(--cr-text-meta);\n  text-decoration: underline;\n  text-underline-offset: 3px;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-link-button:hover {\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-inline-actions {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-notice {\n  margin: var(--cr-space-3) 0 0;\n  padding: var(--cr-space-2) var(--cr-space-3);\n  border-left: 3px solid var(--cr-border);\n  border-radius: 0 var(--cr-radius-control) var(--cr-radius-control) 0;\n  background: var(--cr-surface-raised);\n  font-size: var(--cr-text-meta);\n}\n\n.cr-native-scope .cr-notice-warning {\n  border-left-color: var(--cr-warning);\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-notice-info {\n  border-left-color: var(--cr-primary);\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-rail {\n  display: grid;\n  gap: var(--cr-space-3);\n  min-width: 0;\n}\n\n.cr-native-scope .cr-rail-card {\n  padding: var(--cr-space-4);\n}\n\n.cr-native-scope .cr-rail-copy {\n  margin: 0;\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-control);\n  overflow-wrap: anywhere;\n}\n\n.cr-native-scope .cr-rail-meta {\n  display: flex;\n  flex-wrap: wrap;\n  gap: var(--cr-space-2);\n  margin-top: var(--cr-space-3);\n  color: var(--cr-text-muted);\n  font-size: 12px;\n}\n\n.cr-native-scope .cr-fix-grid {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 6px;\n}\n\n.cr-native-scope .cr-fix-cell {\n  display: grid;\n  gap: 2px;\n  min-height: 58px;\n  padding: var(--cr-space-2);\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n  background: var(--cr-bg);\n  color: var(--cr-text);\n  text-align: left;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-fix-cell:hover {\n  background: var(--cr-surface-raised);\n}\n\n.cr-native-scope .cr-fix-cell[aria-pressed='true'] {\n  border-color: var(--cr-primary);\n  box-shadow: inset 0 0 0 1px var(--cr-primary);\n}\n\n.cr-native-scope .cr-fix-cell[data-group='addressed'] .cr-fix-count {\n  color: var(--cr-success);\n}\n\n.cr-native-scope .cr-fix-cell[data-group='not-fixed'] .cr-fix-count {\n  color: var(--cr-danger);\n}\n\n.cr-native-scope .cr-fix-cell[data-group='outdated'] .cr-fix-count {\n  color: var(--cr-warning);\n}\n\n.cr-native-scope .cr-fix-count {\n  font-family: var(--cr-font-mono);\n  font-size: 20px;\n  font-weight: 650;\n  line-height: 1.1;\n}\n\n.cr-native-scope .cr-fix-label {\n  color: var(--cr-text-muted);\n  font-size: 11px;\n  line-height: 1.2;\n}\n\n.cr-native-scope .cr-fix-board .cr-link-button {\n  margin-top: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-fix-note {\n  margin: var(--cr-space-3) 0 0;\n}\n\n.cr-native-scope .cr-switch-row {\n  display: flex;\n  align-items: flex-start;\n  gap: var(--cr-space-2);\n  min-height: 40px;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-switch-row input {\n  width: 18px;\n  height: 18px;\n  margin: 2px 0 0;\n  accent-color: var(--cr-primary);\n}\n\n.cr-native-scope .cr-switch-row > span {\n  display: grid;\n  gap: 2px;\n  font-size: var(--cr-text-control);\n}\n\n.cr-native-scope .cr-delivery-details {\n  margin-top: var(--cr-space-2);\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-meta);\n}\n\n.cr-native-scope .cr-delivery-details summary {\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-shortcut-card .cr-link-button {\n  font-family: var(--cr-font-mono);\n  font-size: 16px;\n}\n\n/* Conversations */\n.cr-native-scope .cr-thread-list {\n  display: grid;\n  gap: var(--cr-space-3);\n  margin: 0;\n  padding: 0;\n  list-style: none;\n}\n\n/* Quoted code scrolls inside its own block; it must not widen the grid track. */\n.cr-native-scope .cr-thread-list > li {\n  min-width: 0;\n}\n\n.cr-native-scope .cr-thread {\n  min-width: 0;\n  padding: var(--cr-space-3);\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-thread-active {\n  border-color: var(--cr-primary);\n}\n\n.cr-native-scope .cr-thread-compact {\n  padding: var(--cr-space-3);\n  border-radius: var(--cr-radius-control);\n  background: var(--cr-bg);\n}\n\n.cr-native-scope .cr-thread-deleted {\n  border-style: dashed;\n  background: var(--cr-bg);\n}\n\n.cr-native-scope .cr-thread-tombstone {\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-control);\n  font-style: italic;\n}\n\n.cr-native-scope .cr-thread-delete-confirm {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n  margin-top: var(--cr-space-3);\n  padding-top: var(--cr-space-3);\n  border-top: 1px solid var(--cr-border);\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-control);\n}\n\n.cr-native-scope .cr-thread-head {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n  margin-bottom: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-thread-author {\n  font-size: var(--cr-text-control);\n  font-weight: 650;\n}\n\n.cr-native-scope .cr-avatar {\n  display: grid;\n  width: 24px;\n  height: 24px;\n  place-items: center;\n  border-radius: 999px;\n  background: var(--cr-surface-raised);\n  color: var(--cr-primary);\n  font-size: 11px;\n  font-weight: 700;\n}\n\n.cr-native-scope .cr-anchor-jump {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n  max-width: 100%;\n  min-height: 32px;\n  margin-bottom: var(--cr-space-2);\n  padding: 3px 7px;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n  background: var(--cr-bg);\n  color: var(--cr-text-muted);\n  font: inherit;\n  font-size: 12px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-anchor-jump:hover {\n  color: var(--cr-text);\n  border-color: var(--cr-primary);\n}\n\n.cr-native-scope .cr-anchor-path {\n  overflow: hidden;\n  max-width: 34ch;\n  font-family: var(--cr-font-mono);\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-anchor-line {\n  color: var(--cr-primary);\n  font-family: var(--cr-font-mono);\n}\n\n.cr-native-scope .cr-thread-body {\n  color: var(--cr-text);\n  font-size: var(--cr-text-control);\n  line-height: 1.55;\n  white-space: pre-wrap;\n  overflow-wrap: anywhere;\n}\n\n.cr-native-scope .cr-quote {\n  overflow: auto;\n  max-height: 220px;\n  margin: var(--cr-space-2) 0;\n  padding: var(--cr-space-2) var(--cr-space-3);\n  border-left: 3px solid var(--cr-border);\n  border-radius: 0 var(--cr-radius-control) var(--cr-radius-control) 0;\n  background: var(--cr-bg);\n  color: var(--cr-text-muted);\n  font-family: var(--cr-font-mono);\n  font-size: var(--cr-text-code);\n  line-height: var(--cr-leading-code);\n  white-space: pre;\n}\n\n.cr-native-scope .cr-suggestion {\n  margin-top: var(--cr-space-3);\n  padding: var(--cr-space-2);\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n  background: var(--cr-bg);\n}\n\n.cr-native-scope .cr-suggestion-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: var(--cr-space-2);\n  margin-bottom: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-suggestion-label {\n  color: var(--cr-text-muted);\n  font-size: 11px;\n  font-weight: 650;\n  letter-spacing: 0.06em;\n  text-transform: uppercase;\n}\n\n.cr-native-scope .cr-suggestion-block {\n  overflow: auto;\n  border-radius: var(--cr-radius-control);\n}\n\n.cr-native-scope .cr-suggestion-block + .cr-suggestion-block {\n  margin-top: 6px;\n}\n\n.cr-native-scope .cr-suggestion-block pre {\n  margin: 0;\n  padding: 6px 9px;\n  font-family: var(--cr-font-mono);\n  font-size: var(--cr-text-code);\n  line-height: var(--cr-leading-code);\n  white-space: pre;\n}\n\n.cr-native-scope .cr-suggestion-old {\n  border: 1px solid color-mix(in srgb, var(--cr-danger) 35%, var(--cr-border));\n  background: var(--cr-removed-bg);\n}\n\n.cr-native-scope .cr-suggestion-new {\n  border: 1px solid color-mix(in srgb, var(--cr-success) 35%, var(--cr-border));\n  background: var(--cr-added-bg);\n}\n\n.cr-native-scope .cr-suggestion-caption {\n  display: block;\n  padding: 2px 9px;\n  color: var(--cr-text-muted);\n  font-size: 10px;\n  font-weight: 650;\n  letter-spacing: 0.07em;\n  text-transform: uppercase;\n}\n\n.cr-native-scope .cr-replies {\n  display: grid;\n  gap: var(--cr-space-2);\n  margin: var(--cr-space-3) 0 0;\n  padding: 0 0 0 var(--cr-space-3);\n  border-left: 2px solid var(--cr-border);\n  list-style: none;\n}\n\n.cr-native-scope .cr-reply-head {\n  display: flex;\n  align-items: center;\n  gap: var(--cr-space-2);\n  font-size: 12px;\n}\n\n.cr-native-scope .cr-reply-body {\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-control);\n  white-space: pre-wrap;\n  overflow-wrap: anywhere;\n}\n\n.cr-native-scope .cr-thread-actions {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-1);\n  margin-top: var(--cr-space-3);\n}\n\n.cr-native-scope .cr-reply-form {\n  margin-top: var(--cr-space-3);\n  padding-top: var(--cr-space-3);\n  border-top: 1px solid var(--cr-border);\n}\n\n.cr-native-scope .cr-topic-thread {\n  display: grid;\n  gap: var(--cr-space-2);\n  min-width: 0;\n  margin-top: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-topic-thread-list {\n  display: grid;\n  gap: var(--cr-space-2);\n  margin: 0;\n  padding: 0;\n  list-style: none;\n}\n\n.cr-native-scope .cr-topic-thread-list > li {\n  min-width: 0;\n}\n\n.cr-native-scope .cr-topic-thread-actions,\n.cr-native-scope .cr-topic-thread-form-actions {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-topic-thread-form {\n  display: grid;\n  gap: var(--cr-space-2);\n  margin-top: var(--cr-space-1);\n  padding-top: var(--cr-space-2);\n  border-top: 1px solid var(--cr-border);\n}\n\n.cr-native-scope .cr-topic-thread-form .cr-meta {\n  margin: 0;\n}\n\n.cr-native-scope .cr-topic-thread-error {\n  margin: 0;\n  color: var(--cr-danger);\n  font-size: var(--cr-text-meta);\n}\n\n/* Diff */\n.cr-native-scope .cr-diff-layout {\n  display: grid;\n  grid-template-columns: 238px minmax(0, 1fr);\n  gap: var(--cr-space-3);\n  align-items: start;\n  min-width: 0;\n}\n\n.cr-native-scope .cr-file-tree {\n  position: sticky;\n  top: var(--cr-space-4);\n  overflow: auto;\n  max-height: calc(100vh - 80px);\n  padding: var(--cr-space-3);\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-file-tree-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  margin-bottom: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-file-tree .cr-field {\n  margin-bottom: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-file-tree-empty {\n  margin: var(--cr-space-2) 0;\n}\n\n.cr-native-scope .cr-tree {\n  display: grid;\n  gap: 2px;\n}\n\n.cr-native-scope .cr-tree-dir {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  width: 100%;\n  min-height: 28px;\n  padding: 2px 4px;\n  border: 0;\n  border-radius: var(--cr-radius-control);\n  background: transparent;\n  color: var(--cr-text-muted);\n  font: inherit;\n  font-size: 11px;\n  font-weight: 650;\n  text-align: left;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-tree-dir:hover {\n  color: var(--cr-text);\n  background: var(--cr-surface-raised);\n}\n\n.cr-native-scope .cr-tree-dir-name {\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-tree-file {\n  display: grid;\n  grid-template-columns: 16px minmax(0, 1fr) auto auto auto;\n  gap: 6px;\n  align-items: center;\n  width: 100%;\n  min-height: 30px;\n  padding: 2px 4px 2px 16px;\n  border: 0;\n  border-radius: var(--cr-radius-control);\n  background: transparent;\n  color: var(--cr-text-muted);\n  font: inherit;\n  font-size: 12px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-tree-file:hover {\n  background: var(--cr-surface-raised);\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-tree-file-active {\n  background: var(--cr-surface-raised);\n  color: var(--cr-text);\n  box-shadow: inset 2px 0 0 var(--cr-primary);\n}\n\n.cr-native-scope .cr-tree-path {\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-tree-status {\n  display: grid;\n  width: 15px;\n  height: 15px;\n  place-items: center;\n  border-radius: 3px;\n  font-family: var(--cr-font-mono);\n  font-size: 9px;\n  font-weight: 700;\n}\n\n.cr-native-scope .cr-tree-status-added,\n.cr-native-scope .cr-tree-status-untracked {\n  background: color-mix(in srgb, var(--cr-success) 16%, transparent);\n  color: var(--cr-success);\n}\n\n.cr-native-scope .cr-tree-status-deleted {\n  background: color-mix(in srgb, var(--cr-danger) 16%, transparent);\n  color: var(--cr-danger);\n}\n\n.cr-native-scope .cr-tree-status-renamed {\n  background: color-mix(in srgb, var(--cr-warning) 16%, transparent);\n  color: var(--cr-warning);\n}\n\n.cr-native-scope .cr-tree-status-modified {\n  background: var(--cr-surface-raised);\n  color: var(--cr-text-muted);\n}\n\n.cr-native-scope .cr-tree-stat {\n  color: var(--cr-text-muted);\n  font-family: var(--cr-font-mono);\n  font-size: 10px;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-diff-main {\n  min-width: 0;\n}\n\n.cr-native-scope .cr-conflict-banner {\n  margin-bottom: var(--cr-space-3);\n  padding: var(--cr-space-3) var(--cr-space-4);\n  border: 1px solid color-mix(in srgb, var(--cr-danger) 35%, var(--cr-border));\n  border-left: 4px solid var(--cr-danger);\n  border-radius: var(--cr-radius-card);\n  background: color-mix(in srgb, var(--cr-danger) 7%, var(--cr-surface));\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-conflict-banner strong {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: baseline;\n  gap: var(--cr-space-2);\n  font-size: var(--cr-text-control);\n}\n\n.cr-native-scope .cr-conflict-count {\n  color: var(--cr-danger);\n  font-family: var(--cr-font-mono);\n  font-size: var(--cr-text-meta);\n  font-weight: 500;\n}\n\n.cr-native-scope .cr-conflict-banner p {\n  margin: var(--cr-space-1) 0 var(--cr-space-2);\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-meta);\n}\n\n.cr-native-scope .cr-conflict-banner ul {\n  display: flex;\n  flex-wrap: wrap;\n  gap: var(--cr-space-1) var(--cr-space-3);\n  margin: 0;\n  padding: 0;\n  list-style: none;\n}\n\n.cr-native-scope .cr-conflict-banner li {\n  min-width: 0;\n}\n\n.cr-native-scope .cr-conflict-banner .cr-link-button {\n  max-width: 100%;\n  overflow: hidden;\n  font-family: var(--cr-font-mono);\n  font-size: var(--cr-text-meta);\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-tree-status-conflict {\n  background: color-mix(in srgb, var(--cr-danger) 18%, transparent);\n  color: var(--cr-danger);\n}\n\n.cr-native-scope .cr-diff-toolbar {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-3);\n  margin-bottom: var(--cr-space-3);\n  padding: var(--cr-space-2);\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-diff-delta-note {\n  display: inline-flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 2px 6px;\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-meta);\n}\n\n/* Full-file preview */\n\n.cr-native-scope .cr-dialog:has(.cr-file-view) {\n  display: flex;\n  width: min(1080px, 100%);\n  max-height: min(88vh, 900px);\n  flex-direction: column;\n  overflow: hidden;\n}\n\n.cr-native-scope .cr-dialog:has(.cr-file-view) .cr-dialog-head {\n  flex: 0 0 auto;\n}\n\n.cr-native-scope .cr-dialog:has(.cr-file-view) .cr-dialog-body {\n  min-height: 0;\n  overflow: auto;\n  overscroll-behavior: contain;\n}\n\n.cr-native-scope .cr-file-view {\n  display: grid;\n  min-width: 0;\n  gap: var(--cr-space-3);\n}\n\n.cr-native-scope .cr-file-view > .cr-segmented {\n  justify-self: start;\n}\n\n.cr-native-scope .cr-full-file {\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n  background: var(--cr-bg);\n  font-family: var(--cr-font-mono);\n  font-size: var(--cr-text-code);\n  line-height: var(--cr-leading-code);\n}\n\n.cr-native-scope .cr-full-file-head,\n.cr-native-scope .cr-full-file-line {\n  display: grid;\n  grid-template-columns: 58px 20px minmax(0, 1fr) 26px;\n  min-width: 0;\n  align-items: stretch;\n}\n\n.cr-native-scope .cr-full-file-head {\n  position: sticky;\n  z-index: 1;\n  top: 0;\n  border-bottom: 1px solid var(--cr-border);\n  background: var(--cr-surface);\n  color: var(--cr-text-muted);\n  font-family: var(--cr-font-sans);\n  font-size: 10px;\n  font-weight: 650;\n  letter-spacing: 0.08em;\n  text-transform: uppercase;\n}\n\n.cr-native-scope .cr-full-file-head > * {\n  padding: 6px 8px;\n}\n\n.cr-native-scope .cr-full-file-line {\n  min-height: 20px;\n  color: var(--cr-text);\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-full-file-line:focus-visible {\n  outline: 2px solid var(--cr-focus);\n  outline-offset: -2px;\n}\n\n.cr-native-scope .cr-full-file-line-selected {\n  background: color-mix(in srgb, var(--cr-primary) 18%, var(--cr-bg));\n}\n\n.cr-native-scope .cr-full-file-block + .cr-full-file-block .cr-full-file-line {\n  border-top: 1px solid color-mix(in srgb, var(--cr-border) 45%, transparent);\n}\n\n.cr-native-scope .cr-full-file-toolbar {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  justify-content: space-between;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-full-file-toolbar .cr-meta {\n  margin: 0;\n}\n\n.cr-native-scope .cr-full-file-thread-cell,\n.cr-native-scope .cr-full-file-composer-cell {\n  padding: var(--cr-space-2);\n  border-top: 1px solid var(--cr-border);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-full-file-thread-cell .cr-thread + .cr-thread {\n  margin-top: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-full-file-composer-cell {\n  background: var(--cr-surface-raised);\n}\n\n.cr-native-scope .cr-full-file-finding {\n  display: block;\n  font-family: var(--cr-font-ui);\n}\n\n.cr-native-scope .cr-full-file-finding .cr-inline-finding {\n  margin: 0;\n}\n\n.cr-native-scope .cr-full-file-finding .cr-inline-finding-head strong,\n.cr-native-scope .cr-full-file-finding .cr-inline-finding-rationale {\n  overflow-wrap: anywhere;\n}\n\n.cr-native-scope .cr-full-file-question {\n  display: block;\n  font-family: var(--cr-font-ui);\n}\n\n.cr-native-scope .cr-full-file-question .cr-inline-question {\n  margin: 0;\n}\n\n.cr-native-scope .cr-full-file-line-add {\n  background: var(--cr-added-bg);\n}\n\n.cr-native-scope .cr-full-file-line-del {\n  background: var(--cr-removed-bg);\n}\n\n.cr-native-scope .cr-full-file-no {\n  padding: 0 7px 0 3px;\n  border-right: 1px solid var(--cr-border);\n  color: var(--cr-text-muted);\n  font-size: 11px;\n  text-align: right;\n  user-select: none;\n}\n\n.cr-native-scope .cr-full-file-marker {\n  color: var(--cr-text-muted);\n  text-align: center;\n  user-select: none;\n}\n\n.cr-native-scope .cr-full-file-line-add .cr-full-file-marker {\n  color: var(--cr-success);\n}\n\n.cr-native-scope .cr-full-file-line-del .cr-full-file-marker {\n  color: var(--cr-danger);\n}\n\n.cr-native-scope .cr-full-file-code {\n  margin: 0;\n  padding: 0 10px;\n  overflow-wrap: anywhere;\n  tab-size: 2;\n  white-space: pre-wrap;\n}\n\n.cr-native-scope .cr-full-file-actions-cell {\n  display: flex;\n  min-width: 0;\n  align-items: center;\n  justify-content: center;\n}\n\n.cr-native-scope .cr-full-file-comment {\n  display: none;\n  width: 20px;\n  min-height: 18px;\n  padding: 0;\n  border: 0;\n  border-radius: 3px;\n  background: var(--cr-surface-raised);\n  color: var(--cr-primary);\n  font: inherit;\n  font-weight: 700;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-full-file-line:hover .cr-full-file-comment,\n.cr-native-scope .cr-full-file-line:focus-within .cr-full-file-comment,\n.cr-native-scope .cr-full-file-line-selected .cr-full-file-comment {\n  display: inline-block;\n}\n\n@media (pointer: coarse) {\n  .cr-native-scope .cr-full-file-head,\n  .cr-native-scope .cr-full-file-line {\n    grid-template-columns: 58px 20px minmax(0, 1fr) 40px;\n  }\n\n  .cr-native-scope .cr-full-file-comment {\n    display: inline-block;\n    width: 36px;\n    min-height: 36px;\n  }\n}\n\n.cr-native-scope .cr-full-file-more {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-segmented {\n  display: inline-flex;\n  padding: 2px;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n  background: var(--cr-bg);\n}\n\n.cr-native-scope .cr-segmented-button {\n  min-height: 30px;\n  padding: 2px 9px;\n  border: 0;\n  border-radius: 4px;\n  background: transparent;\n  color: var(--cr-text-muted);\n  font: inherit;\n  font-size: 12px;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-segmented-button:hover:not(:disabled) {\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-segmented-button[aria-pressed='true'] {\n  background: var(--cr-surface-raised);\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-segmented-button:disabled {\n  opacity: 0.45;\n  cursor: not-allowed;\n}\n\n.cr-native-scope .cr-diff-count,\n.cr-native-scope .cr-diff-scope-note {\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-shortcut-hint {\n  margin-left: auto;\n  font-family: var(--cr-font-mono);\n  font-size: 11px;\n}\n\n.cr-native-scope .cr-mobile-file-select {\n  display: none;\n}\n\n.cr-native-scope .cr-diff-files {\n  display: grid;\n  gap: var(--cr-space-3);\n  min-width: 0;\n}\n\n.cr-native-scope .cr-diff-file {\n  overflow: hidden;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-diff-file-active {\n  border-color: color-mix(in srgb, var(--cr-primary) 55%, var(--cr-border));\n}\n\n.cr-native-scope .cr-diff-file-head {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n  min-height: 42px;\n  padding: var(--cr-space-1) var(--cr-space-2);\n  border-bottom: 1px solid var(--cr-border);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-diff-full-file {\n  flex: 0 0 auto;\n}\n\n.cr-native-scope .cr-diff-collapse {\n  display: grid;\n  width: 26px;\n  height: 26px;\n  place-items: center;\n  border: 0;\n  border-radius: 4px;\n  background: transparent;\n  color: var(--cr-text-muted);\n  font-size: 16px;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-diff-collapse:hover {\n  background: var(--cr-surface-raised);\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-diff-path {\n  display: flex;\n  min-width: 0;\n  flex: 1 1 260px;\n  align-items: center;\n  gap: var(--cr-space-2);\n  padding: 2px 0;\n  border: 0;\n  background: transparent;\n  color: var(--cr-text);\n  font-family: var(--cr-font-mono);\n  font-size: 12px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-diff-path:hover .cr-diff-path-text {\n  text-decoration: underline;\n  text-underline-offset: 3px;\n}\n\n.cr-native-scope .cr-diff-path-text {\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-diff-stat {\n  font-family: var(--cr-font-mono);\n  font-size: 11px;\n}\n\n.cr-native-scope .cr-diff-stat-add {\n  color: var(--cr-success);\n}\n\n.cr-native-scope .cr-diff-stat-del {\n  color: var(--cr-danger);\n}\n\n.cr-native-scope .cr-diff-hash {\n  flex: 0 0 auto;\n  margin-left: auto;\n  font-family: var(--cr-font-mono);\n}\n\n.cr-native-scope .cr-diff-body {\n  overflow-x: auto;\n  min-width: 0;\n}\n\n.cr-native-scope .cr-diff-gutter-head {\n  display: grid;\n  grid-template-columns: 48px 48px 20px 22px minmax(0, 1fr);\n  min-width: 560px;\n  padding: 3px var(--cr-space-2);\n  border-bottom: 1px solid var(--cr-border);\n  color: var(--cr-text-muted);\n  font-family: var(--cr-font-mono);\n  font-size: 9px;\n  letter-spacing: 0.08em;\n  text-transform: uppercase;\n}\n\n.cr-native-scope .cr-hunk {\n  display: flex;\n  flex-wrap: wrap;\n  gap: var(--cr-space-2);\n  min-width: 560px;\n  padding: 4px var(--cr-space-2);\n  border-top: 1px solid var(--cr-border);\n  border-bottom: 1px solid var(--cr-border);\n  background: var(--cr-surface-raised);\n  color: var(--cr-text-muted);\n  font-family: var(--cr-font-mono);\n  font-size: 11px;\n}\n\n.cr-native-scope .cr-hunk-code {\n  color: var(--cr-info);\n}\n\n.cr-native-scope .cr-hunk-header {\n  overflow-wrap: anywhere;\n}\n\n.cr-native-scope .cr-diff-line {\n  position: relative;\n  display: grid;\n  grid-template-columns: 48px 48px 20px 22px minmax(0, 1fr) auto;\n  align-items: stretch;\n  min-width: 560px;\n  min-height: 20px;\n  color: var(--cr-text);\n  font-family: var(--cr-font-mono);\n  font-size: var(--cr-text-code);\n  line-height: var(--cr-leading-code);\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-diff-line:hover {\n  background: color-mix(in srgb, var(--cr-text) 5%, transparent);\n}\n\n.cr-native-scope .cr-diff-line:focus-visible {\n  outline: 2px solid var(--cr-focus);\n  outline-offset: -2px;\n}\n\n.cr-native-scope .cr-diff-line-add {\n  background: var(--cr-added-bg);\n}\n\n.cr-native-scope .cr-diff-line-del {\n  background: var(--cr-removed-bg);\n}\n\n.cr-native-scope .cr-diff-line-selected {\n  box-shadow: inset 2px 0 0 var(--cr-selection-accent);\n}\n\n.cr-native-scope .cr-diff-line-range {\n  background: var(--cr-selection-bg);\n}\n\n.cr-native-scope .cr-diff-line-drag {\n  background: var(--cr-selection-bg);\n  box-shadow: inset 2px 0 0 var(--cr-selection-accent);\n}\n\n.cr-native-scope .cr-diff-line-drag .cr-diff-no {\n  color: var(--cr-selection-accent);\n}\n\n.cr-native-scope .cr-diff-risk-cell {\n  display: grid;\n  place-items: center;\n  align-self: center;\n}\n\n.cr-native-scope .cr-diff-risk-pin {\n  position: relative;\n  display: grid;\n  width: 17px;\n  height: 17px;\n  padding: 0;\n  place-items: center;\n  border: 1px solid currentColor;\n  border-radius: 50%;\n  background: var(--cr-surface);\n  color: var(--cr-text-muted);\n  font-family: var(--cr-font-ui);\n  font-size: 9px;\n  font-weight: 800;\n  line-height: 1;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-diff-risk-pin:hover,\n.cr-native-scope .cr-diff-risk-pin:focus-visible {\n  outline: 2px solid currentColor;\n  outline-offset: 1px;\n}\n\n.cr-native-scope .cr-diff-risk-pin.cr-risk-blocker {\n  background: var(--cr-danger);\n  color: var(--cr-on-danger);\n  border-color: var(--cr-danger);\n}\n\n.cr-native-scope .cr-diff-risk-pin.cr-risk-major {\n  background: var(--cr-warning);\n  color: var(--cr-bg);\n  border-color: var(--cr-warning);\n}\n\n.cr-native-scope .cr-diff-risk-pin.cr-risk-minor {\n  background: var(--cr-info);\n  color: var(--cr-bg);\n  border-color: var(--cr-info);\n}\n\n.cr-native-scope .cr-diff-risk-pin.cr-risk-nit {\n  background: var(--cr-surface-raised);\n  color: var(--cr-text-muted);\n}\n\n.cr-native-scope .cr-diff-line-commented .cr-diff-comment-count {\n  display: inline-grid;\n}\n\n.cr-native-scope .cr-diff-no {\n  padding: 0 7px 0 3px;\n  border-right: 1px solid var(--cr-border);\n  color: var(--cr-text-muted);\n  font-size: 11px;\n  text-align: right;\n  user-select: none;\n}\n\n.cr-native-scope .cr-diff-marker {\n  color: var(--cr-text-muted);\n  text-align: center;\n  user-select: none;\n}\n\n.cr-native-scope .cr-diff-line-add .cr-diff-marker {\n  color: var(--cr-success);\n}\n\n.cr-native-scope .cr-diff-line-del .cr-diff-marker {\n  color: var(--cr-danger);\n}\n\n.cr-native-scope .cr-diff-text {\n  overflow: visible;\n  padding-right: var(--cr-space-2);\n  font-family: inherit;\n  white-space: pre;\n}\n\n.cr-native-scope .cr-diff-wrap .cr-diff-line,\n.cr-native-scope .cr-diff-wrap .cr-diff-gutter-head,\n.cr-native-scope .cr-diff-wrap .cr-hunk {\n  min-width: 0;\n}\n\n.cr-native-scope .cr-diff-wrap .cr-diff-text {\n  min-width: 0;\n  white-space: pre-wrap;\n  overflow-wrap: anywhere;\n}\n\n.cr-native-scope .cr-diff-wrap .cr-diff-body {\n  overflow-x: hidden;\n}\n\n.cr-native-scope .cr-diff-wrap .cr-quote,\n.cr-native-scope .cr-diff-wrap .cr-thread-body,\n.cr-native-scope .cr-diff-wrap .cr-reply-body {\n  overflow-wrap: anywhere;\n}\n\n.cr-native-scope .cr-diff-actions-cell {\n  display: flex;\n  min-width: 0;\n  align-items: center;\n  justify-content: flex-end;\n  gap: 3px;\n}\n\n.cr-native-scope .cr-diff-comment {\n  display: none;\n  width: 24px;\n  min-height: 20px;\n  padding: 0;\n  border: 0;\n  border-radius: 3px;\n  background: var(--cr-surface-raised);\n  color: var(--cr-primary);\n  font: inherit;\n  font-weight: 700;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-diff-line:hover .cr-diff-comment,\n.cr-native-scope .cr-diff-line:focus-within .cr-diff-comment,\n.cr-native-scope .cr-diff-line-selected .cr-diff-comment {\n  display: inline-block;\n}\n\n.cr-native-scope .cr-diff-comment-count {\n  display: none;\n  min-width: 18px;\n  height: 18px;\n  place-items: center;\n  align-self: center;\n  margin-right: 4px;\n  border-radius: 999px;\n  background: var(--cr-primary);\n  color: var(--cr-on-primary);\n  font-family: var(--cr-font-ui);\n  font-size: 10px;\n  font-weight: 700;\n}\n\n.cr-native-scope .cr-diff-line-commented .cr-diff-comment-count {\n  display: inline-grid;\n}\n\n.cr-native-scope .cr-inline-thread {\n  display: grid;\n  gap: var(--cr-space-2);\n  min-width: 0;\n  padding: var(--cr-space-2) var(--cr-space-3);\n  border-bottom: 1px solid var(--cr-border);\n  background: var(--cr-bg);\n}\n\n.cr-native-scope .cr-inline-composer {\n  min-width: 0;\n  padding: var(--cr-space-2) var(--cr-space-3) var(--cr-space-3);\n  border-bottom: 1px solid var(--cr-border);\n  background: var(--cr-bg);\n}\n\n.cr-native-scope .cr-inline-finding-row {\n  display: block;\n}\n\n.cr-native-scope .cr-inline-question-row {\n  display: block;\n}\n\n.cr-native-scope .cr-inline-thread-cell {\n  display: grid;\n  gap: var(--cr-space-2);\n  min-width: 0;\n}\n\n.cr-native-scope .cr-inline-finding {\n  display: block;\n  min-width: 0;\n  margin: 0;\n  padding: 0;\n  border: 0;\n  border-block: 1px solid var(--cr-border);\n  border-left: 2px solid var(--cr-warning);\n  border-radius: 0;\n  background: var(--cr-surface);\n  color: var(--cr-text);\n  font-family: var(--cr-font-ui);\n}\n\n.cr-native-scope .cr-inline-finding.cr-risk-blocker {\n  border-left-color: var(--cr-danger);\n}\n\n.cr-native-scope .cr-inline-finding.cr-risk-minor {\n  border-left-color: var(--cr-info);\n}\n\n.cr-native-scope .cr-inline-finding.cr-risk-nit {\n  border-left-color: var(--cr-text-muted);\n}\n\n.cr-native-scope .cr-inline-finding-header {\n  display: grid;\n  width: 100%;\n  min-width: 0;\n  grid-template-columns: 14px 22px minmax(0, 1fr);\n  align-items: start;\n  gap: var(--cr-space-2);\n  margin: 0;\n  padding: 5px 10px 6px;\n  border: 0;\n  background: transparent;\n  color: inherit;\n  font: inherit;\n  text-align: left;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-inline-finding-header:hover {\n  background: color-mix(in srgb, var(--cr-text) 4%, transparent);\n}\n\n.cr-native-scope .cr-inline-finding-header:focus-visible {\n  outline: 2px solid var(--cr-focus);\n  outline-offset: -2px;\n}\n\n.cr-native-scope .cr-inline-finding-toggle {\n  display: grid;\n  width: 14px;\n  height: 20px;\n  place-items: center;\n  color: var(--cr-text-muted);\n  font-size: 11px;\n  line-height: 1;\n}\n\n.cr-native-scope .cr-inline-finding-severity {\n  display: grid;\n  width: 22px;\n  height: 22px;\n  place-items: center;\n  border-radius: 50%;\n  background: var(--cr-warning);\n  color: var(--cr-bg);\n  font-size: 10px;\n  font-weight: 800;\n  line-height: 1;\n}\n\n.cr-native-scope .cr-inline-finding.cr-risk-blocker .cr-inline-finding-severity {\n  background: var(--cr-danger);\n  color: var(--cr-on-danger);\n}\n\n.cr-native-scope .cr-inline-finding.cr-risk-minor .cr-inline-finding-severity {\n  background: var(--cr-info);\n  color: var(--cr-bg);\n}\n\n.cr-native-scope .cr-inline-finding.cr-risk-nit .cr-inline-finding-severity {\n  background: var(--cr-surface-raised);\n  color: var(--cr-text-muted);\n}\n\n.cr-native-scope .cr-inline-finding-main {\n  display: grid;\n  gap: 0;\n  min-width: 0;\n}\n\n.cr-native-scope .cr-inline-finding-head {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: baseline;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-inline-finding-head strong {\n  font-size: var(--cr-text-control);\n}\n\n.cr-native-scope .cr-inline-finding-body {\n  padding: 0 10px 7px 62px;\n}\n\n.cr-native-scope .cr-inline-finding-rationale {\n  margin: 0;\n  color: var(--cr-text);\n  font-size: var(--cr-text-meta);\n  line-height: 1.5;\n}\n\n.cr-native-scope .cr-inline-finding-details {\n  min-width: 0;\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-meta);\n}\n\n.cr-native-scope .cr-inline-finding-details summary {\n  width: fit-content;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-inline-finding-evidence,\n.cr-native-scope .cr-inline-finding-suggestion pre {\n  max-width: 100%;\n  margin: var(--cr-space-2) 0 0;\n  overflow-x: auto;\n  padding: var(--cr-space-2);\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n  background: var(--cr-bg);\n  color: var(--cr-text);\n  font-family: var(--cr-font-mono);\n  font-size: 11px;\n  line-height: 1.45;\n  white-space: pre-wrap;\n  overflow-wrap: anywhere;\n}\n\n.cr-native-scope .cr-inline-finding-suggestion {\n  margin-top: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-inline-finding-actions {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-inline-question {\n  display: block;\n  width: 100%;\n  min-width: 0;\n  margin: 0;\n  padding: 5px 10px 6px;\n  border: 0;\n  border-block: 1px solid var(--cr-border);\n  border-left: 2px solid color-mix(in srgb, var(--cr-info) 70%, var(--cr-border));\n  border-radius: 0;\n  background: var(--cr-surface);\n  color: var(--cr-text);\n  font-family: var(--cr-font-ui);\n}\n\n.cr-native-scope .cr-inline-question-row {\n  display: flex;\n  min-width: 0;\n  align-items: center;\n  gap: 8px;\n}\n\n.cr-native-scope .cr-inline-question-header {\n  display: grid;\n  flex: 1;\n  min-width: 0;\n  grid-template-columns: 14px 18px minmax(0, 1fr);\n  align-items: center;\n  gap: 8px;\n  margin: 0;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: inherit;\n  font: inherit;\n  text-align: left;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-inline-question-header:hover {\n  background: color-mix(in srgb, var(--cr-text) 4%, transparent);\n}\n\n.cr-native-scope .cr-inline-question-header:focus-visible {\n  outline: 2px solid var(--cr-focus);\n  outline-offset: -2px;\n}\n\n.cr-native-scope .cr-inline-question-mark {\n  display: grid;\n  width: 18px;\n  height: 18px;\n  place-items: center;\n  border: 1px solid color-mix(in srgb, var(--cr-info) 45%, var(--cr-border));\n  border-radius: 50%;\n  background: color-mix(in srgb, var(--cr-info) 12%, var(--cr-surface));\n  color: color-mix(in srgb, var(--cr-info) 82%, var(--cr-text));\n  font-family: var(--cr-font-ui);\n  font-size: 11px;\n  font-weight: 800;\n  line-height: 1;\n}\n\n.cr-native-scope .cr-inline-question-main {\n  display: grid;\n  gap: 3px;\n  min-width: 0;\n}\n\n.cr-native-scope .cr-inline-question-head {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.cr-native-scope .cr-inline-question-head .cr-badge {\n  flex: none;\n}\n\n.cr-native-scope .cr-inline-question-head .cr-meta {\n  margin: 0;\n  font-size: 11px;\n}\n\n.cr-native-scope .cr-inline-question-toggle {\n  display: grid;\n  width: 14px;\n  height: 20px;\n  place-items: center;\n  color: var(--cr-text-muted);\n  font-size: 11px;\n  line-height: 1;\n}\n\n.cr-native-scope .cr-inline-question-cta {\n  min-height: 24px;\n  margin-left: auto;\n  padding: 2px 7px;\n  border: 1px solid color-mix(in srgb, var(--cr-info) 30%, var(--cr-border));\n  border-radius: var(--cr-radius-control);\n  background: color-mix(in srgb, var(--cr-info) 6%, transparent);\n  color: var(--cr-text);\n  font: inherit;\n  font-size: 11px;\n  font-weight: 650;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-inline-question-cta:hover {\n  background: color-mix(in srgb, var(--cr-info) 12%, transparent);\n}\n\n.cr-native-scope .cr-inline-question-cta:focus-visible {\n  outline: 2px solid var(--cr-focus);\n  outline-offset: 2px;\n}\n\n.cr-native-scope .cr-inline-question-text {\n  margin: 0;\n  color: var(--cr-text);\n  font-size: 13px;\n  font-weight: 600;\n  line-height: 1.45;\n  overflow-wrap: anywhere;\n}\n\n.cr-native-scope .cr-inline-question-body {\n  display: grid;\n  gap: 4px;\n  min-width: 0;\n  padding: 4px 0 0 48px;\n}\n\n.cr-native-scope .cr-inline-question-why {\n  margin: 0;\n  color: var(--cr-text-muted);\n  font-size: 12px;\n  line-height: 1.45;\n  overflow-wrap: anywhere;\n}\n\n.cr-native-scope .cr-inline-question-why .cr-meta {\n  font-size: 11px;\n}\n\n.cr-native-scope .cr-inline-question .cr-topic-thread {\n  margin-top: 4px;\n  padding-top: 6px;\n  border-top: 1px solid color-mix(in srgb, var(--cr-info) 18%, var(--cr-border));\n}\n\n.cr-native-scope .cr-inline-question .cr-topic-thread-list {\n  gap: 0;\n}\n\n.cr-native-scope .cr-inline-question .cr-topic-thread-list > li + li {\n  border-top: 1px solid color-mix(in srgb, var(--cr-info) 14%, var(--cr-border));\n}\n\n.cr-native-scope .cr-inline-question .cr-thread-compact {\n  padding: 7px 0;\n  border: 0;\n  border-radius: 0;\n  background: transparent;\n}\n\n.cr-native-scope .cr-inline-question .cr-thread-actions {\n  margin-top: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-inline-question .cr-reply-form {\n  margin-top: var(--cr-space-2);\n  padding-top: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-finding-decision {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: flex-start;\n  justify-content: space-between;\n  gap: var(--cr-space-2);\n  margin-top: var(--cr-space-3);\n  padding-top: var(--cr-space-3);\n  border-top: 1px solid var(--cr-border);\n}\n\n.cr-native-scope .cr-finding-decision-status {\n  display: flex;\n  flex: 1 1 220px;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n  min-width: 0;\n}\n\n.cr-native-scope .cr-finding-decision-note {\n  flex: 1 1 100%;\n  margin: 0;\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-control);\n  overflow-wrap: anywhere;\n}\n\n.cr-native-scope .cr-finding-decision-note-label {\n  color: var(--cr-text);\n  font-weight: 600;\n}\n\n.cr-native-scope .cr-finding-decision-actions {\n  display: flex;\n  flex-wrap: wrap;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-finding-decision .cr-button[aria-pressed='true'] {\n  border-color: var(--cr-primary);\n  color: var(--cr-primary);\n  box-shadow: inset 0 0 0 1px var(--cr-primary);\n}\n\n.cr-native-scope .cr-finding-decision-editor {\n  display: grid;\n  flex: 1 1 100%;\n  gap: var(--cr-space-2);\n  margin-top: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-finding-decision-editor .cr-field {\n  margin: 0;\n}\n\n.cr-native-scope .cr-finding-decision-editor .cr-textarea {\n  min-height: 84px;\n}\n\n.cr-native-scope .cr-finding-decision-editor-actions {\n  display: flex;\n  flex-wrap: wrap;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-finding-decision-error {\n  color: var(--cr-danger);\n  font-size: var(--cr-text-meta);\n  margin: 0;\n}\n\n.cr-native-scope .cr-diff-empty,\n.cr-native-scope .cr-diff-placeholder,\n.cr-native-scope .cr-diff-more,\n.cr-native-scope .cr-diff-loading {\n  padding: var(--cr-space-4);\n}\n\n.cr-native-scope .cr-diff-empty {\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-control);\n}\n\n.cr-native-scope .cr-diff-placeholder {\n  display: grid;\n  gap: 6px;\n}\n\n.cr-native-scope .cr-diff-more {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-3);\n  border-top: 1px solid var(--cr-border);\n}\n\n.cr-native-scope .cr-diff-loading {\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface);\n}\n\n/* Composer */\n.cr-native-scope .cr-composer {\n  padding: var(--cr-space-3);\n  border: 1px solid var(--cr-primary);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-composer-head {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: baseline;\n  justify-content: space-between;\n  gap: var(--cr-space-2);\n  margin-bottom: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-composer-title {\n  font-size: var(--cr-text-control);\n  font-weight: 650;\n}\n\n.cr-native-scope .cr-composer-range {\n  display: grid;\n  grid-template-columns: minmax(0, 120px) minmax(0, 120px);\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-draft-note {\n  margin: 0 0 var(--cr-space-2);\n  padding: 8px 10px;\n  border: 1px solid color-mix(in srgb, var(--cr-info) 35%, var(--cr-border));\n  border-radius: var(--cr-radius-control);\n  background: color-mix(in srgb, var(--cr-info) 8%, var(--cr-surface));\n  color: var(--cr-text-muted);\n  font-size: 12px;\n  line-height: 1.45;\n}\n\n.cr-native-scope .cr-composer-suggestion {\n  display: grid;\n  gap: var(--cr-space-2);\n  margin-top: var(--cr-space-2);\n  padding-top: var(--cr-space-2);\n  border-top: 1px solid var(--cr-border);\n}\n\n.cr-native-scope .cr-suggestion-preview {\n  display: grid;\n  gap: 6px;\n}\n\n.cr-native-scope .cr-composer-actions {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n  margin-top: var(--cr-space-3);\n}\n\n.cr-native-scope .cr-composer-actions .cr-meta {\n  margin-left: auto;\n}\n\n.cr-native-scope .cr-check {\n  display: flex;\n  align-items: center;\n  gap: var(--cr-space-2);\n  min-height: 36px;\n  color: var(--cr-text);\n  font-size: var(--cr-text-control);\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-check input {\n  width: 18px;\n  height: 18px;\n  margin: 0;\n  accent-color: var(--cr-primary);\n}\n\n/* Report and signals */\n.cr-native-scope .cr-report {\n  display: grid;\n  gap: var(--cr-space-4);\n}\n\n.cr-native-scope .cr-report-summary {\n  padding: var(--cr-space-4);\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-report-summary-head {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-report-copy {\n  margin: var(--cr-space-3) 0;\n  color: var(--cr-text);\n  font-size: var(--cr-text-body);\n  line-height: 1.55;\n  white-space: pre-wrap;\n}\n\n.cr-native-scope .cr-report-copy,\n.cr-native-scope .cr-rail-copy {\n  max-height: var(--cr-summary-max-height);\n  padding-right: var(--cr-space-2);\n  overflow-y: auto;\n  overflow-wrap: anywhere;\n  overscroll-behavior: contain;\n  scrollbar-gutter: stable;\n  scrollbar-width: thin;\n}\n\n.cr-native-scope .cr-report-transferred {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n  margin: 0 0 var(--cr-space-3);\n}\n\n.cr-native-scope .cr-report-counts {\n  display: flex;\n  flex-wrap: wrap;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-report-warnings,\n.cr-native-scope .cr-report-warnings li {\n  margin: var(--cr-space-2) 0 0;\n  padding-left: var(--cr-space-4);\n  color: var(--cr-warning);\n  font-size: var(--cr-text-meta);\n}\n\n.cr-native-scope .cr-report-toolbar {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: flex-end;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-report-toolbar .cr-field {\n  width: 170px;\n}\n\n.cr-native-scope .cr-multi-select {\n  position: relative;\n  display: grid;\n  gap: 6px;\n  width: 170px;\n  min-width: 0;\n}\n\n.cr-native-scope .cr-multi-select-trigger {\n  display: flex;\n  width: 100%;\n  min-height: 44px;\n  align-items: center;\n  justify-content: space-between;\n  gap: var(--cr-space-2);\n  padding: 8px 10px;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n  background: var(--cr-bg);\n  color: var(--cr-text);\n  font-size: var(--cr-text-control);\n  line-height: var(--cr-leading-control);\n  text-align: left;\n  cursor: pointer;\n  transition:\n    border-color var(--cr-motion-press) ease,\n    background var(--cr-motion-press) ease;\n}\n\n.cr-native-scope .cr-multi-select-trigger:hover {\n  border-color: var(--cr-text-muted);\n}\n\n.cr-native-scope .cr-multi-select-trigger:focus-visible {\n  border-color: var(--cr-primary);\n  outline: 2px solid var(--cr-focus);\n  outline-offset: 2px;\n}\n\n.cr-native-scope .cr-multi-select-trigger[aria-expanded='true'] {\n  border-color: var(--cr-primary);\n}\n\n.cr-native-scope .cr-multi-select-trigger:disabled {\n  cursor: not-allowed;\n  opacity: 0.55;\n}\n\n.cr-native-scope .cr-multi-select-trigger > span:first-child {\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-multi-select-chevron {\n  flex: none;\n  color: var(--cr-text-muted);\n  font-size: 11px;\n}\n\n.cr-native-scope .cr-multi-select-menu {\n  position: absolute;\n  z-index: 20;\n  top: calc(100% + 4px);\n  left: 0;\n  display: none;\n  width: max(100%, 220px);\n  max-height: 300px;\n  overflow: auto;\n  padding: 6px;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface);\n  box-shadow: var(--cr-shadow);\n}\n\n.cr-native-scope .cr-multi-select[data-open] .cr-multi-select-menu {\n  display: grid;\n  gap: 1px;\n}\n\n.cr-native-scope .cr-multi-select-option {\n  min-height: 40px;\n  padding: 4px 8px;\n  border-radius: var(--cr-radius-control);\n}\n\n.cr-native-scope .cr-multi-select-option:hover {\n  background: var(--cr-surface-raised);\n}\n\n.cr-native-scope .cr-report-selection {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n  margin-top: var(--cr-space-2);\n  padding: var(--cr-space-2) var(--cr-space-3);\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n  background: var(--cr-surface-raised);\n}\n\n.cr-native-scope .cr-report-select-all {\n  margin-right: var(--cr-space-1);\n}\n\n.cr-native-scope .cr-report-bulk-actions {\n  display: flex;\n  flex-wrap: wrap;\n  gap: var(--cr-space-2);\n  margin-left: auto;\n}\n\n@media (max-width: 720px) {\n  .cr-native-scope .cr-report-bulk-actions {\n    width: 100%;\n    margin-left: 0;\n  }\n}\n\n.cr-native-scope .cr-findings {\n  display: grid;\n  gap: var(--cr-space-3);\n  margin: 0;\n  padding: 0;\n  list-style: none;\n}\n\n.cr-native-scope .cr-report-browser {\n  min-width: 0;\n  overflow: hidden;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-report-tabs > .cr-tabs {\n  padding: 0 var(--cr-space-4);\n  background: var(--cr-surface-raised);\n}\n\n.cr-native-scope .cr-report-tabs > [role='tabpanel'] {\n  min-width: 0;\n}\n\n.cr-native-scope .cr-report-issues {\n  display: grid;\n  gap: var(--cr-space-3);\n  padding: var(--cr-space-4);\n}\n\n.cr-native-scope .cr-report-questions {\n  display: grid;\n  gap: var(--cr-space-3);\n  padding: var(--cr-space-4);\n  overflow-wrap: anywhere;\n}\n\n.cr-native-scope .cr-report-scroll {\n  height: clamp(20rem, 58vh, 46rem);\n  padding: var(--cr-space-4);\n  overflow-x: hidden;\n  overflow-y: auto;\n  border-block: 1px solid var(--cr-border);\n  overscroll-behavior: contain;\n  scrollbar-gutter: stable;\n  scrollbar-width: thin;\n}\n\n.cr-native-scope .cr-report-scroll .cr-findings,\n.cr-native-scope .cr-report-scroll .cr-question-list {\n  margin: 0;\n  padding: 0;\n}\n\n.cr-native-scope .cr-report-pagination {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  justify-content: space-between;\n  gap: var(--cr-space-2);\n  padding-block: var(--cr-space-1);\n}\n\n.cr-native-scope .cr-report-pagination-actions {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-finding {\n  min-width: 0;\n  max-width: 100%;\n  padding: var(--cr-space-4);\n  overflow-wrap: anywhere;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-finding-collapsed {\n  padding-block: var(--cr-space-3);\n}\n\n.cr-native-scope .cr-finding-collapsed .cr-finding-head {\n  margin-bottom: var(--cr-space-1);\n}\n\n.cr-native-scope .cr-finding-collapsed .cr-finding-title {\n  margin-bottom: 0;\n}\n\n.cr-native-scope .cr-finding-toggle {\n  display: grid;\n  width: 16px;\n  height: 20px;\n  padding: 0;\n  place-items: center;\n  border: 0;\n  background: transparent;\n  color: var(--cr-text-muted);\n  font: inherit;\n  font-size: 11px;\n  line-height: 1;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-finding-toggle:hover,\n.cr-native-scope .cr-finding-toggle:focus-visible {\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-finding-toggle:focus-visible {\n  outline: 2px solid var(--cr-focus);\n  outline-offset: 1px;\n}\n\n.cr-native-scope .cr-finding-body {\n  display: grid;\n  gap: var(--cr-space-2);\n  min-width: 0;\n}\n\n.cr-native-scope .cr-finding-item {\n  min-width: 0;\n  max-width: 100%;\n  list-style: none;\n}\n\n.cr-native-scope .cr-finding-item:focus-visible {\n  outline: 2px solid var(--cr-focus);\n  outline-offset: 2px;\n  border-radius: var(--cr-radius-card);\n}\n\n.cr-native-scope .cr-finding:focus-visible {\n  outline: 2px solid var(--cr-focus);\n  outline-offset: 2px;\n}\n\n.cr-native-scope .cr-finding-head {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n  min-width: 0;\n  margin-bottom: var(--cr-space-2);\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-finding-select {\n  flex: 0 0 auto;\n  width: 18px;\n  height: 18px;\n  margin: 0;\n  accent-color: var(--cr-primary);\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-finding-selected {\n  border-color: var(--cr-primary);\n  box-shadow: inset 0 0 0 1px var(--cr-primary);\n}\n\n.cr-native-scope .cr-finding-location {\n  min-width: 0;\n  padding: 0;\n  overflow-wrap: anywhere;\n  border: 0;\n  background: transparent;\n  color: var(--cr-primary);\n  font-family: var(--cr-font-mono);\n  font-size: 12px;\n  text-decoration: underline;\n  text-underline-offset: 3px;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-finding-title {\n  margin: 0 0 var(--cr-space-2);\n  font-size: var(--cr-text-control);\n  font-weight: 650;\n}\n\n.cr-native-scope .cr-finding-copy {\n  margin: 0;\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-control);\n  white-space: pre-wrap;\n  overflow-wrap: anywhere;\n}\n\n.cr-native-scope .cr-evidence {\n  max-width: 100%;\n  overflow: auto;\n  overflow-wrap: anywhere;\n  max-height: 280px;\n  margin: var(--cr-space-3) 0 0;\n  padding: var(--cr-space-2) var(--cr-space-3);\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n  background: var(--cr-bg);\n  color: var(--cr-text-muted);\n  font-family: var(--cr-font-mono);\n  font-size: var(--cr-text-code);\n  line-height: var(--cr-leading-code);\n  white-space: pre-wrap;\n}\n\n.cr-native-scope .cr-report-section {\n  padding: var(--cr-space-4);\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-question-list,\n.cr-native-scope .cr-verification-list,\n.cr-native-scope .cr-test-list {\n  display: grid;\n  gap: var(--cr-space-2);\n  margin: var(--cr-space-3) 0 0;\n  padding: 0;\n  list-style: none;\n}\n\n.cr-native-scope .cr-question-list li,\n.cr-native-scope .cr-verification-list li,\n.cr-native-scope .cr-test-list li {\n  display: flex;\n  min-width: 0;\n  flex-wrap: wrap;\n  align-items: baseline;\n  gap: var(--cr-space-2);\n  padding-bottom: var(--cr-space-2);\n  border-bottom: 1px solid var(--cr-border);\n}\n\n.cr-native-scope .cr-question-list li:last-child,\n.cr-native-scope .cr-verification-list li:last-child,\n.cr-native-scope .cr-test-list li:last-child {\n  border-bottom: 0;\n  padding-bottom: 0;\n}\n\n.cr-native-scope .cr-question-list p {\n  flex-basis: 100%;\n  margin: 0;\n}\n\n.cr-native-scope .cr-question-list > li {\n  align-items: flex-start;\n}\n\n.cr-native-scope .cr-question-list .cr-topic-thread {\n  flex-basis: 100%;\n  width: 100%;\n  margin-top: 6px;\n  padding-top: 8px;\n  border-top: 1px solid var(--cr-border);\n}\n\n.cr-native-scope .cr-finding-item > .cr-topic-thread {\n  margin: 8px var(--cr-space-4) 0;\n  padding-top: 8px;\n  border-top: 1px solid var(--cr-border);\n}\n\n.cr-native-scope .cr-signals {\n  display: grid;\n  gap: var(--cr-space-3);\n}\n\n.cr-native-scope .cr-signals-head {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: baseline;\n  justify-content: space-between;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-signals-note {\n  margin: 0;\n}\n\n.cr-native-scope .cr-signal-list {\n  display: grid;\n  gap: var(--cr-space-2);\n  margin: 0;\n  padding: 0;\n  list-style: none;\n}\n\n.cr-native-scope .cr-signal {\n  display: grid;\n  grid-template-columns: 18px minmax(0, 1fr) auto;\n  gap: var(--cr-space-3);\n  align-items: start;\n  padding: var(--cr-space-3);\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-card);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-signal[data-tone='danger'] {\n  border-left: 3px solid var(--cr-danger);\n}\n\n.cr-native-scope .cr-signal[data-tone='warning'] {\n  border-left: 3px solid var(--cr-warning);\n}\n\n.cr-native-scope .cr-signal[data-tone='info'] {\n  border-left: 3px solid var(--cr-info);\n}\n\n.cr-native-scope .cr-signal-mark {\n  color: var(--cr-text-muted);\n  font-size: 14px;\n  line-height: 1.3;\n}\n\n.cr-native-scope .cr-signal-main {\n  min-width: 0;\n}\n\n.cr-native-scope .cr-signal-title-row {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-signal-main p {\n  margin: 2px 0 0;\n  overflow-wrap: anywhere;\n}\n\n.cr-native-scope .cr-signal .cr-link-button {\n  overflow-wrap: anywhere;\n}\n\n/* Submit / refresh / shortcuts */\n.cr-native-scope .cr-submit {\n  display: grid;\n  gap: var(--cr-space-3);\n}\n\n.cr-native-scope .cr-recipient-warning {\n  padding: var(--cr-space-3);\n  border: 1px solid color-mix(in srgb, var(--cr-warning) 45%, var(--cr-border));\n  border-radius: var(--cr-radius-control);\n  background: color-mix(in srgb, var(--cr-warning) 9%, var(--cr-surface));\n}\n\n.cr-native-scope .cr-recipient-warning p {\n  margin: 4px 0 0;\n  color: var(--cr-text-muted);\n  font-size: var(--cr-text-meta);\n}\n\n.cr-native-scope .cr-verdict-field {\n  margin: 0;\n  padding: 0;\n  border: 0;\n}\n\n.cr-native-scope .cr-verdict-options {\n  display: grid;\n  gap: var(--cr-space-2);\n  margin-top: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-verdict-option {\n  display: flex;\n  align-items: flex-start;\n  gap: var(--cr-space-2);\n  min-height: 44px;\n  padding: var(--cr-space-2);\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-verdict-option:has(input:checked) {\n  border-color: var(--cr-primary);\n  background: color-mix(in srgb, var(--cr-primary) 8%, transparent);\n}\n\n.cr-native-scope .cr-verdict-option input {\n  width: 18px;\n  height: 18px;\n  margin: 2px 0 0;\n  accent-color: var(--cr-primary);\n}\n\n.cr-native-scope .cr-verdict-option > span {\n  display: grid;\n  gap: 1px;\n}\n\n.cr-native-scope .cr-submit-counts {\n  display: flex;\n  flex-wrap: wrap;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-tree-risk {\n  display: grid;\n  min-width: 18px;\n  height: 18px;\n  padding: 0 4px;\n  place-items: center;\n  border: 1px solid currentColor;\n  border-radius: var(--cr-radius-pill);\n  background: var(--cr-surface);\n  font-family: var(--cr-font-ui);\n  font-size: 10px;\n  font-weight: 750;\n}\n\n.cr-native-scope .cr-tree-risk.cr-risk-blocker {\n  color: var(--cr-danger);\n}\n\n.cr-native-scope .cr-tree-risk.cr-risk-major {\n  color: var(--cr-warning);\n}\n\n.cr-native-scope .cr-tree-risk.cr-risk-minor {\n  color: var(--cr-info);\n}\n\n.cr-native-scope .cr-tree-risk.cr-risk-nit {\n  color: var(--cr-text-muted);\n}\n\n.cr-native-scope .cr-tree-comments {\n  display: inline-grid;\n  min-width: 18px;\n  height: 18px;\n  place-items: center;\n  padding: 0 4px;\n  border-radius: 9px;\n  background: color-mix(in srgb, var(--cr-warning) 18%, transparent);\n  color: var(--cr-warning);\n  font-family: var(--cr-font-mono);\n  font-size: 10px;\n  font-weight: 700;\n}\n\n.cr-native-scope .cr-submit-pending {\n  display: grid;\n  gap: var(--cr-space-2);\n  padding-top: var(--cr-space-3);\n  border-top: 1px solid var(--cr-border);\n}\n\n.cr-native-scope .cr-submit-pending-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-submit-pending-head h3 {\n  margin: 0;\n  font-size: 13px;\n  font-weight: 650;\n}\n\n.cr-native-scope .cr-submit-pending-head span {\n  color: var(--cr-text-muted);\n  font-family: var(--cr-font-mono);\n  font-size: 11px;\n}\n\n.cr-native-scope .cr-submit-pending-list {\n  display: grid;\n  gap: 6px;\n  max-height: 220px;\n  margin: 0;\n  padding: 0;\n  overflow: auto;\n  list-style: none;\n}\n\n.cr-native-scope .cr-submit-pending-item {\n  display: grid;\n  gap: 2px;\n  width: 100%;\n  padding: 8px 10px;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n  background: var(--cr-surface);\n  color: var(--cr-text);\n  text-align: left;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-submit-pending-item:hover:not(:disabled),\n.cr-native-scope .cr-submit-pending-item:focus-visible {\n  border-color: var(--cr-primary);\n  background: color-mix(in srgb, var(--cr-primary) 7%, var(--cr-surface));\n}\n\n.cr-native-scope .cr-submit-pending-item:disabled {\n  cursor: default;\n}\n\n.cr-native-scope .cr-submit-pending-path {\n  color: var(--cr-text-muted);\n  font-size: 11px;\n}\n\n.cr-native-scope .cr-submit-pending-body {\n  display: -webkit-box;\n  overflow: hidden;\n  font-size: 12px;\n  line-height: 1.4;\n  -webkit-box-orient: vertical;\n  -webkit-line-clamp: 2;\n}\n\n.cr-native-scope .cr-refresh {\n  display: grid;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-refresh p {\n  margin: 0;\n}\n\n.cr-native-scope .cr-shortcut-list {\n  display: grid;\n  gap: var(--cr-space-2);\n  margin: 0;\n}\n\n.cr-native-scope .cr-shortcut-list > div {\n  display: grid;\n  grid-template-columns: 72px minmax(0, 1fr);\n  gap: var(--cr-space-2);\n  align-items: baseline;\n}\n\n.cr-native-scope .cr-shortcut-list dt,\n.cr-native-scope .cr-shortcut-list dd {\n  margin: 0;\n}\n\n.cr-native-scope .cr-shortcut-list kbd {\n  display: inline-block;\n  min-width: 26px;\n  padding: 2px 6px;\n  border: 1px solid var(--cr-border);\n  border-bottom-width: 2px;\n  border-radius: 4px;\n  background: var(--cr-bg);\n  color: var(--cr-text);\n  font-family: var(--cr-font-mono);\n  font-size: 11px;\n  text-align: center;\n}\n\n/* Detail responsive */\n@media (max-width: 1240px) {\n  .cr-native-scope .cr-detail-grid {\n    grid-template-columns: minmax(0, 1fr);\n  }\n\n  .cr-native-scope .cr-rail {\n    grid-template-columns: repeat(2, minmax(0, 1fr));\n  }\n\n  .cr-native-scope .cr-rail-card:first-child {\n    grid-column: 1 / -1;\n  }\n}\n\n@media (max-width: 1024px) {\n  .cr-native-scope .cr-diff-layout {\n    grid-template-columns: 210px minmax(0, 1fr);\n  }\n}\n\n@media (max-width: 900px) {\n  .cr-native-scope .cr-diff-layout {\n    grid-template-columns: minmax(0, 1fr);\n  }\n\n  .cr-native-scope .cr-file-tree {\n    position: static;\n    display: none;\n  }\n\n  .cr-native-scope .cr-mobile-file-select {\n    display: block;\n    flex: 1 1 180px;\n  }\n\n  .cr-native-scope .cr-mobile-file-select select {\n    width: 100%;\n    min-height: 38px;\n    padding: 6px 9px;\n    border: 1px solid var(--cr-border);\n    border-radius: var(--cr-radius-control);\n    background: var(--cr-bg);\n    color: var(--cr-text);\n    font-size: var(--cr-text-control);\n  }\n\n  .cr-native-scope .cr-shortcut-hint {\n    display: none;\n  }\n}\n\n@media (max-width: 768px) {\n  .cr-native-scope .cr-detail-header {\n    flex-direction: column;\n    gap: var(--cr-space-4);\n  }\n\n  .cr-native-scope .cr-detail-actions {\n    justify-content: flex-start;\n  }\n\n  .cr-native-scope .cr-detail-title {\n    font-size: 26px;\n  }\n\n  .cr-native-scope .cr-rail {\n    grid-template-columns: minmax(0, 1fr);\n  }\n\n  .cr-native-scope .cr-rail-card:first-child {\n    grid-column: auto;\n  }\n\n  .cr-native-scope .cr-inline-thread,\n  .cr-native-scope .cr-inline-composer {\n    padding-inline: var(--cr-space-3);\n    min-width: 0;\n  }\n\n  .cr-native-scope .cr-inline-finding,\n  .cr-native-scope .cr-inline-question {\n    margin-inline: 0;\n  }\n\n  .cr-native-scope .cr-signal {\n    grid-template-columns: 18px minmax(0, 1fr);\n  }\n\n  .cr-native-scope .cr-signal .cr-link-button {\n    grid-column: 2;\n    justify-self: start;\n  }\n\n  .cr-native-scope .cr-report-toolbar .cr-field,\n  .cr-native-scope .cr-report-toolbar .cr-multi-select {\n    width: min(100%, 220px);\n  }\n}\n\n@media (max-width: 520px) {\n  .cr-native-scope .cr-detail-header,\n  .cr-native-scope .cr-detail-eyebrow,\n  .cr-native-scope .cr-detail-scope {\n    overflow-wrap: anywhere;\n  }\n\n  .cr-native-scope .cr-detail-tabs {\n    flex-wrap: wrap;\n  }\n\n  .cr-native-scope .cr-detail-tabs .cr-tab {\n    flex: 1 1 45%;\n    justify-content: center;\n    min-width: 0;\n    padding: 0 8px;\n    font-size: 12.5px;\n  }\n\n  .cr-native-scope .cr-detail-tabs .cr-tab-count {\n    margin-left: 5px;\n    min-width: 17px;\n    padding: 0 4px;\n  }\n\n  .cr-native-scope .cr-detail-actions {\n    display: grid;\n    grid-template-columns: minmax(0, 1fr);\n    width: 100%;\n  }\n\n  .cr-native-scope .cr-detail-actions .cr-button {\n    width: 100%;\n  }\n\n  .cr-native-scope .cr-round-pills {\n    justify-content: flex-start;\n  }\n\n  .cr-native-scope .cr-diff-toolbar {\n    align-items: stretch;\n  }\n\n  .cr-native-scope .cr-diff-count,\n  .cr-native-scope .cr-diff-scope-note {\n    white-space: normal;\n  }\n\n  .cr-native-scope .cr-diff-file-head {\n    gap: 6px;\n  }\n\n  .cr-native-scope .cr-diff-hash {\n    display: none;\n  }\n\n  .cr-native-scope .cr-diff-gutter-head,\n  .cr-native-scope .cr-hunk,\n  .cr-native-scope .cr-diff-line,\n  .cr-native-scope .cr-inline-thread,\n  .cr-native-scope .cr-inline-composer {\n    min-width: 0;\n  }\n\n  .cr-native-scope .cr-diff-body {\n    overflow-x: auto;\n  }\n\n  .cr-native-scope .cr-diff-gutter-head {\n    grid-template-columns: 34px 34px 16px 22px minmax(0, 1fr);\n  }\n\n  .cr-native-scope .cr-diff-line {\n    grid-template-columns: 34px 34px 16px 22px minmax(0, 1fr) auto auto;\n    font-size: 11.5px;\n  }\n\n  .cr-native-scope .cr-inline-thread,\n  .cr-native-scope .cr-inline-composer {\n    padding-left: var(--cr-space-2);\n  }\n\n  .cr-native-scope .cr-composer-range {\n    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);\n  }\n\n  .cr-native-scope .cr-rail {\n    grid-template-columns: minmax(0, 1fr);\n  }\n\n  .cr-native-scope .cr-fix-grid {\n    grid-template-columns: repeat(2, minmax(0, 1fr));\n  }\n\n  .cr-native-scope .cr-thread-head {\n    gap: 6px;\n  }\n}\n\n@media (pointer: coarse) {\n  .cr-native-scope .cr-diff-line {\n    min-height: 44px;\n  }\n\n  .cr-native-scope .cr-diff-comment {\n    display: inline-block;\n    width: 44px;\n    height: 44px;\n  }\n\n  .cr-native-scope .cr-diff-risk-pin::before {\n    position: absolute;\n    inset: -14px;\n    content: '';\n  }\n\n  .cr-native-scope .cr-round-pill,\n  .cr-native-scope .cr-segmented-button,\n  .cr-native-scope .cr-tree-file,\n  .cr-native-scope .cr-tree-dir {\n    min-height: 44px;\n  }\n\n  .cr-native-scope .cr-diff-line:hover .cr-diff-comment {\n    display: inline-block;\n  }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .cr-native-scope .cr-round-pill,\n  .cr-native-scope .cr-segmented-button,\n  .cr-native-scope .cr-fix-cell,\n  .cr-native-scope .cr-tree-file,\n  .cr-native-scope .cr-tree-dir,\n  .cr-native-scope .cr-thread,\n  .cr-native-scope .cr-anchor-jump {\n    transition: none;\n  }\n}\n\n.cr-native-scope .cr-button[data-size='small'] {\n  min-height: 30px;\n  padding: 3px 9px;\n  font-size: 12px;\n}\n\n@media (max-width: 768px) {\n  .cr-native-scope .cr-topbar .cr-tooltip,\n  .cr-native-scope .cr-topbar .cr-tooltip-wrap:hover .cr-tooltip,\n  .cr-native-scope .cr-topbar .cr-tooltip-wrap:focus-within .cr-tooltip,\n  .cr-native-scope .cr-topbar .cr-tooltip[data-open='true'] {\n    left: auto;\n    right: 0;\n    transform: translateY(2px);\n  }\n\n  .cr-native-scope .cr-topbar .cr-tooltip-wrap:hover .cr-tooltip,\n  .cr-native-scope .cr-topbar .cr-tooltip-wrap:focus-within .cr-tooltip,\n  .cr-native-scope .cr-topbar .cr-tooltip[data-open='true'] {\n    transform: translateY(0);\n  }\n}\n\n.cr-native-scope .cr-detail-tabs {\n  scrollbar-width: none;\n}\n\n.cr-native-scope .cr-detail-tabs::-webkit-scrollbar {\n  display: none;\n}\n\n@media (max-width: 520px) {\n  .cr-native-scope .cr-detail-actions > .cr-badge {\n    justify-self: start;\n  }\n}\n\n@media (pointer: coarse) {\n  .cr-native-scope .cr-button[data-size='small'],\n  .cr-native-scope .cr-link-button {\n    min-height: 44px;\n  }\n}\n\n.cr-native-scope .cr-form-section-head {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: flex-start;\n  justify-content: space-between;\n  gap: var(--cr-space-3);\n}\n\n.cr-native-scope .cr-form-error-summary {\n  margin: 0;\n  padding: var(--cr-space-3);\n  border: 1px solid color-mix(in srgb, var(--cr-danger) 45%, var(--cr-border));\n  border-radius: var(--cr-radius-control);\n  background: color-mix(in srgb, var(--cr-danger) 9%, var(--cr-surface));\n  color: var(--cr-text);\n  font-size: var(--cr-text-control);\n}\n\n.cr-native-scope .cr-commits-fieldset {\n  display: grid;\n  gap: var(--cr-space-2);\n  min-width: 0;\n  margin: var(--cr-space-2) 0 0;\n  padding: var(--cr-space-3);\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n}\n\n.cr-native-scope .cr-radio {\n  display: flex;\n  align-items: flex-start;\n  gap: var(--cr-space-2);\n  min-height: 44px;\n  padding: 6px 4px;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-radio input {\n  width: 18px;\n  height: 18px;\n  margin: 2px 0 0;\n  accent-color: var(--cr-primary);\n}\n\n.cr-native-scope .cr-radio > span {\n  display: grid;\n  gap: 2px;\n}\n\n.cr-native-scope .cr-commit-picker {\n  display: grid;\n  gap: var(--cr-space-2);\n  padding-top: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-commit-list {\n  display: grid;\n  gap: 2px;\n  margin: 0;\n  padding: 0;\n  list-style: none;\n}\n\n.cr-native-scope .cr-commit-option {\n  display: grid;\n  grid-template-columns: 18px 72px minmax(0, 1fr) auto;\n  align-items: center;\n  gap: var(--cr-space-2);\n  min-height: 44px;\n  padding: 4px 6px;\n  border-radius: var(--cr-radius-control);\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-commit-option:hover {\n  background: color-mix(in srgb, var(--cr-text) 5%, transparent);\n}\n\n.cr-native-scope .cr-commit-option input {\n  width: 18px;\n  height: 18px;\n  margin: 0;\n  accent-color: var(--cr-primary);\n}\n\n.cr-native-scope .cr-commit-sha {\n  color: var(--cr-text-muted);\n  font-family: var(--cr-font-mono);\n  font-size: 12px;\n}\n\n.cr-native-scope .cr-commit-subject {\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-commit-author {\n  color: var(--cr-text-muted);\n  font-size: 12px;\n}\n\n.cr-native-scope .cr-settings-form {\n  display: grid;\n  gap: var(--cr-space-4);\n  max-width: 1040px;\n}\n\n.cr-native-scope .cr-settings-notice {\n  margin: 0;\n  padding: var(--cr-space-3);\n  border: 1px solid color-mix(in srgb, var(--cr-success) 45%, var(--cr-border));\n  border-radius: var(--cr-radius-control);\n  background: color-mix(in srgb, var(--cr-success) 8%, var(--cr-surface));\n  color: var(--cr-text);\n  font-size: var(--cr-text-control);\n}\n\n.cr-native-scope .cr-repo-list {\n  display: grid;\n  gap: var(--cr-space-3);\n  margin: 0;\n  padding: 0;\n  list-style: none;\n}\n\n.cr-native-scope .cr-repo-row {\n  display: grid;\n  grid-template-columns: minmax(0, 1fr) auto;\n  align-items: start;\n  gap: var(--cr-space-3);\n  padding: var(--cr-space-4);\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-repo-fields {\n  display: grid;\n  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 0.8fr);\n  gap: var(--cr-space-3);\n}\n\n.cr-native-scope .cr-path-control {\n  display: flex;\n  align-items: stretch;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-path-control .cr-input {\n  min-width: 0;\n  flex: 1 1 auto;\n}\n\n.cr-native-scope .cr-path-control .cr-icon-button {\n  flex: 0 0 auto;\n}\n\n.cr-native-scope .cr-path-browse {\n  background: var(--cr-surface);\n  color: var(--cr-primary);\n}\n\n.cr-native-scope .cr-branch-feedback {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-1) var(--cr-space-2);\n}\n\n.cr-native-scope .cr-branch-feedback .cr-error {\n  min-width: 0;\n  flex: 1 1 180px;\n}\n\n.cr-native-scope .cr-repo-remove {\n  margin-top: calc(1.4em + 6px);\n}\n\n.cr-native-scope .cr-folder-path-form {\n  display: flex;\n  align-items: flex-end;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-folder-path-form .cr-field {\n  min-width: 0;\n  flex: 1 1 auto;\n  margin: 0;\n}\n\n.cr-native-scope .cr-folder-nav {\n  display: flex;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: var(--cr-space-2);\n}\n\n.cr-native-scope .cr-folder-breadcrumbs {\n  display: flex;\n  min-width: 0;\n  flex: 1 1 220px;\n  flex-wrap: wrap;\n  align-items: center;\n  gap: 2px;\n  font-family: var(--cr-font-mono);\n  font-size: 12px;\n}\n\n.cr-native-scope .cr-folder-crumb {\n  display: inline-flex;\n  align-items: center;\n  gap: 2px;\n}\n\n.cr-native-scope .cr-folder-separator {\n  color: var(--cr-text-muted);\n}\n\n.cr-native-scope .cr-folder-crumb-button {\n  min-height: 30px;\n  padding: 2px 5px;\n  border: 0;\n  border-radius: 4px;\n  background: transparent;\n  color: var(--cr-primary);\n  font: inherit;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-folder-crumb-button[aria-current='location'] {\n  color: var(--cr-text);\n  font-weight: 650;\n}\n\n.cr-native-scope .cr-folder-crumb-button:hover {\n  background: var(--cr-surface-raised);\n}\n\n.cr-native-scope .cr-folder-list {\n  display: grid;\n  max-height: min(42vh, 360px);\n  margin: 0;\n  padding: 0;\n  overflow: auto;\n  border: 1px solid var(--cr-border);\n  border-radius: var(--cr-radius-control);\n  list-style: none;\n}\n\n.cr-native-scope .cr-folder-entry {\n  display: flex;\n  width: 100%;\n  min-height: 44px;\n  align-items: center;\n  justify-content: space-between;\n  gap: var(--cr-space-3);\n  padding: var(--cr-space-2) var(--cr-space-3);\n  border: 0;\n  border-bottom: 1px solid var(--cr-border);\n  background: var(--cr-surface);\n  color: var(--cr-text);\n  font-family: var(--cr-font-mono);\n  font-size: 13px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-folder-list li:last-child .cr-folder-entry {\n  border-bottom: 0;\n}\n\n.cr-native-scope .cr-folder-entry:hover,\n.cr-native-scope .cr-folder-entry:focus-visible {\n  background: var(--cr-surface-raised);\n}\n\n.cr-native-scope .cr-folder-entry-name {\n  min-width: 0;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-folder-git-badge {\n  flex: 0 0 auto;\n  padding: 1px 7px;\n  border: 1px solid color-mix(in srgb, var(--cr-success) 45%, var(--cr-border));\n  border-radius: var(--cr-radius-pill);\n  color: var(--cr-success);\n  font-family: var(--cr-font-ui);\n  font-size: 10px;\n  font-weight: 650;\n  letter-spacing: 0.02em;\n}\n\n@media (max-width: 860px) {\n  .cr-native-scope .cr-repo-fields {\n    grid-template-columns: minmax(0, 1fr);\n  }\n\n  .cr-native-scope .cr-path-control,\n  .cr-native-scope .cr-folder-path-form {\n    flex-wrap: wrap;\n  }\n\n  .cr-native-scope .cr-folder-path-form .cr-button {\n    width: 100%;\n  }\n\n  .cr-native-scope .cr-repo-row {\n    grid-template-columns: minmax(0, 1fr);\n  }\n\n  .cr-native-scope .cr-repo-row > .cr-button {\n    justify-self: start;\n  }\n\n  .cr-native-scope .cr-repo-remove {\n    margin-top: 0;\n  }\n}\n\n@media (max-width: 520px) {\n  .cr-native-scope .cr-commit-option {\n    grid-template-columns: 18px minmax(0, 1fr);\n  }\n\n  .cr-native-scope .cr-commit-sha {\n    display: none;\n  }\n\n  .cr-native-scope .cr-commit-author {\n    grid-column: 2;\n  }\n}\n\n/* Touch line selection: long-press then drag. The bar appears only for that gesture. */\n.cr-native-scope .cr-touch-comment-bar {\n  position: fixed;\n  bottom: calc(18px + env(safe-area-inset-bottom, 0px));\n  left: 50%;\n  z-index: 80;\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  max-width: calc(100vw - 24px);\n  padding: 6px 6px 6px 14px;\n  transform: translateX(-50%);\n  border: 1px solid var(--cr-border);\n  border-radius: 999px;\n  background: var(--cr-surface-raised);\n  box-shadow: 0 10px 30px rgb(0 0 0 / 22%);\n  color: var(--cr-text);\n  font-size: 12px;\n}\n\n.cr-native-scope .cr-touch-comment-range {\n  overflow: hidden;\n  color: var(--cr-text-muted);\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-touch-comment-cta {\n  min-height: 40px;\n  padding: 0 16px;\n  border: 0;\n  border-radius: 999px;\n  background: var(--cr-primary);\n  color: var(--cr-on-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-touch-comment-clear {\n  display: inline-flex;\n  width: 36px;\n  height: 36px;\n  align-items: center;\n  justify-content: center;\n  padding: 0;\n  border: 0;\n  border-radius: 999px;\n  background: transparent;\n  color: var(--cr-text-muted);\n  font-size: 18px;\n  line-height: 1;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-touch-comment-clear:hover {\n  background: color-mix(in srgb, var(--cr-text) 8%, transparent);\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-touch-selecting .cr-diff-line {\n  user-select: none;\n}\n\n@media (pointer: coarse) {\n  .cr-native-scope .cr-diff-line {\n    -webkit-touch-callout: none;\n    user-select: none;\n  }\n\n  .cr-native-scope .cr-touch-comment-cta {\n    min-height: 44px;\n  }\n\n  .cr-native-scope .cr-touch-comment-clear {\n    width: 44px;\n    height: 44px;\n  }\n}\n\n/* Prism token colours are semantic, never raw HTML. */\n.cr-native-scope .cr-token {\n  color: inherit;\n}\n\n.cr-native-scope .cr-token-keyword {\n  color: var(--cr-syn-keyword);\n}\n\n.cr-native-scope .cr-token-type {\n  color: var(--cr-syn-type);\n}\n\n.cr-native-scope .cr-token-function {\n  color: var(--cr-syn-function);\n}\n\n.cr-native-scope .cr-token-variable,\n.cr-native-scope .cr-token-property {\n  color: var(--cr-syn-variable);\n}\n\n.cr-native-scope .cr-token-string {\n  color: var(--cr-syn-string);\n}\n\n.cr-native-scope .cr-token-number {\n  color: var(--cr-syn-number);\n}\n\n.cr-native-scope .cr-token-comment {\n  color: var(--cr-syn-comment);\n  font-style: italic;\n}\n\n.cr-native-scope .cr-token-tag {\n  color: var(--cr-syn-tag);\n}\n\n.cr-native-scope .cr-token-constant {\n  color: var(--cr-syn-constant);\n}\n\n.cr-native-scope .cr-token-operator,\n.cr-native-scope .cr-token-punctuation {\n  color: inherit;\n}\n\n.cr-native-scope {\n  box-sizing: border-box;\n  display: flex;\n  flex-direction: column;\n  min-width: 0;\n  min-height: 0;\n  height: 100%;\n  overflow: hidden;\n  background: var(--cr-bg);\n  color: var(--cr-text);\n  font-family: var(--dsw-font-family, var(--cr-font-ui));\n}\n\n.cr-native-scope.cr-native-panel .cr-native-bar {\n  display: flex;\n  align-items: center;\n  gap: 12px;\n  min-height: 48px;\n  padding: 6px 16px;\n  border-bottom: 1px solid var(--cr-border);\n  background: var(--cr-surface);\n}\n\n.cr-native-scope .cr-native-brand {\n  flex: 0 0 auto;\n  color: var(--cr-text);\n  font-family: var(--dsw-font-family, var(--cr-font-ui));\n  font-size: 13px;\n  font-weight: 600;\n}\n\n.cr-native-scope .cr-native-nav {\n  display: flex;\n  flex: 1 1 auto;\n  gap: 4px;\n  min-width: 0;\n  overflow-x: auto;\n  scrollbar-width: thin;\n}\n\n.cr-native-scope .cr-native-tab {\n  flex: 0 0 auto;\n  min-height: 32px;\n  padding: 5px 9px;\n  border: 1px solid transparent;\n  border-radius: var(--cr-radius-control);\n  color: var(--cr-text-muted);\n  font-size: 12px;\n  text-decoration: none;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-native-tab:hover {\n  background: var(--cr-surface-raised);\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-native-tab[aria-current='page'] {\n  border-color: var(--cr-border);\n  background: var(--cr-surface-raised);\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-native-main {\n  display: flex;\n  flex: 1 1 auto;\n  flex-direction: column;\n  min-height: 0;\n  overflow: auto;\n  padding: 20px 24px 48px;\n}\n\n.cr-native-scope.cr-native-panel {\n  --cr-bg: var(--dsw-alias-bg-layer-1, #0d1117);\n  --cr-surface: var(--dsw-alias-bg-layer-2, #161b22);\n  --cr-surface-raised: var(--dsw-alias-bg-layer-3, #21262d);\n  --cr-text: var(--dsw-alias-label-primary, #e6edf3);\n  --cr-text-muted: var(--dsw-alias-label-tertiary, #9da7b3);\n  --cr-border: var(--dsw-alias-border-l2, #5b6572);\n  --cr-primary: var(--dsw-alias-brand-primary, #58a6ff);\n  --cr-on-primary: var(--dsw-alias-label-primary-foreground, #08111f);\n}\n\n.cr-native-scope.cr-settings-tab {\n  height: auto;\n  min-height: 0;\n  overflow: visible;\n  padding: 4px 0 24px;\n}\n\n.cr-native-scope.cr-settings-tab > .cr-page-head {\n  margin-bottom: 16px;\n}\n\n@media (max-width: 640px) {\n  .cr-native-scope.cr-native-panel .cr-native-bar {\n    padding-inline: 12px;\n  }\n\n  .cr-native-scope .cr-native-main {\n    padding: 16px 16px 40px;\n  }\n}\n\n.cr-native-scope .cr-native-error {\n  padding: 24px;\n  color: var(--cr-text);\n}\n\n.cr-native-scope .cr-native-error h1 {\n  margin: 0 0 8px;\n  font-size: 20px;\n}\n\n.cr-native-scope .cr-native-error p {\n  margin: 0 0 16px;\n  color: var(--cr-text-muted);\n}\n\n/* Native DSH settings section (Settings \u2192 Code Review). The surrounding shell\n   owns the modal chrome and theme, so this surface only uses host tokens. */\n.cr-native-scope.cr-dsh-settings-scope {\n  height: auto;\n  min-height: 0;\n  overflow: visible;\n  background: transparent;\n  color: var(--dsw-alias-label-primary, #111827);\n  font-size: 13px;\n}\n\n.cr-native-scope .cr-dsh-settings {\n  display: grid;\n  gap: 14px;\n  max-width: 760px;\n  font-family: var(--dsw-font-family, system-ui, sans-serif);\n  font-size: 13px;\n  line-height: 1.45;\n}\n\n.cr-native-scope .cr-dsh-settings-head {\n  display: flex;\n  align-items: flex-start;\n  justify-content: space-between;\n  gap: 16px;\n}\n\n.cr-native-scope .cr-dsh-settings-copy {\n  min-width: 0;\n}\n\n.cr-native-scope .cr-dsh-settings-copy h2 {\n  margin: 0;\n  font-size: 15px;\n  font-weight: 600;\n  line-height: 1.35;\n}\n\n.cr-native-scope .cr-dsh-settings-copy p {\n  margin: 2px 0 0;\n  color: var(--dsw-alias-label-tertiary, #6b7280);\n  font-size: 12px;\n}\n\n.cr-native-scope .cr-dsh-form {\n  display: grid;\n  gap: 12px;\n}\n\n.cr-native-scope .cr-dsh-muted {\n  margin: 0;\n  color: var(--dsw-alias-label-tertiary, #6b7280);\n  font-size: 12px;\n}\n\n.cr-native-scope .cr-dsh-banner {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  margin: 0;\n  padding: 8px 10px;\n  border: 1px solid var(--dsw-alias-border-l2, #d0d5dd);\n  border-radius: 8px;\n  font-size: 12px;\n}\n\n.cr-native-scope .cr-dsh-banner-error {\n  border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary, #d92d20) 45%, transparent);\n  color: var(--dsw-alias-state-error-primary, #b42318);\n}\n\n.cr-native-scope .cr-dsh-banner-success {\n  border-color: color-mix(\n    in srgb,\n    var(--dsw-alias-state-success-primary, #12b76a) 45%,\n    transparent\n  );\n  color: var(--dsw-alias-label-primary, #111827);\n}\n\n.cr-native-scope .cr-dsh-repos {\n  border-top: 1px solid var(--dsw-alias-border-l2, #d0d5dd);\n}\n\n.cr-native-scope .cr-dsh-repo {\n  display: grid;\n  grid-template-columns: minmax(110px, 0.9fr) minmax(190px, 1.5fr) minmax(125px, 0.8fr) auto;\n  align-items: start;\n  gap: 10px;\n  padding: 12px 0;\n  border-bottom: 1px solid var(--dsw-alias-border-l2, #d0d5dd);\n}\n\n.cr-native-scope .cr-dsh-field {\n  display: grid;\n  gap: 4px;\n  min-width: 0;\n}\n\n.cr-native-scope .cr-dsh-label {\n  color: var(--dsw-alias-label-tertiary, #6b7280);\n  font-size: 11px;\n  font-weight: 500;\n  line-height: 1.3;\n}\n\n.cr-native-scope .cr-dsh-input {\n  box-sizing: border-box;\n  width: 100%;\n  height: 32px;\n  padding: 0 9px;\n  border: 1px solid var(--dsw-alias-border-l2, #d0d5dd);\n  border-radius: 8px;\n  background: var(--dsw-alias-bg-layer-2, #fff);\n  color: var(--dsw-alias-label-primary, #111827);\n  font: inherit;\n  font-size: 13px;\n  outline: none;\n}\n\n.cr-native-scope .cr-dsh-input::placeholder {\n  color: var(--dsw-alias-label-quaternary, #98a2b3);\n}\n\n.cr-native-scope .cr-dsh-input:focus-visible {\n  border-color: var(--dsw-alias-brand-primary, #2f6fed);\n  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-alias-brand-primary, #2f6fed) 28%, transparent);\n}\n\n.cr-native-scope .cr-dsh-input:disabled {\n  opacity: 0.55;\n}\n\n.cr-native-scope .cr-dsh-mono {\n  font-family: var(--cr-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);\n  font-size: 12px;\n}\n\n.cr-native-scope .cr-dsh-select {\n  padding-right: 26px;\n}\n\n.cr-native-scope .cr-dsh-inline {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.cr-native-scope .cr-dsh-inline .cr-dsh-input {\n  min-width: 0;\n  flex: 1 1 auto;\n}\n\n.cr-native-scope .cr-dsh-icon-button {\n  display: inline-flex;\n  flex: 0 0 auto;\n  align-items: center;\n  justify-content: center;\n  width: 32px;\n  height: 32px;\n  padding: 0;\n  border: 1px solid var(--dsw-alias-border-l2, #d0d5dd);\n  border-radius: 8px;\n  background: var(--dsw-alias-bg-layer-2, #fff);\n  color: var(--dsw-alias-label-tertiary, #6b7280);\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-dsh-icon-button:hover:not(:disabled) {\n  background: var(--dsw-alias-bg-layer-3, #f2f4f7);\n  color: var(--dsw-alias-label-primary, #111827);\n}\n\n.cr-native-scope .cr-dsh-icon-button:disabled {\n  opacity: 0.5;\n}\n\n.cr-native-scope .cr-dsh-remove {\n  margin-top: 19px;\n}\n\n.cr-native-scope .cr-dsh-remove:hover:not(:disabled) {\n  border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary, #d92d20) 50%, transparent);\n  color: var(--dsw-alias-state-error-primary, #b42318);\n}\n\n.cr-native-scope .cr-dsh-retry {\n  flex: 0 0 auto;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: var(--dsw-alias-brand-primary, #2f6fed);\n  font: inherit;\n  font-size: 12px;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-dsh-button {\n  display: inline-flex;\n  flex: 0 0 auto;\n  align-items: center;\n  justify-content: center;\n  min-height: 32px;\n  padding: 0 12px;\n  border: 1px solid var(--dsw-alias-border-l2, #d0d5dd);\n  border-radius: 8px;\n  background: transparent;\n  color: var(--dsw-alias-label-primary, #111827);\n  font: inherit;\n  font-size: 12px;\n  font-weight: 500;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-dsh-button:hover:not(:disabled) {\n  background: var(--dsw-alias-bg-layer-3, #f2f4f7);\n}\n\n.cr-native-scope .cr-dsh-button-primary {\n  border-color: transparent;\n  background: var(--dsw-alias-brand-primary, #2f6fed);\n  color: var(--dsw-alias-label-primary-foreground, #fff);\n}\n\n.cr-native-scope .cr-dsh-button-primary:hover:not(:disabled) {\n  background: color-mix(in srgb, var(--dsw-alias-brand-primary, #2f6fed) 88%, #000);\n}\n\n.cr-native-scope .cr-dsh-button:disabled {\n  opacity: 0.5;\n  cursor: default;\n}\n\n.cr-native-scope .cr-dsh-add {\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n  width: 100%;\n  min-height: 34px;\n  border: 1px dashed var(--dsw-alias-border-l2, #d0d5dd);\n  border-radius: 8px;\n  background: transparent;\n  color: var(--dsw-alias-label-tertiary, #6b7280);\n  font: inherit;\n  font-size: 12px;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-dsh-add:hover:not(:disabled) {\n  border-color: var(--dsw-alias-brand-primary, #2f6fed);\n  color: var(--dsw-alias-brand-primary, #2f6fed);\n}\n\n.cr-native-scope .cr-dsh-add:disabled {\n  opacity: 0.5;\n}\n\n.cr-native-scope .cr-dsh-error {\n  color: var(--dsw-alias-state-error-primary, #b42318);\n  font-size: 11px;\n}\n\n.cr-native-scope .cr-dsh-empty {\n  padding: 14px 0 4px;\n}\n\n.cr-native-scope .cr-dsh-empty p {\n  margin: 0;\n}\n\n.cr-native-scope .cr-dsh-empty .cr-dsh-muted {\n  margin-top: 2px;\n}\n\n@media (max-width: 760px) {\n  .cr-native-scope .cr-dsh-settings-head {\n    flex-direction: column;\n    align-items: stretch;\n  }\n\n  .cr-native-scope .cr-dsh-settings-head .cr-dsh-button-primary {\n    align-self: flex-start;\n  }\n\n  .cr-native-scope .cr-dsh-repo {\n    grid-template-columns: minmax(0, 1fr);\n    gap: 10px;\n  }\n\n  .cr-native-scope .cr-dsh-remove {\n    margin-top: 0;\n    justify-self: end;\n  }\n}\n\n@media (pointer: coarse) {\n  .cr-native-scope .cr-dsh-input,\n  .cr-native-scope .cr-dsh-select {\n    height: 40px;\n    font-size: 16px;\n  }\n\n  .cr-native-scope .cr-dsh-icon-button {\n    width: 40px;\n    height: 40px;\n  }\n\n  .cr-native-scope .cr-dsh-button {\n    min-height: 40px;\n  }\n\n  .cr-native-scope .cr-dsh-add {\n    min-height: 42px;\n  }\n\n  .cr-native-scope .cr-dsh-remove {\n    margin-top: 15px;\n  }\n}\n\n/* Native folder picker opened from the Code Review settings section. */\n.cr-native-scope .cr-dsh-picker-layer {\n  position: fixed;\n  inset: 0;\n  z-index: 10000;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  padding: 24px;\n  background: color-mix(in srgb, #000 42%, transparent);\n}\n\n.cr-native-scope .cr-dsh-picker {\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n  width: min(560px, 100%);\n  max-height: min(80vh, 720px);\n  padding: 16px;\n  border: 1px solid var(--dsw-alias-border-l2, #d0d5dd);\n  border-radius: 12px;\n  background: var(--dsw-alias-bg-layer-1, #fff);\n  color: var(--dsw-alias-label-primary, #111827);\n  box-shadow: 0 16px 48px rgb(0 0 0 / 28%);\n  font-family: var(--dsw-font-family, system-ui, sans-serif);\n  font-size: 13px;\n  outline: none;\n}\n\n.cr-native-scope .cr-dsh-picker-head {\n  display: flex;\n  align-items: flex-start;\n  justify-content: space-between;\n  gap: 12px;\n}\n\n.cr-native-scope .cr-dsh-picker-head h2 {\n  margin: 0;\n  font-size: 15px;\n  font-weight: 600;\n  line-height: 1.35;\n}\n\n.cr-native-scope .cr-dsh-picker-head p {\n  margin: 2px 0 0;\n  color: var(--dsw-alias-label-tertiary, #6b7280);\n  font-size: 12px;\n}\n\n.cr-native-scope .cr-dsh-picker-path {\n  display: grid;\n  gap: 4px;\n}\n\n.cr-native-scope .cr-dsh-picker-nav {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 0;\n}\n\n.cr-native-scope .cr-dsh-button-quiet {\n  padding: 0 9px;\n}\n\n.cr-native-scope .cr-dsh-breadcrumbs {\n  display: flex;\n  flex: 1 1 auto;\n  align-items: center;\n  gap: 2px;\n  min-width: 0;\n  overflow-x: auto;\n  white-space: nowrap;\n  scrollbar-width: none;\n}\n\n.cr-native-scope .cr-dsh-breadcrumbs::-webkit-scrollbar {\n  display: none;\n}\n\n.cr-native-scope .cr-dsh-crumb {\n  display: inline-flex;\n  align-items: center;\n}\n\n.cr-native-scope .cr-dsh-crumb-separator {\n  padding: 0 2px;\n  color: var(--dsw-alias-label-quaternary, #98a2b3);\n}\n\n.cr-native-scope .cr-dsh-crumb-button {\n  padding: 2px 3px;\n  border: 0;\n  border-radius: 4px;\n  background: transparent;\n  color: var(--dsw-alias-brand-primary, #2f6fed);\n  font: inherit;\n  font-size: 12px;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-dsh-crumb-button:hover {\n  background: var(--dsw-alias-bg-layer-3, #f2f4f7);\n}\n\n.cr-native-scope .cr-dsh-crumb-button[aria-current='location'] {\n  color: var(--dsw-alias-label-primary, #111827);\n  font-weight: 500;\n}\n\n.cr-native-scope .cr-dsh-badge {\n  flex: 0 0 auto;\n  padding: 1px 6px;\n  border: 1px solid\n    color-mix(in srgb, var(--dsw-alias-state-success-primary, #12b76a) 50%, transparent);\n  border-radius: 999px;\n  color: var(--dsw-alias-state-success-primary, #067647);\n  font-size: 10px;\n  line-height: 1.5;\n}\n\n.cr-native-scope .cr-dsh-picker-list {\n  flex: 1 1 auto;\n  min-height: 120px;\n  max-height: 46vh;\n  overflow: auto;\n  border: 1px solid var(--dsw-alias-border-l2, #d0d5dd);\n  border-radius: 8px;\n  padding: 4px;\n}\n\n.cr-native-scope .cr-dsh-picker-entries {\n  margin: 0;\n  padding: 0;\n  list-style: none;\n}\n\n.cr-native-scope .cr-dsh-picker-entry {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  width: 100%;\n  min-height: 34px;\n  padding: 0 8px;\n  border: 0;\n  border-radius: 6px;\n  background: transparent;\n  color: var(--dsw-alias-label-primary, #111827);\n  font: inherit;\n  font-size: 13px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.cr-native-scope .cr-dsh-picker-entry:hover {\n  background: var(--dsw-alias-bg-layer-3, #f2f4f7);\n}\n\n.cr-native-scope .cr-dsh-picker-entry-name {\n  flex: 1 1 auto;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.cr-native-scope .cr-dsh-picker-state {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  padding: 8px;\n  color: var(--dsw-alias-state-error-primary, #b42318);\n  font-size: 12px;\n}\n\n.cr-native-scope .cr-dsh-picker-hint {\n  flex: 0 0 auto;\n}\n\n.cr-native-scope .cr-dsh-picker-actions {\n  display: flex;\n  justify-content: flex-end;\n  gap: 8px;\n  padding-top: 2px;\n}\n\n@media (max-width: 600px) {\n  .cr-native-scope .cr-dsh-picker-layer {\n    padding: 12px;\n  }\n\n  .cr-native-scope .cr-dsh-picker {\n    max-height: 90vh;\n  }\n\n  .cr-native-scope .cr-dsh-picker-actions .cr-dsh-button {\n    flex: 1 1 0;\n  }\n}\n\n@media (pointer: coarse) {\n  .cr-native-scope .cr-dsh-picker-entry {\n    min-height: 44px;\n  }\n\n  .cr-native-scope .cr-dsh-picker {\n    font-size: 14px;\n  }\n}\n";
     document.head.append(style);
     return () => style.remove();
   }, "reviewd: scoped styles");
@@ -10163,6 +13011,18 @@ function apply(ctx) {
     )
   );
 }
+/*! Bundled license information:
+
+prismjs/components/prism-core.js:
+  (**
+   * Prism: Lightweight, robust, elegant syntax highlighting
+   *
+   * @license MIT <https://opensource.org/licenses/MIT>
+   * @author Lea Verou <https://lea.verou.me>
+   * @namespace
+   * @public
+   *)
+*/
     return module.exports;
   }
 });

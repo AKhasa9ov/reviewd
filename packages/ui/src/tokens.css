@@ -71,6 +71,29 @@
 }
 
 :root {
+  /* Syntax highlighting (Prism). light-dark() follows the host's color-scheme,
+     including the DSH shell which sets it on <html>. */
+  --cr-syn-keyword: #c586c0;
+  --cr-syn-keyword: light-dark(#af00db, #c586c0);
+  --cr-syn-type: #4ec9b0;
+  --cr-syn-type: light-dark(#1f7187, #4ec9b0);
+  --cr-syn-function: #dcdcaa;
+  --cr-syn-function: light-dark(#795e26, #dcdcaa);
+  --cr-syn-variable: #9cdcfe;
+  --cr-syn-variable: light-dark(#001080, #9cdcfe);
+  --cr-syn-property: #9cdcfe;
+  --cr-syn-property: light-dark(#001080, #9cdcfe);
+  --cr-syn-string: #ce9178;
+  --cr-syn-string: light-dark(#a31515, #ce9178);
+  --cr-syn-number: #b5cea8;
+  --cr-syn-number: light-dark(#067a4a, #b5cea8);
+  --cr-syn-comment: #6a9955;
+  --cr-syn-comment: light-dark(#008000, #6a9955);
+  --cr-syn-tag: #569cd6;
+  --cr-syn-tag: light-dark(#800000, #569cd6);
+  --cr-syn-constant: #4fc1ff;
+  --cr-syn-constant: light-dark(#0070c1, #4fc1ff);
+
   --cr-space-1: 4px;
   --cr-space-2: 8px;
   --cr-space-3: 12px;

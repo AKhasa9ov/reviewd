@@ -843,3 +843,30 @@ describe('FullFileDialog touch selection', () => {
     }
   });
 });
+
+describe('FullFileDialog syntax highlighting', () => {
+  it('renders keyword, type, variable and number tokens in the active file', () => {
+    const syntaxFile = file({
+      path: 'src/syntax.ts',
+      hunks: [],
+      added: 1,
+      deleted: 0,
+      oldLines: ['const answer: number = 42;'],
+      newLines: ['const answer: number = 42;'],
+    });
+    render(
+      <FullFileDialog file={syntaxFile} round={1} onOpenComposer={vi.fn()} onClose={vi.fn()} />,
+    );
+    const dialog = screen.getByRole('dialog', { name: 'src/syntax.ts' });
+    const row = within(dialog).getByRole('row', { name: /Line 1, unchanged: const answer/ });
+
+    expect(row.querySelector('.cr-token-keyword')?.textContent).toBe('const');
+    expect(row.querySelector('.cr-token-type')?.textContent).toBe('number');
+    expect(row.querySelector('.cr-token-variable')?.textContent).toBe('answer');
+    expect(row.querySelector('.cr-token-number')?.textContent).toBe('42');
+    expect(row).toHaveAttribute(
+      'aria-label',
+      expect.stringContaining('const answer: number = 42;'),
+    );
+  });
+});

@@ -26,6 +26,8 @@ import type {
 import { FullFileDialog, type FullFileController } from './FullFileDialog.js';
 import { InlineFinding, severityLetter } from './InlineFinding.js';
 import { InlineQuestion } from './InlineQuestion.js';
+import { CodeText } from './CodeText.js';
+import { highlightHunk, languageForPath, type SyntaxLine } from './syntax.js';
 import {
   buildDiffRows,
   commentsAtLine,
@@ -302,6 +304,14 @@ function DiffFileSection({
   const ref = useRef<HTMLElement>(null);
   const shownFile = loaded ?? file;
   const rows = buildDiffRows(shownFile);
+  const language = useMemo(() => languageForPath(shownFile.path), [shownFile.path]);
+  const syntaxByLine = useMemo(() => {
+    const highlighted = new Map<string, SyntaxLine>();
+    for (const hunk of shownFile.hunks) {
+      for (const [key, line] of highlightHunk(hunk.lines, language)) highlighted.set(key, line);
+    }
+    return highlighted;
+  }, [shownFile, language]);
   const first = firstChangedLine(shownFile);
   const needsLoad = loaded === null && file.truncated === true && onLoadDiff !== undefined;
 
@@ -519,6 +529,7 @@ function DiffFileSection({
                       onCommentFocus={onCommentFocus}
                       onAnswerQuestion={onAnswerQuestion}
                       readOnly={readOnly}
+                      syntaxByLine={syntaxByLine}
                     />
                   ),
                 )}
@@ -577,6 +588,7 @@ function DiffLineRow({
   onCommentFocus,
   onAnswerQuestion,
   readOnly,
+  syntaxByLine,
 }: {
   file: FileDiff;
   row: DiffRow;
@@ -606,6 +618,7 @@ function DiffLineRow({
   onCommentFocus: DiffViewerProps['onCommentFocus'];
   onAnswerQuestion?: DiffViewerProps['onAnswerQuestion'];
   readOnly: boolean;
+  syntaxByLine: ReadonlyMap<string, SyntaxLine>;
 }): JSX.Element {
   const line = row.line;
   if (line === undefined) return <></>;
@@ -630,6 +643,7 @@ function DiffLineRow({
     composer.side === side &&
     no >= composer.lineStart &&
     no <= composer.lineEnd;
+  const syntax = syntaxByLine.get(`${side}:${no}`) ?? null;
   const marker = line.kind === 'add' ? '+' : line.kind === 'del' ? '−' : ' ';
   const label = `line ${no}, ${line.kind === 'add' ? 'added' : line.kind === 'del' ? 'removed' : 'context'}: ${line.text || '(blank)'}`;
 
@@ -705,7 +719,7 @@ function DiffLineRow({
           )}
         </span>
         <code className="cr-diff-text" role="cell">
-          {line.text === '' ? ' ' : line.text}
+          <CodeText text={line.text} syntax={syntax} />
         </code>
         <span className="cr-diff-actions-cell" role="cell">
           {!readOnly ? (

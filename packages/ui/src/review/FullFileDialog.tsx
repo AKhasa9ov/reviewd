@@ -24,6 +24,8 @@ import type {
 import { InlineFinding } from './InlineFinding.js';
 import { InlineQuestion } from './InlineQuestion.js';
 import { commentsAtLine } from './model.js';
+import { CodeText } from './CodeText.js';
+import { highlightLines, languageForPath } from './syntax.js';
 
 const MAX_FULL_FILE_LINES = 2000;
 const EMPTY_FINDING_DECISIONS = new Map<string, FindingDecision>();
@@ -215,7 +217,12 @@ export function FullFileDialog({
   }, [maxLine]);
 
   const changed = useMemo(() => changedLines(file, activeSide), [file, activeSide]);
-  const shown = lines === undefined ? [] : showAll ? lines : lines.slice(0, MAX_FULL_FILE_LINES);
+  const shown = useMemo(
+    () => (lines === undefined ? [] : showAll ? lines : lines.slice(0, MAX_FULL_FILE_LINES)),
+    [lines, showAll],
+  );
+  const language = useMemo(() => languageForPath(file.path), [file.path]);
+  const syntaxLines = useMemo(() => highlightLines(shown.join('\n'), language), [shown, language]);
   const description =
     lines === undefined
       ? 'Full file content is unavailable.'
@@ -709,7 +716,7 @@ export function FullFileDialog({
                         {isChanged ? (activeSide === 'new' ? '+' : '−') : ' '}
                       </span>
                       <code className="cr-full-file-code" role="cell">
-                        {text === '' ? ' ' : text}
+                        <CodeText text={text} syntax={syntaxLines[index]} />
                       </code>
                       <span className="cr-full-file-actions-cell" role="cell">
                         {!readOnly && onOpenComposer !== undefined ? (

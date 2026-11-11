@@ -46,6 +46,10 @@ export function scopeReviewCss(css, scope = '.cr-native-scope') {
 export async function buildReviewCss({ uiDir, nativeCssPath, scope = '.cr-native-scope' }) {
   const tokens = await readFile(join(uiDir, 'tokens.css'), 'utf8');
   const styles = await readFile(join(uiDir, 'styles.css'), 'utf8');
+  const syntax = await readFile(join(uiDir, 'syntax.css'), 'utf8');
   const native = await readFile(nativeCssPath, 'utf8');
-  return scopeReviewCss(`${tokens}\n${styles.replace(/^@import[^;]+;\s*/m, '')}\n${native}`, scope);
+  return scopeReviewCss(
+    `${tokens}\n${styles.replace(/^@import[^;]+;\s*/m, '')}\n${syntax}\n${native}`,
+    scope,
+  );
 }

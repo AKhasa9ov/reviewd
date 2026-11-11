@@ -1,0 +1,47 @@
+/* Prism token colours are semantic, never raw HTML. */
+.cr-token {
+  color: inherit;
+}
+
+.cr-token-keyword {
+  color: var(--cr-syn-keyword);
+}
+
+.cr-token-type {
+  color: var(--cr-syn-type);
+}
+
+.cr-token-function {
+  color: var(--cr-syn-function);
+}
+
+.cr-token-variable,
+.cr-token-property {
+  color: var(--cr-syn-variable);
+}
+
+.cr-token-string {
+  color: var(--cr-syn-string);
+}
+
+.cr-token-number {
+  color: var(--cr-syn-number);
+}
+
+.cr-token-comment {
+  color: var(--cr-syn-comment);
+  font-style: italic;
+}
+
+.cr-token-tag {
+  color: var(--cr-syn-tag);
+}
+
+.cr-token-constant {
+  color: var(--cr-syn-constant);
+}
+
+.cr-token-operator,
+.cr-token-punctuation {
+  color: inherit;
+}

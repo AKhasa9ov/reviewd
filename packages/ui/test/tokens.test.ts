@@ -87,6 +87,25 @@ describe('design tokens', () => {
     });
   }
 
+  it('keeps every syntax token readable on diff surfaces in both themes', () => {
+    const pairs = [
+      ...css.matchAll(/--cr-syn-[a-z-]+:\s*light-dark\((#[0-9a-fA-F]{6}),\s*(#[0-9a-fA-F]{6})\)/g),
+    ];
+    expect(pairs.length).toBeGreaterThanOrEqual(9);
+    for (const match of pairs) {
+      const light = match[1]!;
+      const dark = match[2]!;
+      for (const [foreground, surfaces] of [
+        [light, ['#fbfcfd', '#eaffef', '#ffefed']],
+        [dark, ['#161b22', '#10261a', '#2b1518']],
+      ] as const) {
+        for (const surface of surfaces) {
+          expect(ratio(foreground, surface)).toBeGreaterThanOrEqual(4.5);
+        }
+      }
+    }
+  });
+
   it('keeps the design dark palette exact and derives a matching light theme', () => {
     expect(token('dark', 'bg')).toBe('#0d1117');
     expect(token('dark', 'surface')).toBe('#161b22');
