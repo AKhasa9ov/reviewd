@@ -10001,9 +10001,15 @@ async function startDaemon(config, deps = {}) {
 }
 
 // packages/dsh/src/embedded.ts
+function expandStoreDir(value, home = homedir2()) {
+  if (value === "~") return home;
+  return value.startsWith("~/") ? `${home}/${value.slice(2)}` : value;
+}
 function startEmbeddedReview(config, options = {}) {
   const token = randomBytes9(32).toString("base64url");
-  const storeDir = options.storeDir ?? join6(homedir2(), ".local", "share", "dsh-code-review");
+  const storeDir = expandStoreDir(
+    options.storeDir ?? join6(homedir2(), ".local", "share", "dsh-code-review")
+  );
   const start = options.startDaemon ?? startDaemon;
   const ready = start({
     host: "127.0.0.1",
