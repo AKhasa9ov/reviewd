@@ -1,6 +1,6 @@
 {
   "name": "@sir_yami/reviewd",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Code review panel, review daemon, tools, reviewer worker and feedback delivery for DeepSeek Harness",
   "license": "MIT",
   "type": "module",

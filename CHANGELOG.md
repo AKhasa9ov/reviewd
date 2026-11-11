@@ -7,8 +7,30 @@ versions may contain breaking changes.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-11
+
+### Changed
+
+- The DSH bundle now renders the whole review workflow as a native DSH `main` panel:
+  reviews, new-review flow, review detail, file tree, diff, comments, findings, report and
+  submit all run inside the panel instead of an iframe/Settings tab.
+- Repository settings moved to a top-level **Settings → Code Review** section
+  (`settings.section`) with the host's typography, spacing, controls and light/dark tokens.
+  The folder picker is a native DSH dialog with breadcrumbs, `Up`, git badges and the same
+  tokens; the standalone SPA keeps its original settings page.
+- Review keyboard shortcuts are scoped to the native panel instead of firing across DSH.
+
+### Added
+
+- Touch line selection on coarse pointers: long-press a diff line (450 ms, 8 px tolerance)
+  then drag to extend a range, with a floating `Comment N lines` action. Moving before the
+  long press still scrolls normally; mouse selection is unchanged.
+- The same long-press-and-drag gesture in the full-file dialog, for both Current and Base.
+
 ### Fixed
 
+- The reviews list no longer shrinks to the leftover flex height and clips everything past
+  the first screen. The panel scrolls through all reviews, including on iPad-sized viewports.
 - **Include resolved comments in the package** now controls the submitted feedback package.
   The checkbox is enabled on follow-up submissions too; clearing it omits resolved comments
   from the feedback markdown and the `resolved` summary, while selecting it includes them.
