@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { Anchor, Comment, FileDiff, ReviewQuestion, Snapshot } from '@sir_yami/reviewd-core';
@@ -264,5 +264,173 @@ describe('DiffViewer lazy diffs', () => {
     await user.click(within(card).getByRole('button', { name: 'Send answer' }));
 
     expect(onAnswerQuestion).toHaveBeenCalledWith(question(), 'Because it is the default');
+  });
+});
+
+describe('DiffViewer touch line selection', () => {
+  function touchFile(): FileDiff {
+    return {
+      path: 'src/a.ts',
+      status: 'modified',
+      binary: false,
+      oversized: false,
+      added: 3,
+      deleted: 0,
+      contentHash: 'touch',
+      hunks: [
+        {
+          oldStart: 1,
+          oldLines: 0,
+          newStart: 1,
+          newLines: 3,
+          header: '@@ -1,0 +1,3 @@',
+          lines: [
+            { kind: 'add', oldNo: null, newNo: 1, text: 'one' },
+            { kind: 'add', oldNo: null, newNo: 2, text: 'two' },
+            { kind: 'add', oldNo: null, newNo: 3, text: 'three' },
+          ],
+        },
+      ],
+      newLines: ['one', 'two', 'three'],
+    };
+  }
+
+  function touchSnapshot(file: FileDiff): Snapshot {
+    const base = snapshot();
+    return {
+      ...base,
+      files: [file],
+      manifest: {
+        ...base.manifest!,
+        files: [
+          {
+            path: file.path,
+            status: file.status,
+            binary: false,
+            ignored: false,
+            oversized: false,
+            added: 3,
+            deleted: 0,
+            hunkCount: 1,
+            patchBytes: 0,
+          },
+        ],
+        warnings: [],
+      },
+      warnings: [],
+    };
+  }
+
+  function pointerEvent(type: string, init: { x: number; y: number }): Event {
+    const event = new Event(type, { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'pointerType', { value: 'touch' });
+    Object.defineProperty(event, 'pointerId', { value: 7 });
+    Object.defineProperty(event, 'clientX', { value: init.x });
+    Object.defineProperty(event, 'clientY', { value: init.y });
+    Object.defineProperty(event, 'button', { value: 0 });
+    return event;
+  }
+
+  function renderTouchDiff(props: Partial<Parameters<typeof DiffViewer>[0]> = {}): {
+    onSelectRange: ReturnType<typeof vi.fn>;
+    onOpenComposer: ReturnType<typeof vi.fn>;
+  } {
+    const file = touchFile();
+    const onSelectRange = vi.fn();
+    const onOpenComposer = vi.fn();
+    render(
+      <DiffViewer
+        snapshot={touchSnapshot(file)}
+        comments={[]}
+        round={1}
+        delta={false}
+        canDelta={false}
+        changedPaths={new Set()}
+        onDeltaChange={() => undefined}
+        onJump={() => undefined}
+        onSelectLine={() => undefined}
+        onSelectRange={onSelectRange}
+        onOpenComposer={onOpenComposer}
+        onReply={async () => undefined}
+        onCommentState={async () => undefined}
+        onCommentJump={() => undefined}
+        onCommentFocus={() => undefined}
+        {...props}
+      />,
+    );
+    return { onSelectRange, onOpenComposer };
+  }
+
+  it('selects a line after a long press and extends the range by dragging', () => {
+    vi.useFakeTimers();
+    try {
+      const { onSelectRange, onOpenComposer } = renderTouchDiff();
+      const first = screen.getByRole('row', { name: /line 1, added:/ });
+      const third = screen.getByRole('row', { name: /line 3, added:/ });
+      const originalElementFromPoint = document.elementFromPoint;
+      document.elementFromPoint = () => third;
+
+      act(() => {
+        first.dispatchEvent(pointerEvent('pointerdown', { x: 40, y: 100 }));
+      });
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      expect(onSelectRange).toHaveBeenCalledWith(
+        expect.objectContaining({ path: 'src/a.ts' }),
+        'new',
+        1,
+        1,
+      );
+
+      act(() => {
+        window.dispatchEvent(pointerEvent('pointermove', { x: 40, y: 140 }));
+      });
+      act(() => {
+        window.dispatchEvent(pointerEvent('pointerup', { x: 40, y: 140 }));
+      });
+
+      const action = screen.getByRole('button', { name: 'Comment 3 lines' });
+      expect(screen.getByRole('status')).toHaveTextContent('Lines 1–3');
+      act(() => {
+        action.click();
+      });
+      expect(onOpenComposer).toHaveBeenCalledWith(
+        expect.objectContaining({ path: 'src/a.ts' }),
+        'new',
+        1,
+        3,
+      );
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      document.elementFromPoint = originalElementFromPoint;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not start a selection when the finger scrolls before the long press', () => {
+    vi.useFakeTimers();
+    try {
+      const { onSelectRange } = renderTouchDiff();
+      const first = screen.getByRole('row', { name: /line 1, added:/ });
+
+      act(() => {
+        first.dispatchEvent(pointerEvent('pointerdown', { x: 40, y: 100 }));
+      });
+      act(() => {
+        window.dispatchEvent(pointerEvent('pointermove', { x: 40, y: 140 }));
+      });
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+      act(() => {
+        window.dispatchEvent(pointerEvent('pointerup', { x: 40, y: 140 }));
+      });
+
+      expect(onSelectRange).not.toHaveBeenCalled();
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

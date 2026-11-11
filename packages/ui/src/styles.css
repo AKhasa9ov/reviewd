@@ -4909,3 +4909,83 @@ body.cr-selecting-lines {
     grid-column: 2;
   }
 }
+
+/* Touch line selection: long-press then drag. The bar appears only for that gesture. */
+.cr-touch-comment-bar {
+  position: fixed;
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100vw - 24px);
+  padding: 6px 6px 6px 14px;
+  transform: translateX(-50%);
+  border: 1px solid var(--cr-border);
+  border-radius: 999px;
+  background: var(--cr-surface-raised);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 22%);
+  color: var(--cr-text);
+  font-size: 12px;
+}
+
+.cr-touch-comment-range {
+  overflow: hidden;
+  color: var(--cr-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cr-touch-comment-cta {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--cr-primary);
+  color: var(--cr-on-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cr-touch-comment-clear {
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--cr-text-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.cr-touch-comment-clear:hover {
+  background: color-mix(in srgb, var(--cr-text) 8%, transparent);
+  color: var(--cr-text);
+}
+
+.cr-touch-selecting .cr-diff-line {
+  user-select: none;
+}
+
+@media (pointer: coarse) {
+  .cr-diff-line {
+    -webkit-touch-callout: none;
+    user-select: none;
+  }
+
+  .cr-touch-comment-cta {
+    min-height: 44px;
+  }
+
+  .cr-touch-comment-clear {
+    width: 44px;
+    height: 44px;
+  }
+}

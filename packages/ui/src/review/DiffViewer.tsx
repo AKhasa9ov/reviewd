@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { MouseEvent as ReactMouseEvent, MutableRefObject } from 'react';
+import type {
+  MouseEvent as ReactMouseEvent,
+  MutableRefObject,
+  PointerEvent as ReactPointerEvent,
+} from 'react';
 import type {
   Comment,
   CommentState,
@@ -96,6 +100,25 @@ interface DragState extends DragRange {
   last: number;
   file: FileDiff;
 }
+
+interface TouchSelection extends DragRange {
+  file: FileDiff;
+}
+
+interface TouchGesture {
+  pointerId: number;
+  file: FileDiff;
+  side: Side;
+  anchor: number;
+  last: number;
+  startX: number;
+  startY: number;
+  activated: boolean;
+  timer: number | null;
+}
+
+const TOUCH_LONG_PRESS_MS = 450;
+const TOUCH_MOVE_TOLERANCE_PX = 8;
 
 interface FullFileState {
   file: FileDiff;
@@ -224,6 +247,7 @@ function DiffFileSection({
   onSelectLine,
   onLineDragStart,
   onLineDragEnter,
+  onLineTouchStart,
   onOpenComposer,
   onOpenFinding,
   consumeSuppressedClick,
@@ -255,6 +279,7 @@ function DiffFileSection({
   onSelectLine: DiffViewerProps['onSelectLine'];
   onLineDragStart: (file: FileDiff, side: Side, line: number, event: ReactMouseEvent) => void;
   onLineDragEnter: (file: FileDiff, side: Side, line: number) => void;
+  onLineTouchStart: (file: FileDiff, side: Side, line: number, event: ReactPointerEvent) => void;
   onOpenComposer: DiffViewerProps['onOpenComposer'];
   onOpenFinding: DiffViewerProps['onOpenFinding'];
   consumeSuppressedClick: () => boolean;
@@ -483,6 +508,7 @@ function DiffFileSection({
                       onSelectLine={onSelectLine}
                       onLineDragStart={onLineDragStart}
                       onLineDragEnter={onLineDragEnter}
+                      onLineTouchStart={onLineTouchStart}
                       onOpenComposer={onOpenComposer}
                       onOpenFinding={onOpenFinding}
                       consumeSuppressedClick={consumeSuppressedClick}
@@ -540,6 +566,7 @@ function DiffLineRow({
   onSelectLine,
   onLineDragStart,
   onLineDragEnter,
+  onLineTouchStart,
   onOpenComposer,
   onOpenFinding,
   consumeSuppressedClick,
@@ -568,6 +595,7 @@ function DiffLineRow({
   onSelectLine: DiffViewerProps['onSelectLine'];
   onLineDragStart: (file: FileDiff, side: Side, line: number, event: ReactMouseEvent) => void;
   onLineDragEnter: (file: FileDiff, side: Side, line: number) => void;
+  onLineTouchStart: (file: FileDiff, side: Side, line: number, event: ReactPointerEvent) => void;
   onOpenComposer: DiffViewerProps['onOpenComposer'];
   onOpenFinding: DiffViewerProps['onOpenFinding'];
   consumeSuppressedClick: () => boolean;
@@ -624,6 +652,10 @@ function DiffLineRow({
         tabIndex={0}
         aria-label={label}
         aria-current={selected ? 'true' : undefined}
+        data-diff-path={file.path}
+        data-diff-side={side}
+        data-diff-line={no}
+        onPointerDown={(event) => onLineTouchStart(file, side, no, event)}
         onMouseDown={(event) => {
           if (event.button !== 0 || event.shiftKey) return;
           const target = event.target as HTMLElement | null;
@@ -814,6 +846,11 @@ export function DiffViewer({
   const suppressClickRef = useRef(false);
   const openComposerRef = useRef(onOpenComposer);
   openComposerRef.current = onOpenComposer;
+  const onSelectRangeRef = useRef(onSelectRange);
+  onSelectRangeRef.current = onSelectRange;
+  const [touchSelection, setTouchSelection] = useState<TouchSelection | null>(null);
+  const [touchSelecting, setTouchSelecting] = useState(false);
+  const touchRef = useRef<TouchGesture | null>(null);
   const allFiles = useMemo(() => filesForSnapshot(snapshot), [snapshot]);
   const conflictedFiles = allFiles.filter((file) => file.conflicted === true);
 
@@ -873,6 +910,153 @@ export function DiffViewer({
       document.body.classList.remove('cr-selecting-lines');
     };
   }, [readOnly]);
+
+  useEffect(() => {
+    const filesByPath = new Map(allFiles.map((file) => [file.path, file]));
+
+    function clearTouchTimer(gesture: TouchGesture): void {
+      if (gesture.timer !== null) {
+        window.clearTimeout(gesture.timer);
+        gesture.timer = null;
+      }
+    }
+
+    function lineAtPoint(
+      x: number,
+      y: number,
+    ): { file: FileDiff; side: Side; line: number } | null {
+      const hit = document.elementFromPoint?.(x, y);
+      const row = hit instanceof Element ? hit.closest<HTMLElement>('[data-diff-line]') : null;
+      if (row === null) return null;
+      const path = row.dataset.diffPath;
+      const side = row.dataset.diffSide;
+      const line = Number(row.dataset.diffLine);
+      if (path === undefined || (side !== 'old' && side !== 'new') || !Number.isFinite(line)) {
+        return null;
+      }
+      const file = filesByPath.get(path);
+      return file === undefined ? null : { file, side, line };
+    }
+
+    function extendTouch(
+      gesture: TouchGesture,
+      found: { file: FileDiff; side: Side; line: number },
+    ): void {
+      if (found.file.path !== gesture.file.path || found.side !== gesture.side) return;
+      gesture.last = found.line;
+      const lineStart = Math.min(gesture.anchor, found.line);
+      const lineEnd = Math.max(gesture.anchor, found.line);
+      onSelectRangeRef.current(found.file, found.side, lineStart, lineEnd);
+      setTouchSelection({
+        file: found.file,
+        path: found.file.path,
+        side: found.side,
+        lineStart,
+        lineEnd,
+      });
+    }
+
+    function moveTo(x: number, y: number): void {
+      const gesture = touchRef.current;
+      if (gesture === null || !gesture.activated) return;
+      const found = lineAtPoint(x, y);
+      if (found !== null) extendTouch(gesture, found);
+    }
+
+    function onPointerMove(event: PointerEvent): void {
+      const gesture = touchRef.current;
+      if (gesture === null || event.pointerId !== gesture.pointerId) return;
+      if (!gesture.activated) {
+        const dx = event.clientX - gesture.startX;
+        const dy = event.clientY - gesture.startY;
+        if (Math.hypot(dx, dy) > TOUCH_MOVE_TOLERANCE_PX) {
+          clearTouchTimer(gesture);
+          touchRef.current = null;
+        }
+        return;
+      }
+      if (event.cancelable) event.preventDefault();
+      moveTo(event.clientX, event.clientY);
+    }
+
+    function onTouchMove(event: TouchEvent): void {
+      const gesture = touchRef.current;
+      if (gesture === null || !gesture.activated) return;
+      if (event.cancelable) event.preventDefault();
+      const touch = event.touches[0];
+      if (touch !== undefined) moveTo(touch.clientX, touch.clientY);
+    }
+
+    function finishTouch(event: PointerEvent): void {
+      const gesture = touchRef.current;
+      if (gesture === null || event.pointerId !== gesture.pointerId) return;
+      clearTouchTimer(gesture);
+      touchRef.current = null;
+      if (gesture.activated) {
+        setTouchSelecting(false);
+        document.body.classList.remove('cr-touch-selecting');
+        window.setTimeout(() => {
+          suppressClickRef.current = false;
+        }, 0);
+      }
+    }
+
+    window.addEventListener('pointermove', onPointerMove, { passive: false });
+    window.addEventListener('pointerup', finishTouch);
+    window.addEventListener('pointercancel', finishTouch);
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', finishTouch);
+      window.removeEventListener('pointercancel', finishTouch);
+      window.removeEventListener('touchmove', onTouchMove);
+      const gesture = touchRef.current;
+      if (gesture !== null) clearTouchTimer(gesture);
+      touchRef.current = null;
+      document.body.classList.remove('cr-touch-selecting');
+    };
+  }, [allFiles]);
+
+  function beginTouchLineSelection(
+    file: FileDiff,
+    side: Side,
+    line: number,
+    event: ReactPointerEvent,
+  ): void {
+    if (readOnly || event.pointerType !== 'touch' || event.button !== 0) return;
+    const target = event.target as HTMLElement | null;
+    if (target !== null && target.closest('button, a, input, textarea, select') !== null) return;
+    const previous = touchRef.current;
+    if (previous !== null && previous.timer !== null) window.clearTimeout(previous.timer);
+    const gesture: TouchGesture = {
+      pointerId: event.pointerId,
+      file,
+      side,
+      anchor: line,
+      last: line,
+      startX: event.clientX,
+      startY: event.clientY,
+      activated: false,
+      timer: null,
+    };
+    touchRef.current = gesture;
+    gesture.timer = window.setTimeout(() => {
+      if (touchRef.current !== gesture) return;
+      gesture.timer = null;
+      gesture.activated = true;
+      suppressClickRef.current = true;
+      setTouchSelecting(true);
+      document.body.classList.add('cr-touch-selecting');
+      navigator.vibrate?.(10);
+      onSelectRangeRef.current(file, side, line, line);
+      setTouchSelection({ file, path: file.path, side, lineStart: line, lineEnd: line });
+    }, TOUCH_LONG_PRESS_MS);
+  }
+
+  function clearTouchSelection(): void {
+    setTouchSelection(null);
+    document.body.classList.remove('cr-touch-selecting');
+  }
 
   function beginLineDrag(file: FileDiff, side: Side, line: number, event: ReactMouseEvent): void {
     event.preventDefault();
@@ -993,7 +1177,47 @@ export function DiffViewer({
   }
 
   return (
-    <div className="cr-diff-layout">
+    <div
+      className={['cr-diff-layout', touchSelecting ? 'cr-touch-selecting' : '']
+        .filter(Boolean)
+        .join(' ')}
+    >
+      {touchSelection !== null && !readOnly ? (
+        <div className="cr-touch-comment-bar" role="status" aria-live="polite">
+          <span className="cr-touch-comment-range">
+            {touchSelection.lineStart === touchSelection.lineEnd
+              ? `Line ${touchSelection.lineStart}`
+              : `Lines ${touchSelection.lineStart}–${touchSelection.lineEnd}`}
+          </span>
+          <button
+            type="button"
+            className="cr-touch-comment-cta"
+            onClick={() => {
+              const selected = touchSelection;
+              clearTouchSelection();
+              openComposerRef.current(
+                selected.file,
+                selected.side,
+                selected.lineStart,
+                selected.lineEnd,
+              );
+            }}
+          >
+            Comment{' '}
+            {touchSelection.lineStart === touchSelection.lineEnd
+              ? '1 line'
+              : `${touchSelection.lineEnd - touchSelection.lineStart + 1} lines`}
+          </button>
+          <button
+            type="button"
+            className="cr-touch-comment-clear"
+            aria-label="Clear line selection"
+            onClick={clearTouchSelection}
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
       <aside className="cr-file-tree" aria-label="Changed files">
         <div className="cr-file-tree-head">
           <span className="cr-card-title">Files</span>
@@ -1214,7 +1438,7 @@ export function DiffViewer({
                 activeLine={activeFile === file.path ? activeLine : undefined}
                 activeCommentId={activeCommentId}
                 composer={composer}
-                dragRange={dragRange}
+                dragRange={dragRange ?? touchSelection}
                 findings={findings}
                 questions={questions}
                 findingDecisions={findingDecisions}
@@ -1227,6 +1451,7 @@ export function DiffViewer({
                 onSelectLine={onSelectLine}
                 onLineDragStart={beginLineDrag}
                 onLineDragEnter={enterLine}
+                onLineTouchStart={beginTouchLineSelection}
                 onOpenComposer={onOpenComposer}
                 onOpenFinding={onOpenFinding}
                 consumeSuppressedClick={consumeSuppressedClick}
