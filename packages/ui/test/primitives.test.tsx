@@ -15,6 +15,7 @@ import {
   Skeleton,
   Tabs,
   Textarea,
+  ThemeProvider,
   ToastProvider,
   Tooltip,
   useToast,
@@ -253,6 +254,24 @@ describe('Toast and Tooltip', () => {
     fireEvent.focus(trigger);
     await waitFor(() => expect(screen.getByRole('tooltip')).toHaveAttribute('data-open', 'true'));
     expect(trigger).toHaveAccessibleDescription('Switch to light theme');
+  });
+});
+
+describe('ThemeProvider', () => {
+  it('applies and persists a theme only on the supplied target when requested', () => {
+    const target = document.createElement('div');
+    document.documentElement.dataset.theme = 'light';
+    window.localStorage.setItem('cr-theme', 'light');
+
+    render(
+      <ThemeProvider initialTheme="dark" persist={false} targetRef={{ current: target }}>
+        <span>themed</span>
+      </ThemeProvider>,
+    );
+
+    expect(target.dataset.theme).toBe('dark');
+    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(window.localStorage.getItem('cr-theme')).toBe('light');
   });
 });
 

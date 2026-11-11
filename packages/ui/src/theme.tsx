@@ -6,9 +6,9 @@ export type Theme = 'dark' | 'light';
 export const THEME_STORAGE_KEY = 'cr-theme';
 export const DEFAULT_THEME: Theme = 'dark';
 
-function readStoredTheme(): Theme {
+function readStoredTheme(storageKey = THEME_STORAGE_KEY): Theme {
   try {
-    const value = globalThis.localStorage?.getItem(THEME_STORAGE_KEY);
+    const value = globalThis.localStorage?.getItem(storageKey);
     return value === 'light' ? 'light' : 'dark';
   } catch {
     return DEFAULT_THEME;
@@ -34,23 +34,34 @@ export interface ThemeProviderProps {
   children: ReactNode;
   initialTheme?: Theme;
   storageKey?: string;
+  persist?: boolean;
+  targetRef?: { readonly current: Pick<HTMLElement, 'dataset'> | null };
 }
 
 export function ThemeProvider({
   children,
   initialTheme,
   storageKey = THEME_STORAGE_KEY,
+  persist = true,
+  targetRef,
 }: ThemeProviderProps): JSX.Element {
-  const [theme, setThemeState] = useState<Theme>(() => initialTheme ?? readStoredTheme());
+  const [theme, setThemeState] = useState<Theme>(
+    () => initialTheme ?? (persist ? readStoredTheme(storageKey) : DEFAULT_THEME),
+  );
 
   useEffect(() => {
-    applyTheme(theme);
+    if (targetRef !== undefined) {
+      if (targetRef.current !== null) applyTheme(theme, targetRef.current);
+    } else {
+      applyTheme(theme);
+    }
+    if (!persist) return;
     try {
       globalThis.localStorage?.setItem(storageKey, theme);
     } catch {
       // Storage can be unavailable in private mode; the in-memory theme still works.
     }
-  }, [storageKey, theme]);
+  }, [persist, storageKey, targetRef, theme]);
 
   const setTheme = useCallback((next: Theme) => {
     setThemeState(next);
