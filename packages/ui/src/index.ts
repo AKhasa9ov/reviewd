@@ -11,6 +11,8 @@ export type {
 } from './primitives/Feedback.js';
 export { Dialog } from './primitives/Dialog.js';
 export type { DialogProps } from './primitives/Dialog.js';
+export { PortalContainerProvider, usePortalContainer } from './primitives/PortalContainer.js';
+export type { PortalContainerRef } from './primitives/PortalContainer.js';
 export { Tabs } from './primitives/Tabs.js';
 export type { TabItem, TabsProps } from './primitives/Tabs.js';
 export { ToastProvider, useToast } from './primitives/Toast.js';

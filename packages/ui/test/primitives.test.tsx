@@ -10,6 +10,7 @@ import {
   EmptyState,
   IconButton,
   Input,
+  PortalContainerProvider,
   Select,
   Skeleton,
   Tabs,
@@ -163,6 +164,24 @@ describe('Dialog', () => {
     await user.keyboard('{Escape}');
     await user.click(document.querySelector('.cr-overlay') as HTMLElement);
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('portals a dialog into the panel container when one is provided', () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const close = vi.fn();
+
+    render(
+      <PortalContainerProvider container={{ current: container }}>
+        <Dialog open title="Scoped dialog" onClose={close}>
+          body
+        </Dialog>
+      </PortalContainerProvider>,
+    );
+
+    expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(document.body.querySelector(':scope > .cr-overlay')).toBeNull();
+    container.remove();
   });
 });
 

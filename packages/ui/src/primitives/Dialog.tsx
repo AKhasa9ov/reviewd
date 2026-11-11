@@ -2,6 +2,7 @@ import { useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
 import { CloseIcon } from '../icons.js';
+import { usePortalContainer } from './PortalContainer.js';
 
 const FOCUSABLE = [
   'a[href]',
@@ -34,6 +35,7 @@ export function Dialog({
 }: DialogProps): JSX.Element | null {
   const titleId = useId();
   const descriptionId = useId();
+  const portalContainer = usePortalContainer();
   const dialogRef = useRef<HTMLDivElement>(null);
   const restoreRef = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
@@ -124,6 +126,6 @@ export function Dialog({
         </div>
       </div>
     </div>,
-    document.body,
+    portalContainer ?? document.body,
   );
 }
