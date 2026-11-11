@@ -10114,7 +10114,7 @@ function createProxyHandler(deps) {
       if (headers["x-review-actor-kind"] === void 0) headers["x-review-actor-kind"] = "human";
       const controller = new AbortController();
       res.on("close", () => controller.abort());
-      const daemonPath = path === "/" ? "/api" : `/api${path}`;
+      const daemonPath = path === "/" ? "/api" : path === "/api" || path.startsWith("/api/") ? path : `/api${path}`;
       const response = await fetchImpl(`${endpoint.daemonUrl}${daemonPath}`, {
         method: req.method ?? "GET",
         headers,
