@@ -9,6 +9,7 @@ test-results/
 playwright-report/
 
 packages/dsh/index.js
+packages/dsh/client.js
 packages/dsh/web/
 
 # Deployment files are validated by Docker/Compose or their own linters.

@@ -10,6 +10,7 @@ export default tseslint.config(
       '**/test-results/**',
       'coverage/**',
       'packages/dsh/index.js',
+      'packages/dsh/client.js',
       'packages/dsh/web/**',
       '.superpowers/**',
     ],
@@ -20,15 +21,6 @@ export default tseslint.config(
     rules: {
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/consistent-type-imports': 'error',
-    },
-  },
-  {
-    files: ['packages/dsh/client.js'],
-    languageOptions: {
-      globals: {
-        window: 'readonly',
-        fetch: 'readonly',
-      },
     },
   },
   {
