@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react';
 import { NativePanel } from './client/NativePanel.js';
-import { SettingsTab } from './client/SettingsTab.js';
+import { SettingsSection } from './client/SettingsSection.js';
 
 declare const __REVIEW_CSS__: string;
 
@@ -64,10 +64,10 @@ export function apply(ctx: ClientContext): void {
     ),
   );
   ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: PANEL_ID }, NativePanel));
-  ctx.slots.inject('settings.plugins.tab', () =>
+  ctx.slots.inject('settings.section', () =>
     ctx.slots.register(
-      { name: 'settings.plugins.tab', id: PANEL_ID, order: 20, label: () => 'Code Review' },
-      SettingsTab,
+      { name: 'settings.section', id: PANEL_ID, order: 25, label: () => 'Code Review' },
+      SettingsSection,
     ),
   );
 }

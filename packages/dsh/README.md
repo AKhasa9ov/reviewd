@@ -41,9 +41,9 @@ The token is not written to disk and never reaches the browser.
   review list, review detail with diff and file views, comments, findings and submit. It
   calls `/api/code-review/*` through the same-origin proxy. The native panel has no
   review-token form and no reviewd sidebar or drawer; only the fallback SPA keeps its shell.
-- Repository settings are not a panel tab. They live under DSH Settings → Built-in plugins
-  → **Code Review**, where the saved repositories, their daemon paths and their default
-  target branches are edited.
+- Repository settings are not a panel tab. They live under DSH Settings → **Code Review**
+  in the settings navigation, where the saved repositories, their daemon paths and their
+  default target branches are edited.
 - In embedded mode the standalone SPA is still served on the DSH origin at `/code-review/`
   for direct links and as a fallback; review deep links are `/code-review/review/<id>`.
 - `/code-review` and `/api/code-review` sit behind DSH's connection gate

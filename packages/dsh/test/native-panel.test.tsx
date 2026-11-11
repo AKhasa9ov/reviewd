@@ -7,7 +7,7 @@ import { createMemoryRouter } from '../../web/src/router.js';
 import { reviewView, snapshotR1, snapshotR2 } from '../../web/test/reviewFixtures.js';
 import { ErrorBoundary } from '../src/client/ErrorBoundary.js';
 import { NativePanel } from '../src/client/NativePanel.js';
-import { SettingsTab } from '../src/client/SettingsTab.js';
+import { SettingsSection } from '../src/client/SettingsSection.js';
 
 function client(overrides: Partial<ApiClient> = {}): ApiClient {
   return {
@@ -147,24 +147,24 @@ describe('NativePanel', () => {
     expect(requested[0]).toMatch(/^\/api\/code-review\/api\/reviews/);
   });
 
-  it('uses the /api/code-review proxy for the default settings tab client', async () => {
+  it('uses the /api/code-review proxy for the default settings section client', async () => {
     const requested = stubJsonFetch({ repositories: [] });
 
-    render(<SettingsTab />);
+    render(<SettingsSection />);
     await waitFor(() => expect(requested).toHaveLength(1));
     expect(requested[0]).toMatch(/^\/api\/code-review\/api\/settings\/repositories/);
   });
 
-  it('renders repository settings in the DSH settings tab surface', async () => {
-    render(<SettingsTab client={client()} />);
+  it('renders repository settings in the DSH settings surface', async () => {
+    render(<SettingsSection client={client()} />);
     expect(await screen.findByRole('heading', { name: 'Repositories' })).toBeInTheDocument();
   });
 
-  it('saves repository settings through the DSH tab', async () => {
+  it('saves repository settings through the DSH section', async () => {
     const user = userEvent.setup();
     const saveRepositories = vi.fn(async () => ({ repositories: [] }));
     render(
-      <SettingsTab
+      <SettingsSection
         client={client({
           listRepositories: vi.fn(async () => ({
             repositories: [{ name: 'demo', path: '/srv/demo', defaultTarget: 'main' }],
@@ -175,7 +175,7 @@ describe('NativePanel', () => {
     );
     // The Save button stays disabled until the repository list finishes loading.
     await screen.findByDisplayValue('/srv/demo');
-    await user.click(screen.getByRole('button', { name: 'Save repositories' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() =>
       expect(saveRepositories).toHaveBeenCalledWith([
         { name: 'demo', path: '/srv/demo', defaultTarget: 'main' },

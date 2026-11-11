@@ -340,7 +340,7 @@ export function NewReviewPage({
                   Paths are resolved on the daemon.{' '}
                   {showSettingsLink
                     ? 'Manage saved repositories in Settings.'
-                    : 'Manage saved repositories in DSH Settings → Built-in plugins → Code Review.'}
+                    : 'Manage saved repositories in DSH Settings → Code Review.'}
                 </p>
               </div>
               {showSettingsLink ? (

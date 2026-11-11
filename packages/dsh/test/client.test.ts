@@ -76,7 +76,7 @@ describe('DSH client bundle', () => {
     expect(loadBundle().id).toBe('@sir_yami/reviewd');
   });
 
-  it('registers the panel and the settings plugin tab', () => {
+  it('registers the panel and the settings section', () => {
     const { registrations } = mountBundle();
 
     expect(registrations).toContainEqual(
@@ -86,7 +86,7 @@ describe('DSH client bundle', () => {
       expect.objectContaining({ name: 'sidebar.panellist', id: 'code-review' }),
     );
     expect(registrations).toContainEqual(
-      expect.objectContaining({ name: 'settings.plugins.tab', id: 'code-review' }),
+      expect.objectContaining({ name: 'settings.section', id: 'code-review' }),
     );
     expect(document.head.querySelector('style[data-reviewd-native]')).not.toBeNull();
   });

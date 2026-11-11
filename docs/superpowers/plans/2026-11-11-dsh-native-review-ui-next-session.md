@@ -16,7 +16,7 @@
 - полный паритет: список, создание, детали, diff, комментарии, findings, submit, edit, health;
 - тот же daemon/store, что у standalone;
 - компактный DSH-native chrome: `Reviews | New review | Health`, без вложенного sidebar reviewd;
-- настройки репозиториев — не в панели, а в `DSH Settings → Built-in plugins → Code Review` через `settings.plugins.tab`;
+- настройки репозиториев — не в панели, а в `DSH Settings → Code Review` через `settings.section`;
 - standalone SPA и `/code-review/...` ссылки продолжают работать;
 - UI-текст на английском, как в существующем продукте.
 
@@ -115,7 +115,7 @@ rg -n "__ModuleLoader__|cr-native-scope|settings.plugins.tab|react/jsx-runtime" 
 - не меняй активный профиль без backup;
 - не запускай два daemon на одном store;
 - открой существующий GUI, панель Code Review, создай/открой review, проверь diff/full-file/comment/finding/submit/edit;
-- открой DSH Settings → Built-in plugins → Code Review, сохрани репозиторий;
+- открой DSH Settings → Code Review, сохрани репозиторий;
 - сохрани screenshot/transcript в `/tmp/reviewd-native-*.png` и укажи точный URL.
 
 Без разрешения в отчёте пиши `Live DSH: NOT RUN`, не выдавай это за проверенное.
