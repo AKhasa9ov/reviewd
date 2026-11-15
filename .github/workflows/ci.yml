@@ -47,7 +47,18 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium
+      - name: Install Chromium
+        run: |
+          # ubuntu-latest already ships Chromium's shared libraries. Install only
+          # the browser so a transient Ubuntu archive DNS failure cannot fail CI.
+          for attempt in 1 2 3; do
+            if pnpm exec playwright install chromium; then
+              exit 0
+            fi
+            echo "::warning::Chromium install failed (attempt ${attempt}/3); retrying in $((attempt * 10))s"
+            sleep $((attempt * 10))
+          done
+          exit 1
       - run: pnpm test:e2e
       - name: Upload browser evidence
         if: always()
