@@ -298,6 +298,46 @@ test('full-file line action and c open one composer inside the dialog', async ({
   await expect(page.locator('.cr-inline-composer')).toHaveCount(0);
 });
 
+test('keeps file-tree badges inside the panel with long paths', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 740 });
+  await openReview(page);
+  await expect(page.getByRole('tab', { name: /Files changed/ })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+
+  const panel = page.locator('.cr-file-tree');
+  await panel.evaluate((element) => {
+    const group = element.querySelector('.cr-tree-group');
+    const row = group?.querySelector('.cr-tree-file');
+    const directory = group?.querySelector('.cr-tree-dir-name');
+    if (!group || !row || !directory) throw new Error('file tree row missing');
+    directory.textContent = `deeply/nested/${'directory-'.repeat(10)}path`;
+    const clone = row.cloneNode(true) as HTMLElement;
+    clone.querySelectorAll('.cr-tree-risk, .cr-tree-comments').forEach((node) => node.remove());
+    const badge = document.createElement('span');
+    badge.className = 'cr-tree-comments';
+    badge.dataset.testid = 'long-row-badge';
+    badge.textContent = '1';
+    clone.append(badge);
+    group.append(clone);
+  });
+
+  const layout = await panel.evaluate((element) => {
+    const panelRect = element.getBoundingClientRect();
+    const badgeRect = element
+      .querySelector('[data-testid="long-row-badge"]')
+      ?.getBoundingClientRect();
+    return {
+      overflow: element.scrollWidth - element.clientWidth,
+      badgeRight: badgeRect?.right ?? Number.POSITIVE_INFINITY,
+      panelRight: panelRect.right,
+    };
+  });
+  expect(layout.overflow).toBeLessThanOrEqual(1);
+  expect(layout.badgeRight).toBeLessThanOrEqual(layout.panelRight);
+});
+
 test('tracks the file in view while the diff scrolls', async ({ page }) => {
   await page.setViewportSize({ width: 1200, height: 520 });
   await openReview(page);
